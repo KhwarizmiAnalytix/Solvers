@@ -8,7 +8,7 @@
 
 #include "solver_options/solver_options_ceres.h"
 
-namespace quarisma
+namespace solverslib
 {
 class LambdaCostFunctor : public ceres::CostFunction
 {
@@ -249,10 +249,10 @@ void update_options(
 //    output_options.trust_region_problem_dump_format_type =
 //        static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type_);
 //}
-}  // namespace quarisma
+}  // namespace solverslib
 #endif
 
-namespace quarisma
+namespace solverslib
 {
 ceres_solver_algorithms::ceres_solver_algorithms(
     int                        num_parameters,
@@ -482,4 +482,4 @@ bool ceres_solver_algorithms::solve(
     SOLVERS_NOT_IMPLEMENTED("ceres solver not supported");
 #endif
 }
-}  // namespace quarisma
+}  // namespace solverslib

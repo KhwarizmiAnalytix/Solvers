@@ -2,7 +2,7 @@
 
 #include "detail/support.h"
 
-namespace quarisma
+namespace solverslib
 {
 void solver_options_bfgs::validate() const
 {
@@ -18,4 +18,4 @@ void solver_options_bfgs::validate() const
 //-----------------------------------------------------------------------------
 
 
-}  // namespace quarisma
+}  // namespace solverslib

@@ -1,8 +1,8 @@
-#include "lbfgs_solver.h"
+#include "lbfgs.h"
 
 #include "solver_options/solver_options_bfgs.h"
 
-namespace quarisma
+namespace solverslib
 {
 namespace
 {
@@ -327,17 +327,22 @@ public:
     }
 };
 
-lbfgs_solver::lbfgs_solver(
-    size_type                   num_parameters,
-    size_type                   num_residuals,
-    lbfgs_solver::function_type function,
-    lbfgs_solver::jacobian_type jacobian)
+LBFGS::LBFGS(
+    int                  num_parameters,
+    int                  num_residuals,
+    LBFGS::function_type function,
+    LBFGS::jacobian_type jacobian)
     : function_(std::move(function)),
       jacobian_(std::move(jacobian)),
       num_parameters_(num_parameters),
       num_residuals_(num_residuals) {};
 
-solver_output lbfgs_solver::solve(
+LBFGS::LBFGS(int num_parameters, int num_residuals, LBFGS::function_type function)
+    : function_(std::move(function)),
+      num_parameters_(num_parameters),
+      num_residuals_(num_residuals) {};
+
+optimization_algorithm_output LBFGS::solve(
     Eigen::VectorXd& parameters, const solver_options_bfgs& options) const
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
@@ -499,10 +504,10 @@ solver_output lbfgs_solver::solve(
         }
     }
 
-    solver_output output(num_residuals_);
+    optimization_algorithm_output output(num_residuals_);
 
     output.update(x2_converged, parameters_converged, gradient_converged, iter, y_p);
 
     return output;
 }
-}  // namespace quarisma
+}  // namespace solverslib

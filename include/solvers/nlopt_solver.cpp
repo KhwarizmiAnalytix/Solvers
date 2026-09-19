@@ -15,7 +15,7 @@
 #include "detail/support.h"
 #include "solver_options/solver_options_nlopt.h"
 
-namespace quarisma
+namespace solverslib
 {
 #if SOLVERS_HAS_NLOPT
 // Function to map nlopt_algo_name_enum enum to nlopt::algorithm enum
@@ -192,4 +192,4 @@ double nlopt_solver::CONFUN(
 
     return result;
 }
-}  // namespace quarisma
+}  // namespace solverslib

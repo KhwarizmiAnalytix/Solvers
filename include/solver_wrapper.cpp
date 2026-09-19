@@ -12,7 +12,7 @@
 #include "solvers/levenberg_marquardt_solver.h"
 #include "solvers/nlopt_solver.h"
 
-namespace quarisma
+namespace solverslib
 {
 
 solver_wrapper::solver_wrapper(
@@ -101,7 +101,7 @@ bool solver_wrapper::solve_ceres(
 bool solver_wrapper::solve_lm(
     std::vector<double>& parameters, const solver_options_lm& options) const
 {
-    // Convert std::vector to quarisma::vector for LM solver
+    // Convert std::vector to solverslib::vector for LM solver
     Eigen::VectorXd quarisma_params = Eigen::Map<const Eigen::VectorXd>(parameters.data(), parameters.size());
 
     levenberg_marquardt_solver solver(
@@ -180,4 +180,4 @@ bool solver_wrapper::is_supported(solver_enum optimizer_type)
         return false;
     }
 }
-}  // namespace quarisma
+}  // namespace solverslib

@@ -14,7 +14,7 @@ indent_size = 4
 [*.{py,pyi}]
 indent_size = 4
 
-[*.{c,cc,cxx,cpp,h,hh,hpp,hxx,cu,cuh,mm,m}]
+[*.{c,cc,cpp,h,hh,hpp,hxx,cu,cuh,mm,m}]
 indent_size = 4
 
 [CMakeLists.txt]

@@ -5,7 +5,7 @@
 
 #include "detail/support.h"
 
-namespace quarisma
+namespace solverslib
 {
 bool root_finding_algorithms::dekker(
     const function_gradient_type& func,
@@ -179,4 +179,4 @@ bool root_finding_algorithms::brent(  //NOLINT
     }
     return false;
 }
-}  // namespace quarisma
+}  // namespace solverslib

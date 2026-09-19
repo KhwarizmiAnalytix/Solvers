@@ -3,9 +3,9 @@
 
 #include "detail/support.h"
 
-namespace quarisma
+namespace solverslib
 {
 //-----------------------------------------------------------------------------
 
 
-}  // namespace quarisma
+}  // namespace solverslib

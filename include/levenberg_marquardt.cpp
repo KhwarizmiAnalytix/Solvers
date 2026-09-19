@@ -3,7 +3,7 @@
 #include "detail/support.h"
 #include "solver_options/solver_options_lm.h"
 
-namespace quarisma
+namespace solverslib
 {
 namespace
 {
@@ -294,4 +294,4 @@ optimization_algorithm_output levenberg_marquardt::solve(
 
     return output;
 }
-}  // namespace quarisma
+}  // namespace solverslib

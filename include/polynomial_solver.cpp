@@ -5,7 +5,7 @@
 
 #include "detail/support.h"
 
-namespace quarisma
+namespace solverslib
 {
 //std::vector<std::complex<double>> solve(double a3, double a2, double a1, double a0)
 //{
@@ -146,4 +146,4 @@ double polynomial_solver::third_degree_polynomial_solver(double b, double c, dou
 
     return result;
 }
-}  // namespace quarisma
+}  // namespace solverslib

@@ -1,8 +1,8 @@
-#include "optimization_algorithm_output.h"
+#include "solver_output.h"
 
 #include "detail/support.h"
 
-namespace quarisma
+namespace solverslib
 {
 namespace
 {
@@ -18,15 +18,12 @@ inline double l_max_norm(T const& h)
 }
 }  // namespace
 
-optimization_algorithm_output::optimization_algorithm_output(size_type m)
-    : x2_(0),
-      errors_(m, 0),
-      iterations_(0),
-      status_(optimization_algorithm_convergence_type::NOT_CONVERGED)
+solver_output::solver_output(size_type m)
+    : x2_(0), errors_(m, 0), iterations_(0), status_(solver_convergence_enum::NOT_CONVERGED)
 {
 }
 
-void optimization_algorithm_output::update(
+void solver_output::update(
     bool                       x2_converged,
     bool                       parameters_converged,
     bool                       gradient_converged,
@@ -36,40 +33,40 @@ void optimization_algorithm_output::update(
     iterations_ = iteration;
     if (x2_converged)
     {
-        status_ = optimization_algorithm_convergence_type::X2_CONVERGED;
+        status_ = solver_convergence_enum::X2_CONVERGED;
     }
     else if (parameters_converged)
     {
-        status_ = optimization_algorithm_convergence_type::PARAMETERS_CONVERGED;
+        status_ = solver_convergence_enum::PARAMETERS_CONVERGED;
     }
     else if (gradient_converged)
     {
-        status_ = optimization_algorithm_convergence_type::GRADIENT_CONVERGED;
+        status_ = solver_convergence_enum::GRADIENT_CONVERGED;
     }
     else
     {
-        status_ = optimization_algorithm_convergence_type::NOT_CONVERGED;
+        status_ = solver_convergence_enum::NOT_CONVERGED;
     }
 
     errors_.assign(y_p.begin(), y_p.end());
     x2_ = l2_norm(y_p);
 }
 
-void optimization_algorithm_output::print() const
+void solver_output::print() const
 {
     SOLVERS_LOGF(INFO, "============ final results ============");
     switch (status_)
     {
-    case quarisma::optimization_algorithm_convergence_type::GRADIENT_CONVERGED:
+    case solverslib::solver_convergence_enum::GRADIENT_CONVERGED:
         SOLVERS_LOGF(INFO, "convergence: GRADIENT_CONVERGED");
         break;
-    case quarisma::optimization_algorithm_convergence_type::PARAMETERS_CONVERGED:
+    case solverslib::solver_convergence_enum::PARAMETERS_CONVERGED:
         SOLVERS_LOGF(INFO, "convergence: PARAMETERS_CONVERGED");
         break;
-    case quarisma::optimization_algorithm_convergence_type::X2_CONVERGED:
+    case solverslib::solver_convergence_enum::X2_CONVERGED:
         SOLVERS_LOGF(INFO, "convergence: X2_CONVERGED");
         break;
-    case quarisma::optimization_algorithm_convergence_type::NOT_CONVERGED:
+    case solverslib::solver_convergence_enum::NOT_CONVERGED:
         SOLVERS_LOGF(INFO, "convergence: NOT_CONVERGED");
         break;
     }
@@ -78,4 +75,4 @@ void optimization_algorithm_output::print() const
     SOLVERS_LOGF(INFO, "difference = %.2e", x2_);
 }
 
-}  // namespace quarisma
+}  // namespace solverslib

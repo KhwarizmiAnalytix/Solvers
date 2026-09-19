@@ -12,7 +12,7 @@
 #include "terminals/vector.h"
 #include "quarismaTest.h"
 
-using namespace quarisma;
+using namespace solverslib;
 
 namespace
 {
@@ -40,10 +40,10 @@ double constraint_function(const vector<double>& x, vector<double>& grad)
 constexpr double tolerance = 1.E-15;
 
 double lbfgs_output(
-    const quarisma::lbfgs_solver&        functor,
-    quarisma::vector<double>&            p,
-    const quarisma::vector<double>&      b,
-    const quarisma::solver_options_bfgs& option)
+    const solverslib::lbfgs_solver&        functor,
+    solverslib::vector<double>&            p,
+    const solverslib::vector<double>&      b,
+    const solverslib::solver_options_bfgs& option)
 {
     p = 150.;
 
@@ -55,10 +55,10 @@ double lbfgs_output(
 }
 
 double levenberg_marquardt_solver_output(
-    const quarisma::levenberg_marquardt_solver& functor,
-    quarisma::vector<double>&                   p,
-    const quarisma::vector<double>&             b,
-    const quarisma::solver_options_lm&          option)
+    const solverslib::levenberg_marquardt_solver& functor,
+    solverslib::vector<double>&                   p,
+    const solverslib::vector<double>&             b,
+    const solverslib::solver_options_lm&          option)
 {
     p = 150;
 
@@ -70,49 +70,49 @@ double levenberg_marquardt_solver_output(
 }
 
 void test_lbfgs(
-    const quarisma::lbfgs_solver&   functor,
-    quarisma::solver_options_bfgs&  params,
-    quarisma::vector<double>&       p,
-    const quarisma::vector<double>& b)
+    const solverslib::lbfgs_solver&   functor,
+    solverslib::solver_options_bfgs&  params,
+    solverslib::vector<double>&       p,
+    const solverslib::vector<double>& b)
 {
     params.set_step_max(10000);
     params.set_step_min(0.);
     params.set_function_tolerance(std::numeric_limits<double>::epsilon());
     params.set_gradient_tolerance(0.);
     params.set_parameter_tolerance(0.);
-    params.set_type(quarisma::lbfgs_line_search_type::BACKTRACKING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::ARMIJO);
+    params.set_type(solverslib::lbfgs_line_search_type::BACKTRACKING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::ARMIJO);
 
     auto diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 1.e-4);
 
     //-----------------------------------------------------------------------------
-    params.set_type(quarisma::lbfgs_line_search_type::BACKTRACKING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::WOLFE);
+    params.set_type(solverslib::lbfgs_line_search_type::BACKTRACKING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::WOLFE);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 1.e-4);
 
     //-----------------------------------------------------------------------------
-    params.set_type(quarisma::lbfgs_line_search_type::BACKTRACKING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::STRONG_WOLFE);
+    params.set_type(solverslib::lbfgs_line_search_type::BACKTRACKING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::STRONG_WOLFE);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 1.e-4);
 
     //-----------------------------------------------------------------------------
-    params.set_type(quarisma::lbfgs_line_search_type::BRACKETING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::ARMIJO);
+    params.set_type(solverslib::lbfgs_line_search_type::BRACKETING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::ARMIJO);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 1.e-4);
 
     //-----------------------------------------------------------------------------
-    params.set_type(quarisma::lbfgs_line_search_type::BRACKETING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::WOLFE);
+    params.set_type(solverslib::lbfgs_line_search_type::BRACKETING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::WOLFE);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 1.e-4);
 
     //-----------------------------------------------------------------------------
-    params.set_type(quarisma::lbfgs_line_search_type::BRACKETING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::STRONG_WOLFE);
+    params.set_type(solverslib::lbfgs_line_search_type::BRACKETING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::STRONG_WOLFE);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 1.e-4);
 
@@ -120,8 +120,8 @@ void test_lbfgs(
     params.set_gradient_tolerance(1.e-10);
     params.set_function_tolerance(0.);
     params.set_parameter_tolerance(0.);
-    params.set_type(quarisma::lbfgs_line_search_type::BRACKETING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::WOLFE);
+    params.set_type(solverslib::lbfgs_line_search_type::BRACKETING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::WOLFE);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 4.e-4);
 
@@ -129,8 +129,8 @@ void test_lbfgs(
     params.set_gradient_tolerance(0.);
     params.set_function_tolerance(0.);
     params.set_parameter_tolerance(0.);
-    params.set_type(quarisma::lbfgs_line_search_type::BRACKETING);
-    params.set_method_type(quarisma::lbfgs_line_search_method_type::WOLFE);
+    params.set_type(solverslib::lbfgs_line_search_type::BRACKETING);
+    params.set_method_type(solverslib::lbfgs_line_search_method_type::WOLFE);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 2.e-6);
 
@@ -138,7 +138,7 @@ void test_lbfgs(
     params.set_gradient_tolerance(0.);
     params.set_function_tolerance(0.);
     params.set_parameter_tolerance(1.e-5);
-    params.set_type(quarisma::lbfgs_line_search_type::NOCEDAL_WRIGHT);
+    params.set_type(solverslib::lbfgs_line_search_type::NOCEDAL_WRIGHT);
     diff = lbfgs_output(functor, p, b, params);
     EXPECT_LE(diff, 1.e-4);
 
@@ -149,10 +149,10 @@ void test_lbfgs(
 }
 
 void test_lm(
-    const quarisma::levenberg_marquardt_solver& functor,
-    quarisma::solver_options_lm&                params,
-    quarisma::vector<double>&                   p,
-    const quarisma::vector<double>&             b)
+    const solverslib::levenberg_marquardt_solver& functor,
+    solverslib::solver_options_lm&                params,
+    solverslib::vector<double>&                   p,
+    const solverslib::vector<double>&             b)
 {
 #ifndef NDEBUG
     params.set_debug(true);
@@ -163,17 +163,17 @@ void test_lm(
     params.set_accept_uphill_step(true);
     {
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::LEVENBERG);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::LEVENBERG);
         double diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.5e-8);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::QUADRATIC);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::QUADRATIC);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 2.e-4);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::NIELSEN);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::NIELSEN);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.e-8);
     }
@@ -182,17 +182,17 @@ void test_lm(
     params.set_accept_uphill_step(true);
     {
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::LEVENBERG);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::LEVENBERG);
         double diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.e-7);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::QUADRATIC);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::QUADRATIC);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 2.e-5);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::NIELSEN);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::NIELSEN);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.e-8);
     }
@@ -201,17 +201,17 @@ void test_lm(
     params.set_accept_uphill_step(false);
     {
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::LEVENBERG);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::LEVENBERG);
         double diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.e-8);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::QUADRATIC);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::QUADRATIC);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.e-5);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::NIELSEN);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::NIELSEN);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.e-7);
     }
@@ -220,17 +220,17 @@ void test_lm(
     params.set_accept_uphill_step(false);
     {
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::LEVENBERG);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::LEVENBERG);
         double diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.5e-8);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::QUADRATIC);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::QUADRATIC);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 2.e-4);
 
         //-----------------------------------------------------------------------------
-        params.set_type(quarisma::levenberg_marquardt_solver_enum::NIELSEN);
+        params.set_type(solverslib::levenberg_marquardt_solver_enum::NIELSEN);
         diff = levenberg_marquardt_solver_output(functor, p, b, params);
         EXPECT_LE(diff, 1.e-8);
     }
@@ -240,15 +240,15 @@ void test_lbfgs()
 {
     size_t n = 3;
 
-    quarisma::vector<double> b(n);
-    quarisma::vector<double> p(n);
+    solverslib::vector<double> b(n);
+    solverslib::vector<double> p(n);
 
     b = 0.;
 
-    auto func = [b](quarisma::vector<double> const& x, quarisma::vector<double>& y)
+    auto func = [b](solverslib::vector<double> const& x, solverslib::vector<double>& y)
     { y = log1p((x - b) * (x - b)); };
 
-    auto jacobi = [b](quarisma::vector<double> const& x, quarisma::matrix<double>& y)
+    auto jacobi = [b](solverslib::vector<double> const& x, solverslib::matrix<double>& y)
     {
         y = 0.;
 
@@ -257,13 +257,13 @@ void test_lbfgs()
         y[2][2] = 2 * (x[2] - b[2]) / (1 + (x[2] - b[2]) * (x[2] - b[2]));
     };
 
-    quarisma::solver_options_bfgs params(100);
+    solverslib::solver_options_bfgs params(100);
     {
-        quarisma::lbfgs_solver functor(3, 3, func, jacobi);
+        solverslib::lbfgs_solver functor(3, 3, func, jacobi);
         test_lbfgs(functor, params, p, b);
     }
     {
-        quarisma::lbfgs_solver functor(3, 3, func);
+        solverslib::lbfgs_solver functor(3, 3, func);
         test_lbfgs(functor, params, p, b);
     }
 }
@@ -273,16 +273,16 @@ void test_levenberg_marquardt_solver()
     size_t n = 3;
     size_t m = 3;
 
-    quarisma::vector<double> b(n);
-    quarisma::vector<double> p(n);
+    solverslib::vector<double> b(n);
+    solverslib::vector<double> p(n);
 
     b[0] = 1.3;
     b[1] = -1.;
     b[2] = 3.;
 
-    auto func = [b](quarisma::vector<double> const& x, quarisma::vector<double>& y)
+    auto func = [b](solverslib::vector<double> const& x, solverslib::vector<double>& y)
     { y = log1p((x - b) * (x - b)); };
-    auto jacobi = [b](quarisma::vector<double> const& x, quarisma::matrix<double>& y)
+    auto jacobi = [b](solverslib::vector<double> const& x, solverslib::matrix<double>& y)
     {
         y = 0.;
 
@@ -291,15 +291,15 @@ void test_levenberg_marquardt_solver()
         y[2][2] = 2 * (x[2] - b[2]) / (1 + (x[2] - b[2]) * (x[2] - b[2]));
     };
 
-    quarisma::solver_options_lm params(500);
+    solverslib::solver_options_lm params(500);
     {
         QUARISMA_LOGF(INFO, " levenberg_marquardt_solver with jacobian");
-        quarisma::levenberg_marquardt_solver functor(n, m, func, jacobi);
+        solverslib::levenberg_marquardt_solver functor(n, m, func, jacobi);
         test_lm(functor, params, p, b);
     }
     {
         QUARISMA_LOGF(INFO, " levenberg_marquardt_solver without jacobian");
-        quarisma::levenberg_marquardt_solver functor(n, m, func);
+        solverslib::levenberg_marquardt_solver functor(n, m, func);
         test_lm(functor, params, p, b);
     }
 }
@@ -312,21 +312,21 @@ void test_brent()
 
     auto func = [](double x) { return (x + 3.) * (x - 1.) * (x - 1.); };
 
-    quarisma::root_finding_algorithms::brent(func, a, b, root, 0., tolerance);
+    solverslib::root_finding_algorithms::brent(func, a, b, root, 0., tolerance);
 
     EXPECT_LE(std::fabs(root + 3), tolerance);
     root = 0;
-    EXPECT_TRUE(quarisma::root_finding_algorithms::brent(func, b, a, root, 0., tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::brent(func, b, a, root, 0., tolerance));
     root = 0.;
-    EXPECT_TRUE(quarisma::root_finding_algorithms::brent(func, a, b, root, 0., tolerance));
-    EXPECT_TRUE(quarisma::root_finding_algorithms::brent(func, root, b, root, 0., tolerance));
-    EXPECT_TRUE(quarisma::root_finding_algorithms::brent(func, a, root, root, 0., tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::brent(func, a, b, root, 0., tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::brent(func, root, b, root, 0., tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::brent(func, a, root, root, 0., tolerance));
     root = 0;
-    EXPECT_TRUE(quarisma::root_finding_algorithms::brent(func, b, a, root, 0., tolerance, 1.));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::brent(func, b, a, root, 0., tolerance, 1.));
 
     root = 0;
     EXPECT_FALSE(
-        quarisma::root_finding_algorithms::brent(func, b, a, root, 0., tolerance, tolerance, 1));
+        solverslib::root_finding_algorithms::brent(func, b, a, root, 0., tolerance, tolerance, 1));
 }
 
 void test_dekker()
@@ -342,19 +342,19 @@ void test_dekker()
         return f;
     };
 
-    quarisma::root_finding_algorithms::dekker(func_2, a, b, root, tolerance);
+    solverslib::root_finding_algorithms::dekker(func_2, a, b, root, tolerance);
 
     EXPECT_LE(std::fabs(root + 3), tolerance);
 
     root = 0.;
-    EXPECT_TRUE(quarisma::root_finding_algorithms::dekker(func_2, b, a, root, tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::dekker(func_2, b, a, root, tolerance));
     root = 0.;
-    EXPECT_TRUE(quarisma::root_finding_algorithms::dekker(func_2, a, b, root, tolerance));
-    EXPECT_TRUE(quarisma::root_finding_algorithms::dekker(func_2, root, b, root, tolerance));
-    EXPECT_TRUE(quarisma::root_finding_algorithms::dekker(func_2, a, root, root, tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::dekker(func_2, a, b, root, tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::dekker(func_2, root, b, root, tolerance));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::dekker(func_2, a, root, root, tolerance));
 
     root = 0.;
-    EXPECT_TRUE(quarisma::root_finding_algorithms::dekker(func_2, a, b, root, tolerance, 1.));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::dekker(func_2, a, b, root, tolerance, 1.));
 
     auto func_3 = [](double x, double& df_dx)
     {
@@ -365,19 +365,19 @@ void test_dekker()
 
     root = b;
     EXPECT_TRUE(
-        quarisma::root_finding_algorithms::dekker(
+        solverslib::root_finding_algorithms::dekker(
             func_3, a, b, root, 10 * tolerance, 10 * tolerance));
 
     root = -3. + 0.1;
     EXPECT_FALSE(
-        quarisma::root_finding_algorithms::dekker(func_3, -3. - 0.1, -3. + 0.1, root, tolerance));
+        solverslib::root_finding_algorithms::dekker(func_3, -3. - 0.1, -3. + 0.1, root, tolerance));
 
     root = 0;
-    EXPECT_TRUE(quarisma::root_finding_algorithms::dekker(func_3, b, a, root, tolerance, 1.));
+    EXPECT_TRUE(solverslib::root_finding_algorithms::dekker(func_3, b, a, root, tolerance, 1.));
 
     root = 0;
     EXPECT_FALSE(
-        quarisma::root_finding_algorithms::dekker(func_3, b, a, root, tolerance, tolerance, 1));
+        solverslib::root_finding_algorithms::dekker(func_3, b, a, root, tolerance, tolerance, 1));
 }
 }  // namespace
 QUARISMATEST(Math, OptimizationAlgorithm)

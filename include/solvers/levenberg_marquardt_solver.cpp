@@ -7,7 +7,7 @@
 
 #define MAX_LAMBDA 1e12
 
-namespace quarisma
+namespace solverslib
 {
 template <typename T>
 inline double l2_norm(T const& h)
@@ -359,4 +359,4 @@ solver_output levenberg_marquardt_solver::solve(
 
     return output;
 }
-}  // namespace quarisma
+}  // namespace solverslib

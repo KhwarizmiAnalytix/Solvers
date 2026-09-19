@@ -9,7 +9,7 @@ include_patterns = [
     '**/*.hxx',
     '**/*.hpp',
     '**/*.cpp',
-    '**/*.cxx',
+    '**/*.cpp',
     '**/*.cc',
     '**/*.cu',
     '**/*.cuh',

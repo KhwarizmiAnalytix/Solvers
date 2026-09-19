@@ -1,5 +1,5 @@
 /**
- * @file TestOptimizerWrapper.cxx
+ * @file TestOptimizerWrapper.cpp
  * @brief Simple test for the solver_wrapper class
  *
  * Tests demonstrate how the wrapper eliminates switch statements and provides
@@ -16,7 +16,7 @@
 #include "quarismaTest.h"
 #include "quarismaTesting.h"
 
-namespace quarisma
+namespace solverslib
 {
 
 class TestOptimizerWrapper
@@ -92,7 +92,7 @@ public:
             residuals[0] = x[0] - 1.0;  // Residual for (x-1)^2
         };
 
-        auto optimizer = util::make_ptr_unique_const<quarisma::solver_wrapper>(
+        auto optimizer = util::make_ptr_unique_const<solverslib::solver_wrapper>(
             num_parameters, num_residuals, objective);
 
         // Test with LM solver (always available)
@@ -135,11 +135,11 @@ private:
     std::vector<double> lower_bounds_, upper_bounds_;
     double              tolerance_;
 };
-}  // namespace quarisma
+}  // namespace solverslib
 
 QUARISMATEST(Math, OptimizerWrapper)
 {
-    quarisma::TestOptimizerWrapper test;
+    solverslib::TestOptimizerWrapper test;
     test.SetUp();
 
     QUARISMA_LOGF(INFO, "=== Testing Optimizer Wrapper ===");

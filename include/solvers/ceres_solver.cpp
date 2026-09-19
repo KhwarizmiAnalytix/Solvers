@@ -10,7 +10,7 @@
 
 #define DEBUG_AAD 0
 
-namespace quarisma
+namespace solverslib
 {
 class LambdaCostFunctor : public ceres::CostFunction
 {
@@ -294,10 +294,10 @@ void update_options(
 //    output_options.trust_region_problem_dump_format_type =
 //        static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type_);
 //}
-}  // namespace quarisma
+}  // namespace solverslib
 #endif
 
-namespace quarisma
+namespace solverslib
 {
 ceres_solver::ceres_solver(
     size_t                     num_parameters,
@@ -490,4 +490,4 @@ bool ceres_solver::solve(
     SOLVERS_NOT_IMPLEMENTED("ceres solver not supported");
 #endif
 }
-}  // namespace quarisma
+}  // namespace solverslib
