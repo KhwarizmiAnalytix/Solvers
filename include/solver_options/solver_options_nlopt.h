@@ -33,7 +33,7 @@ enum class nlopt_algo_name_enum : int
     VARIABLE_METRIC_METHOD                 = 14
 };
 
-class MATH_VISIBILITY solver_options_nlopt : public solver_options
+class SOLVER_VISIBILITY solver_options_nlopt : public solver_options
 {
     friend class solver_options_nlopt_builder;
 
@@ -77,10 +77,10 @@ private:
  *       .with_max_iterations(100).with_function_tolerance(1e-6)
  *       .with_algorithm(nlopt_algo_name_enum::lbfgs_solver).build();
  */
-class MATH_VISIBILITY solver_options_nlopt_builder
+class SOLVER_VISIBILITY solver_options_nlopt_builder
 {
 public:
-    MATH_API solver_options_nlopt_builder()
+    SOLVER_API solver_options_nlopt_builder()
         : options_(std::shared_ptr<solver_options_nlopt>(new solver_options_nlopt()))
     {
     }
@@ -135,7 +135,7 @@ public:
         return *this;
     }
     // Build the final options
-    MATH_API std::shared_ptr<const solver_options_nlopt> build() const { return options_; }
+    SOLVER_API std::shared_ptr<const solver_options_nlopt> build() const { return options_; }
 
 private:
     std::shared_ptr<solver_options_nlopt> options_;

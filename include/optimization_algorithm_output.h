@@ -27,7 +27,7 @@ struct optimization_algorithm_output
     using scalar_type = double;
     using size_type   = size_t;
 
-    MATH_API explicit optimization_algorithm_output(size_type m);
+    SOLVER_API explicit optimization_algorithm_output(size_type m);
 
     void update(
         bool                       x2_converged,
@@ -36,7 +36,7 @@ struct optimization_algorithm_output
         size_type                  iteration,
         const Eigen::VectorXd& y_p);
 
-    MATH_API void print() const;
+    SOLVER_API void print() const;
 
     scalar_type                             x2_;
     std::vector<scalar_type>                errors_;

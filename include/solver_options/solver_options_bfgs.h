@@ -26,7 +26,7 @@ enum class lbfgs_line_search_type : int
     BRACKETING     = 3
 };
 
-class MATH_VISIBILITY solver_options_bfgs : public solver_options
+class SOLVER_VISIBILITY solver_options_bfgs : public solver_options
 {
     friend class solver_options_bfgs_builder;
 
@@ -77,7 +77,7 @@ public:
     void set_bump(double bump) { bump_ = bump; }
 
 private:
-    MATH_API void validate() const;
+    SOLVER_API void validate() const;
 
     void initialize() const { validate(); };
 
@@ -104,10 +104,10 @@ private:
  *       .with_max_iterations(100).with_function_tolerance(1e-6)
  *       .with_method_type(lbfgs_line_search_method_type::ARMIJO).with_tau(10).build();
  */
-class MATH_VISIBILITY solver_options_bfgs_builder
+class SOLVER_VISIBILITY solver_options_bfgs_builder
 {
 public:
-    MATH_API solver_options_bfgs_builder()
+    SOLVER_API solver_options_bfgs_builder()
         : options_(std::shared_ptr<solver_options_bfgs>(new solver_options_bfgs()))
     {
     }
@@ -211,7 +211,7 @@ public:
     }
 
     // Build the final options
-    MATH_API std::shared_ptr<const solver_options_bfgs> build() const { return options_; }
+    SOLVER_API std::shared_ptr<const solver_options_bfgs> build() const { return options_; }
 
 private:
     std::shared_ptr<solver_options_bfgs> options_;

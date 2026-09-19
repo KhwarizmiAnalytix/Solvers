@@ -20,7 +20,7 @@ enum class levenberg_marquardt_solver_enum : int
     NIELSEN   = 2
 };
 
-class MATH_VISIBILITY solver_options_lm : public solver_options
+class SOLVER_VISIBILITY solver_options_lm : public solver_options
 {
     friend class solver_options_lm_builder;
 
@@ -102,7 +102,7 @@ private:
  *       .with_max_iterations(100).with_function_tolerance(1e-6)
  *       .with_lambda(1e-3).with_type(levenberg_marquardt_solver_enum::NIELSEN).build();
  */
-class MATH_VISIBILITY solver_options_lm_builder
+class SOLVER_VISIBILITY solver_options_lm_builder
 {
 public:
     solver_options_lm_builder() : options_(std::shared_ptr<solver_options_lm>(new solver_options_lm()))

@@ -32,12 +32,12 @@ class levenberg_marquardt
     int           num_residuals_;
 
 public:
-    MATH_API levenberg_marquardt(
+    SOLVER_API levenberg_marquardt(
         int num_parameters, int num_residuals, function_type function, jacobian_type jacobian);
 
-    MATH_API levenberg_marquardt(int num_parameters, int num_residuals, function_type function);
+    SOLVER_API levenberg_marquardt(int num_parameters, int num_residuals, function_type function);
 
-    MATH_API optimization_algorithm_output
+    SOLVER_API optimization_algorithm_output
     solve(Eigen::VectorXd& parameters, const solver_options_lm& options) const;
 };
 }  // namespace solverslib

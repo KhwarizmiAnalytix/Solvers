@@ -26,7 +26,7 @@ public:
     using ObjFunc_aad = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
     //using ConFunc = std::function<double(const Eigen::VectorXd&, Eigen::VectorXd&)>;
 
-    MATH_API nlopt_solver(
+    SOLVER_API nlopt_solver(
         size_t              num_parameters,
         size_t              num_residuals,
         ObjFunc             func,
@@ -34,9 +34,9 @@ public:
         std::vector<double> lb = {},
         std::vector<double> ub = {});
 
-    MATH_API static bool is_supported();
+    SOLVER_API static bool is_supported();
 
-    MATH_API void solve(std::vector<double>& parameters, const solver_options_nlopt& options);
+    SOLVER_API void solve(std::vector<double>& parameters, const solver_options_nlopt& options);
 
 private:
     std::vector<double> lower_bounds_;

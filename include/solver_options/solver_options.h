@@ -11,7 +11,7 @@
 
 namespace solverslib
 {
-class MATH_VISIBILITY solver_options
+class SOLVER_VISIBILITY solver_options
 {
 protected:
     solver_options(

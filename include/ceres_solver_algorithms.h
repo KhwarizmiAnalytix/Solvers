@@ -21,7 +21,7 @@ public:
     using CostFunctionLambda     = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
     using CostFunctionLambda_aad = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
 
-    MATH_API ceres_solver_algorithms(
+    SOLVER_API ceres_solver_algorithms(
         int                        num_parameters,
         int                        num_residuals,
         CostFunctionLambda         cost_function,
@@ -29,16 +29,16 @@ public:
         const std::vector<double>& lower_bounds,
         const std::vector<double>& upper_bounds);
 
-    MATH_API ceres_solver_algorithms(
+    SOLVER_API ceres_solver_algorithms(
         int                        num_parameters,
         int                        num_residuals,
         CostFunctionLambda         cost_function,
         const std::vector<double>& lower_bounds,
         const std::vector<double>& upper_bounds);
 
-    MATH_API bool solve(std::vector<double>& parameters, const solver_options_ceres& option);
+    SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_ceres& option);
 
-    MATH_API static bool is_supported();
+    SOLVER_API static bool is_supported();
 
 private:
     CostFunctionLambda     cost_function_;

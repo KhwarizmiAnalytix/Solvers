@@ -436,7 +436,7 @@ enum class dump_format_enum : int16_t
 
 namespace solverslib
 {
-class MATH_VISIBILITY solver_options_ceres : public solver_options
+class SOLVER_VISIBILITY solver_options_ceres : public solver_options
 {
     friend class solver_options_ceres_builder;
 
@@ -756,7 +756,7 @@ private:
  *       .with_minimizer_type(MinimizerType::TRUST_REGION)
  *       .with_linear_solver_type(LinearSolverType::DENSE_QR).build();
  */
-class MATH_VISIBILITY solver_options_ceres_builder
+class SOLVER_VISIBILITY solver_options_ceres_builder
 {
 public:
     solver_options_ceres_builder()

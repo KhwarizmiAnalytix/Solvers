@@ -30,12 +30,12 @@ class LBFGS
     int           num_residuals_;
 
 public:
-    MATH_API LBFGS(
+    SOLVER_API LBFGS(
         int num_parameters, int num_residuals, function_type function, jacobian_type jacobian);
 
-    MATH_API LBFGS(int num_parameters, int num_residuals, function_type function);
+    SOLVER_API LBFGS(int num_parameters, int num_residuals, function_type function);
 
-    MATH_API optimization_algorithm_output
+    SOLVER_API optimization_algorithm_output
     solve(Eigen::VectorXd& parameters, const solver_options_bfgs& options) const;
 };
 }  // namespace solverslib

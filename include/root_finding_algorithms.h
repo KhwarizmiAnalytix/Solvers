@@ -15,7 +15,7 @@ public:
     using function_type          = std::function<double(double)>;
     using function_gradient_type = std::function<double(double, double&)>;
 
-    MATH_API static bool dekker(
+    SOLVER_API static bool dekker(
         function_gradient_type const& func,
         double                        x1,
         double                        x2,
@@ -24,7 +24,7 @@ public:
         double                        tolerance_parametes = std::numeric_limits<double>::epsilon(),
         size_t                        max_iterations      = 50);
 
-    MATH_API static bool brent(
+    SOLVER_API static bool brent(
         function_type const& func,
         double               x1,
         double               x2,

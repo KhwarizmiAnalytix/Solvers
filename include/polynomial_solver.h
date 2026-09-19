@@ -22,7 +22,7 @@ public:
     //fourth degree polynomial solve of the equation: $$x^4 + a_3x^3 + a_2x^2 + a_1x + a_0=0$$
     // return the minmum positive root.
     */
-    MATH_API static double fourth_degree_polynomial_solver(
+    SOLVER_API static double fourth_degree_polynomial_solver(
         double a3, double a2, double a1, double a0, double threshold = 0.0000);
 
     //-----------------------------------------------------------------------------
@@ -30,7 +30,7 @@ public:
     //tex:
     //cubic solver of the equation: $$x^3+bx^2+cx+d=0$$
     */
-    MATH_API static double third_degree_polynomial_solver(double b, double c, double d);
+    SOLVER_API static double third_degree_polynomial_solver(double b, double c, double d);
 
     //------------------------------------------------------------------------------
     /*

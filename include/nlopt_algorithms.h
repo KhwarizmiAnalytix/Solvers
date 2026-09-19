@@ -24,12 +24,12 @@ public:
     using ObjFunc = std::function<double(const Eigen::VectorXd&, Eigen::VectorXd&)>;
     using ConFunc = std::function<double(const Eigen::VectorXd&, Eigen::VectorXd&)>;
 
-    MATH_API nlopt_algorithms(
+    SOLVER_API nlopt_algorithms(
         ObjFunc func, ConFunc func_con, std::vector<double> lb, std::vector<double> ub);
 
-    MATH_API bool is_supported();
+    SOLVER_API bool is_supported();
 
-    MATH_API void solve(std::vector<double>& parameters, const solver_options_nlopt& options);
+    SOLVER_API void solve(std::vector<double>& parameters, const solver_options_nlopt& options);
 
 private:
     std::vector<double> bl_;

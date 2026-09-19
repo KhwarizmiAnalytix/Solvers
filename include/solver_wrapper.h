@@ -42,7 +42,7 @@ class solver_options_bfgs;
  * bool success = wrapper.solve(parameters, options);
  * @endcode
  */
-class MATH_VISIBILITY solver_wrapper
+class SOLVER_VISIBILITY solver_wrapper
 {
 public:
     // Function type definitions matching the optimizer interfaces
@@ -59,7 +59,7 @@ public:
      * @param lower_bounds Lower bounds for parameters (optional)
      * @param upper_bounds Upper bounds for parameters (optional)
      */
-    MATH_API solver_wrapper(
+    SOLVER_API solver_wrapper(
         size_t                      num_parameters,
         size_t                      num_residuals,
         objective_function_type     objective_function,
@@ -74,7 +74,7 @@ public:
      * @param options Solver options (determines which optimizer to use)
      * @return true if optimization succeeded, false otherwise
      */
-    MATH_API bool solve(
+    SOLVER_API bool solve(
         std::vector<double>& parameters, const std::shared_ptr<const solver_options>& options) const;
 
     /**
@@ -83,7 +83,7 @@ public:
      * @param solver_type The solver type to check
      * @return true if supported, false otherwise
      */
-    MATH_API static bool is_supported(solver_enum solver_type);
+    SOLVER_API static bool is_supported(solver_enum solver_type);
 
 private:
     // Internal solve methods for each optimizer type
