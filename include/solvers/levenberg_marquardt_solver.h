@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <stdio.h>
 
 #include <cmath>
@@ -9,7 +8,6 @@
 #include <limits>
 #include <vector>
 
-#include "include/detail/support.h"
 #include "include/detail/support.h"
 #include "include/solver_output.h"
 
@@ -32,13 +30,12 @@ class levenberg_marquardt_solver
     size_t        num_residuals_;
 
 public:
-    SOLVER_API levenberg_marquardt_solver(
-        size_t        num_parameters,
-        size_t        num_residuals,
-        function_type function,
-        jacobian_type jacobian = nullptr);
+    SOLVER_API levenberg_marquardt_solver(size_t num_parameters,
+        size_t                                   num_residuals,
+        function_type                            function,
+        jacobian_type                            jacobian = nullptr);
 
-    SOLVER_API solver_output
-    solve(Eigen::VectorXd& parameters, const solver_options_lm& options) const;
+    SOLVER_API solver_output solve(
+        Eigen::VectorXd& parameters, const solver_options_lm& options) const;
 };
 }  // namespace solverslib

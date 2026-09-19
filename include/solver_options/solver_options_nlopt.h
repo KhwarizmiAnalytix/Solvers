@@ -7,7 +7,6 @@
 #include <stdexcept>
 
 #include "include/detail/support.h"
-#include "include/detail/support.h"
 #include "solver_options/solver_options.h"
 
 namespace solverslib
@@ -38,15 +37,13 @@ class SOLVER_VISIBILITY solver_options_nlopt : public solver_options
     friend class solver_options_nlopt_builder;
 
 public:
-    solver_options_nlopt(
-        nlopt_algo_name_enum nloptal,
-        int                  max_num_iterations,
-        double               function_tolerance  = std::numeric_limits<double>::epsilon(),
-        double               gradient_tolerance  = std::numeric_limits<double>::epsilon(),
-        double               parameter_tolerance = std::numeric_limits<double>::epsilon(),
-        bool                 verbose             = false)
-        : solver_options(
-              solver_enum::NLOPT,
+    solver_options_nlopt(nlopt_algo_name_enum nloptal,
+        int                                   max_num_iterations,
+        double function_tolerance  = std::numeric_limits<double>::epsilon(),
+        double gradient_tolerance  = std::numeric_limits<double>::epsilon(),
+        double parameter_tolerance = std::numeric_limits<double>::epsilon(),
+        bool   verbose             = false)
+        : solver_options(solver_enum::NLOPT,
               max_num_iterations,
               function_tolerance,
               gradient_tolerance,
@@ -63,8 +60,6 @@ public:
 private:
     solver_options_nlopt() : solver_options(solverslib::solver_enum::NLOPT) {};
     void initialize() const {};
-
-
 
     nlopt_algo_name_enum nloptal_ = nlopt_algo_name_enum::LBFGS;
 };

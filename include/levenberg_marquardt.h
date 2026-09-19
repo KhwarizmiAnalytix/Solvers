@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <stdio.h>
 
 #include <cmath>
@@ -9,7 +8,6 @@
 #include <limits>
 #include <vector>
 
-#include "include/detail/support.h"
 #include "include/detail/support.h"
 #include "include/optimization_algorithm_output.h"
 
@@ -37,7 +35,7 @@ public:
 
     SOLVER_API levenberg_marquardt(int num_parameters, int num_residuals, function_type function);
 
-    SOLVER_API optimization_algorithm_output
-    solve(Eigen::VectorXd& parameters, const solver_options_lm& options) const;
+    SOLVER_API optimization_algorithm_output solve(
+        Eigen::VectorXd& parameters, const solver_options_lm& options) const;
 };
 }  // namespace solverslib

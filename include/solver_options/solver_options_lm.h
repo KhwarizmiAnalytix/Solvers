@@ -8,7 +8,6 @@
 #include <string>
 
 #include "include/detail/support.h"
-#include "include/detail/support.h"
 #include "solver_options/solver_options.h"
 
 namespace solverslib
@@ -25,14 +24,12 @@ class SOLVER_VISIBILITY solver_options_lm : public solver_options
     friend class solver_options_lm_builder;
 
 public:
-    solver_options_lm(
-        int    max_num_iterations,
-        double function_tolerance  = std::numeric_limits<double>::epsilon(),
-        double gradient_tolerance  = 0.0,
-        double parameter_tolerance = std::numeric_limits<double>::epsilon(),
-        bool   verbose             = false)
-        : solver_options(
-              solver_enum::LM,
+    solver_options_lm(int max_num_iterations,
+        double            function_tolerance  = std::numeric_limits<double>::epsilon(),
+        double            gradient_tolerance  = 0.0,
+        double            parameter_tolerance = std::numeric_limits<double>::epsilon(),
+        bool              verbose             = false)
+        : solver_options(solver_enum::LM,
               max_num_iterations,
               function_tolerance,
               gradient_tolerance,
@@ -79,8 +76,6 @@ private:
 
     void initialize() const {};
 
-
-
     bool   accept_uphill_step_ = false;
     bool   use_geodesic_       = true;
     double alpha_              = 0.75;
@@ -105,7 +100,8 @@ private:
 class SOLVER_VISIBILITY solver_options_lm_builder
 {
 public:
-    solver_options_lm_builder() : options_(std::shared_ptr<solver_options_lm>(new solver_options_lm()))
+    solver_options_lm_builder()
+        : options_(std::shared_ptr<solver_options_lm>(new solver_options_lm()))
     {
     }
 

@@ -9,10 +9,6 @@
 namespace solverslib
 {
 
-
-
-
-
 class solver_options_ceres;
 
 class ceres_solver
@@ -21,8 +17,7 @@ public:
     using CostFunctionLambda     = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
     using CostFunctionLambda_aad = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
 
-    SOLVER_API ceres_solver(
-        size_t                     num_parameters,
+    SOLVER_API ceres_solver(size_t num_parameters,
         size_t                     num_residuals,
         CostFunctionLambda         cost_function,
         CostFunctionLambda_aad     cost_function_aad = nullptr,

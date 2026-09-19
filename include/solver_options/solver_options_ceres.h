@@ -7,7 +7,6 @@
 #include <stdexcept>
 
 #include "include/detail/support.h"
-#include "include/detail/support.h"
 #include "solver_options/solver_options.h"
 
 namespace solverslib
@@ -441,14 +440,12 @@ class SOLVER_VISIBILITY solver_options_ceres : public solver_options
     friend class solver_options_ceres_builder;
 
 public:
-    solver_options_ceres(
-        int    max_num_iterations,
-        double function_tolerance  = std::numeric_limits<double>::epsilon(),
-        double gradient_tolerance  = std::numeric_limits<double>::epsilon(),
-        double parameter_tolerance = std::numeric_limits<double>::epsilon(),
-        bool   verbose             = false)
-        : solver_options(
-              solver_enum::CERES,
+    solver_options_ceres(int max_num_iterations,
+        double               function_tolerance  = std::numeric_limits<double>::epsilon(),
+        double               gradient_tolerance  = std::numeric_limits<double>::epsilon(),
+        double               parameter_tolerance = std::numeric_limits<double>::epsilon(),
+        bool                 verbose             = false)
+        : solver_options(solver_enum::CERES,
               max_num_iterations,
               function_tolerance,
               gradient_tolerance,
@@ -693,8 +690,6 @@ private:
     void initialize() const {};
 
     solver_options_ceres() : solver_options(solverslib::solver_enum::CERES) {};
-
-
 
     visibility_clustering_enum visibility_clustering_type_ =
         visibility_clustering_enum::CANONICAL_VIEWS;

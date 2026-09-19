@@ -8,11 +8,9 @@
 #include <vector>
 
 #include "include/detail/support.h"
-#include "include/detail/support.h"
 
 namespace solverslib
 {
-
 
 class solver_options_nlopt;
 }  // namespace solverslib
@@ -24,15 +22,14 @@ class nlopt_solver
 public:
     using ObjFunc     = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
     using ObjFunc_aad = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
-    //using ConFunc = std::function<double(const Eigen::VectorXd&, Eigen::VectorXd&)>;
+    // using ConFunc = std::function<double(const Eigen::VectorXd&, Eigen::VectorXd&)>;
 
-    SOLVER_API nlopt_solver(
-        size_t              num_parameters,
-        size_t              num_residuals,
-        ObjFunc             func,
-        ObjFunc_aad         func_aad,
-        std::vector<double> lb = {},
-        std::vector<double> ub = {});
+    SOLVER_API nlopt_solver(size_t num_parameters,
+        size_t                     num_residuals,
+        ObjFunc                    func,
+        ObjFunc_aad                func_aad,
+        std::vector<double>        lb = {},
+        std::vector<double>        ub = {});
 
     SOLVER_API static bool is_supported();
 

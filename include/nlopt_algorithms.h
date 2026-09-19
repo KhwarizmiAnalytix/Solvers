@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "include/detail/support.h"
-#include "include/detail/support.h"
 
 namespace solverslib
 {

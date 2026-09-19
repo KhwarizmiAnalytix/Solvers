@@ -14,21 +14,16 @@ namespace solverslib
 class SOLVER_VISIBILITY solver_options
 {
 protected:
-    solver_options(
-        solver_enum solver,
-        int         max_num_iterations,
-        double      function_tolerance,
-        double      gradient_tolerance,
-        double      parameter_tolerance,
-        bool        verbose,
-        bool        aad_jacobian = true)
-        : solver_(solver),
-          max_num_iterations_(max_num_iterations),
-          function_tolerance_(function_tolerance),
-          gradient_tolerance_(gradient_tolerance),
-          parameter_tolerance_(parameter_tolerance),
-          verbose_(verbose),
-          aad_jacobian_(aad_jacobian)
+    solver_options(solver_enum solver,
+        int                    max_num_iterations,
+        double                 function_tolerance,
+        double                 gradient_tolerance,
+        double                 parameter_tolerance,
+        bool                   verbose,
+        bool                   aad_jacobian = true)
+        : solver_(solver), max_num_iterations_(max_num_iterations),
+          function_tolerance_(function_tolerance), gradient_tolerance_(gradient_tolerance),
+          parameter_tolerance_(parameter_tolerance), verbose_(verbose), aad_jacobian_(aad_jacobian)
 
     {
     }

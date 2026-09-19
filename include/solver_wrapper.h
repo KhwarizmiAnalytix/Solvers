@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "include/detail/support.h"
-#include "include/detail/support.h"
 #include "include/solver_enum.h"
 
 namespace solverslib
@@ -20,8 +19,9 @@ class solver_options_bfgs;
  * @brief Universal optimizer wrapper that automatically selects the appropriate optimizer
  * based on solver_options type. Eliminates the need for switch statements in calibration functions.
  *
- * This wrapper provides a unified interface for all optimization algorithms (Ceres, LM, NLopt, lbfgs_solver)
- * and automatically dispatches to the correct optimizer based on the solver_options type.
+ * This wrapper provides a unified interface for all optimization algorithms (Ceres, LM, NLopt,
+ * lbfgs_solver) and automatically dispatches to the correct optimizer based on the solver_options
+ * type.
  *
  * Usage:
  * @code
@@ -46,8 +46,9 @@ class SOLVER_VISIBILITY solver_wrapper
 {
 public:
     // Function type definitions matching the optimizer interfaces
-    using objective_function_type     = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
-    using objective_function_aad_type = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
+    using objective_function_type = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
+    using objective_function_aad_type =
+        std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
 
     /**
      * @brief Constructor with both objective function and AAD jacobian
@@ -59,13 +60,12 @@ public:
      * @param lower_bounds Lower bounds for parameters (optional)
      * @param upper_bounds Upper bounds for parameters (optional)
      */
-    SOLVER_API solver_wrapper(
-        size_t                      num_parameters,
-        size_t                      num_residuals,
-        objective_function_type     objective_function,
-        objective_function_aad_type objective_function_aad = nullptr,
-        const std::vector<double>&  lower_bounds           = {},
-        const std::vector<double>&  upper_bounds           = {});
+    SOLVER_API solver_wrapper(size_t num_parameters,
+        size_t                       num_residuals,
+        objective_function_type      objective_function,
+        objective_function_aad_type  objective_function_aad = nullptr,
+        const std::vector<double>&   lower_bounds           = {},
+        const std::vector<double>&   upper_bounds           = {});
 
     /**
      * @brief Universal solve method that automatically dispatches to the correct optimizer
@@ -74,8 +74,8 @@ public:
      * @param options Solver options (determines which optimizer to use)
      * @return true if optimization succeeded, false otherwise
      */
-    SOLVER_API bool solve(
-        std::vector<double>& parameters, const std::shared_ptr<const solver_options>& options) const;
+    SOLVER_API bool solve(std::vector<double>&       parameters,
+        const std::shared_ptr<const solver_options>& options) const;
 
     /**
      * @brief Check if the specified solver is supported

@@ -1,13 +1,11 @@
 #pragma once
 
-
 #include <cassert>
 #include <cmath>
 #include <functional>
 #include <limits>
 #include <stdexcept>
 
-#include "include/detail/support.h"
 #include "include/detail/support.h"
 #include "include/optimization_algorithm_output.h"
 
@@ -35,7 +33,7 @@ public:
 
     SOLVER_API LBFGS(int num_parameters, int num_residuals, function_type function);
 
-    SOLVER_API optimization_algorithm_output
-    solve(Eigen::VectorXd& parameters, const solver_options_bfgs& options) const;
+    SOLVER_API optimization_algorithm_output solve(
+        Eigen::VectorXd& parameters, const solver_options_bfgs& options) const;
 };
 }  // namespace solverslib

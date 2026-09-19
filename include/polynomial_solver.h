@@ -1,12 +1,10 @@
 #pragma once
 
-
 #include <cmath>
 #include <cstddef>
 #include <limits>
 #include <utility>
 
-#include "include/detail/support.h"
 #include "include/detail/support.h"
 
 namespace solverslib
@@ -20,7 +18,7 @@ public:
     /*
     //tex:
     //fourth degree polynomial solve of the equation: $$x^4 + a_3x^3 + a_2x^2 + a_1x + a_0=0$$
-    // return the minmum positive root.
+    // return the minimum positive root.
     */
     SOLVER_API static double fourth_degree_polynomial_solver(
         double a3, double a2, double a1, double a0, double threshold = 0.0000);
@@ -36,7 +34,7 @@ public:
     /*
     //tex:
     //quadratic solver of the equation: $$x^2+bx+c=0$$
-    //return the minmum positive root.
+    //return the minimum positive root.
     */
     SOLVERS_FORCE_INLINE static double second_degree_polynomial_solver(double b, double c) noexcept
     {

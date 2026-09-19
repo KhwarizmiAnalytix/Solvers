@@ -1,13 +1,11 @@
 #pragma once
 
-
 #include <cassert>
 #include <cmath>
 #include <functional>
 #include <limits>
 #include <stdexcept>
 
-#include "include/detail/support.h"
 #include "include/detail/support.h"
 #include "include/solver_output.h"
 
@@ -30,12 +28,11 @@ class lbfgs_solver
     size_type     num_residuals_;
 
 public:
-    SOLVER_API lbfgs_solver(
-        size_type     num_parameters,
-        size_type     num_residuals,
-        function_type function,
-        jacobian_type jacobian = nullptr);
-    SOLVER_API solver_output
-    solve(Eigen::VectorXd& parameters, const solver_options_bfgs& options) const;
+    SOLVER_API               lbfgs_solver(size_type num_parameters,
+                      size_type                     num_residuals,
+                      function_type                 function,
+                      jacobian_type                 jacobian = nullptr);
+    SOLVER_API solver_output solve(
+        Eigen::VectorXd& parameters, const solver_options_bfgs& options) const;
 };
 }  // namespace solverslib
