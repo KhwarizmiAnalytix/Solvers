@@ -10,21 +10,17 @@
 
 namespace solverslib
 {
-template <typename T>
-inline double l2_norm(T const& h)
+template <typename T> inline double l2_norm(T const& h)
 {
     return h.norm();
 }
 
-levenberg_marquardt_solver::levenberg_marquardt_solver(
-    size_t                                    num_parameters,
-    size_t                                    num_residuals,
-    levenberg_marquardt_solver::function_type function,
-    levenberg_marquardt_solver::jacobian_type jacobian)
-    : function_(std::move(function)),
-      jacobian_(std::move(jacobian)),
-      num_parameters_(num_parameters),
-      num_residuals_(num_residuals)
+levenberg_marquardt_solver::levenberg_marquardt_solver(size_t num_parameters,
+    size_t                                                    num_residuals,
+    levenberg_marquardt_solver::function_type                 function,
+    levenberg_marquardt_solver::jacobian_type                 jacobian)
+    : function_(std::move(function)), jacobian_(std::move(jacobian)),
+      num_parameters_(num_parameters), num_residuals_(num_residuals)
 {
 }
 
@@ -86,7 +82,7 @@ solver_output levenberg_marquardt_solver::solve(
 
     vector_type y_p(m), y_p_new(m), y_tmp(m);
     vector_type JtWdy(n), p_new(n), last_accepted_step = vector_type::Zero(n);
-    vector_type step(n), tmp(n), diagonals = vector_type::Ones(n);
+    vector_type step(n), tmp(n), diagonals             = vector_type::Ones(n);
     matrix_type J(m, n), Jt(n, m), JtWJ(n, n), JtWJ_lambda(n, n);
 
     function_(parameters, y_p);
@@ -184,8 +180,8 @@ solver_output levenberg_marquardt_solver::solve(
                     if (x2_p > norm)
                     {
                         x2_p_new = norm;
-                        p_new = tmp;
-                        y_p_new = y_tmp;
+                        p_new    = tmp;
+                        y_p_new  = y_tmp;
 
                         if (accept_uphill_step)
                         {
@@ -205,10 +201,9 @@ solver_output levenberg_marquardt_solver::solve(
                 auto norm_previous_h = l2_norm(last_accepted_step);
                 auto norm_h          = l2_norm(step);
 
-                auto cos_theta =
-                    !is_almost_zero(norm_h * norm_previous_h)
-                        ? step.dot(last_accepted_step) / (norm_h * norm_previous_h)
-                        : 0.;
+                auto cos_theta = !is_almost_zero(norm_h * norm_previous_h)
+                                     ? step.dot(last_accepted_step) / (norm_h * norm_previous_h)
+                                     : 0.;
 
                 min_x2 = std::min(x2_p, min_x2);
 
@@ -217,15 +212,14 @@ solver_output levenberg_marquardt_solver::solve(
 
             if (update_step)
             {
-                parameters = p_new;
-                y_p = y_p_new;
+                parameters       = p_new;
+                y_p              = y_p_new;
                 auto previous_x2 = x2_p;
                 x2_p             = x2_p_new;
                 min_x2           = std::min(x2_p, min_x2);
 
                 // Enhanced logging for accepted steps
-                SOLVERS_LOG_IF(
-                    INFO,
+                SOLVERS_LOG_IF(INFO,
                     options.verbose(),
                     "LM Iter " << std::setw(3) << iteration << " | ACCEPTED STEP | "
                                << "f(x) = " << std::scientific << std::setprecision(3) << x2_p
@@ -275,8 +269,7 @@ solver_output levenberg_marquardt_solver::solve(
                 // Log convergence status if any criterion is met
                 if (parameters_converged || gradient_converged || x2_converged)
                 {
-                    SOLVERS_LOG_IF(
-                        INFO,
+                    SOLVERS_LOG_IF(INFO,
                         options.verbose(),
                         "LM Iter " << std::setw(3) << iteration << " | CONVERGENCE CHECK | "
                                    << "rel_step = " << std::scientific << std::setprecision(2)
@@ -296,8 +289,7 @@ solver_output levenberg_marquardt_solver::solve(
             else
             {
                 // Enhanced logging for rejected steps
-                SOLVERS_LOG_IF(
-                    INFO,
+                SOLVERS_LOG_IF(INFO,
                     options.verbose(),
                     "LM Iter " << std::setw(3) << iteration << " | REJECTED STEP | "
                                << "f(x) = " << std::scientific << std::setprecision(3) << x2_p
@@ -327,8 +319,7 @@ solver_output levenberg_marquardt_solver::solve(
                 }
 
                 // Log the new lambda value after adjustment
-                SOLVERS_LOG_IF(
-                    INFO,
+                SOLVERS_LOG_IF(INFO,
                     options.verbose(),
                     "LM Iter " << std::setw(3) << iteration << " | lambda increased to "
                                << std::scientific << std::setprecision(2) << lambda);
@@ -342,8 +333,7 @@ solver_output levenberg_marquardt_solver::solve(
     }
 
     // Log final optimization status
-    SOLVERS_LOG_IF(
-        INFO,
+    SOLVERS_LOG_IF(INFO,
         options.verbose(),
         "LM COMPLETED | iterations = " << iteration << " | final f(x) = " << std::scientific
                                        << std::setprecision(3) << x2_p << " | "
@@ -355,8 +345,6 @@ solver_output levenberg_marquardt_solver::solve(
     solver_output output(num_residuals_);
 
     output.update(x2_converged, parameters_converged, gradient_converged, iteration, y_p);
-
-
 
     return output;
 }

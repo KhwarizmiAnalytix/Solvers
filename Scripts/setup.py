@@ -47,13 +47,18 @@ def run(command: list[str], cwd: Path = ROOT) -> None:
 
 def cmake_args(tokens: set[str], build_dir: Path) -> list[str]:
     build_type = "Release" if "release" in tokens else "RelWithDebInfo" if "relwithdebinfo" in tokens else "Debug"
+    # The benchmark target lives in Testing/Cxx, which the top-level CMakeLists
+    # only add_subdirectory()s when testing is enabled, so requesting the
+    # benchmark implies testing even if the "test" token was left off.
+    enable_testing = "test" in tokens or "testing" in tokens or "benchmark" in tokens
     args = [
         "-S", str(ROOT),
         "-B", str(build_dir),
         f"-DCMAKE_BUILD_TYPE={build_type}",
-        f"-DSOLVERS_ENABLE_TESTING={'ON' if 'test' in tokens or 'testing' in tokens else 'OFF'}",
+        f"-DSOLVERS_ENABLE_TESTING={'ON' if enable_testing else 'OFF'}",
         f"-DSOLVERS_ENABLE_CERES={'ON' if 'ceres' in tokens else 'OFF'}",
         f"-DSOLVERS_ENABLE_NLOPT={'ON' if 'nlopt' in tokens else 'OFF'}",
+        f"-DSOLVERS_ENABLE_BENCHMARKS={'ON' if 'benchmark' in tokens else 'OFF'}",
         f"-DSOLVERS_ENABLE_SANITIZER={'ON' if 'sanitizer' in tokens or 'asan' in tokens else 'OFF'}",
         f"-DSOLVERS_ENABLE_COVERAGE={'ON' if 'coverage' in tokens else 'OFF'}",
         f"-DBUILD_SHARED_LIBS={'ON' if 'shared' in tokens else 'OFF'}",
@@ -63,6 +68,21 @@ def cmake_args(tokens: set[str], build_dir: Path) -> list[str]:
     elif "clang" in tokens and platform.system() != "Windows":
         args.extend(["-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++"])
     return args
+
+
+def find_built_executable(build_dir: Path, name: str) -> Path:
+    exe_name = f"{name}.exe" if platform.system() == "Windows" else name
+    # Multi-config generators (Visual Studio, Xcode) nest the binary under a
+    # per-config directory; single-config ones (Ninja, Make) do not.
+    for candidate in (
+        build_dir / "Testing" / "Cxx" / exe_name,
+        build_dir / "Testing" / "Cxx" / "Release" / exe_name,
+        build_dir / "Testing" / "Cxx" / "RelWithDebInfo" / exe_name,
+        build_dir / "Testing" / "Cxx" / "Debug" / exe_name,
+    ):
+        if candidate.exists():
+            return candidate
+    raise RuntimeError(f"Could not find built executable {name!r} under {build_dir}; was it built?")
 
 
 def main(arguments: list[str]) -> int:
@@ -90,6 +110,12 @@ def main(arguments: list[str]) -> int:
             run(["cmake", "--build", str(build_dir), "--parallel"])
         if "test" in tokens:
             run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
+        if "benchmark" in tokens:
+            if "build" not in tokens:
+                print_status("'benchmark' requires 'build'; add .build to actually compile it", "ERROR")
+                return 1
+            print_status("Running solver backend benchmark (LM/LBFGS vs. NLopt/Ceres)")
+            run([str(find_built_executable(build_dir, "SolversBenchmark"))])
         if "coverage" in tokens:
             print_status("Coverage instrumentation is enabled; use the repository coverage tooling to collect reports.")
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:

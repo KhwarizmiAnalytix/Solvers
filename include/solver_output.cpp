@@ -6,13 +6,11 @@ namespace solverslib
 {
 namespace
 {
-template <typename T>
-inline double l2_norm(T const& h)
+template <typename T> inline double l2_norm(T const& h)
 {
     return h.norm();
 }
-template <typename T>
-inline double l_max_norm(T const& h)
+template <typename T> inline double l_max_norm(T const& h)
 {
     return h.cwiseAbs().maxCoeff();
 }
@@ -23,12 +21,11 @@ solver_output::solver_output(size_type m)
 {
 }
 
-void solver_output::update(
-    bool               x2_converged,
-    bool               parameters_converged,
-    bool               gradient_converged,
-    size_type          iteration,
-    const vector_type& y_p)
+void solver_output::update(bool x2_converged,
+    bool                        parameters_converged,
+    bool                        gradient_converged,
+    size_type                   iteration,
+    const vector_type&          y_p)
 {
     iterations_ = iteration;
     if (x2_converged)

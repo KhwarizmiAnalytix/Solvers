@@ -15,18 +15,15 @@
 namespace solverslib
 {
 
-solver_wrapper::solver_wrapper(
-    size_t                      num_parameters,
-    size_t                      num_residuals,
-    objective_function_type     objective_function,
-    objective_function_aad_type objective_function_aad,
-    const std::vector<double>&  lower_bounds,
-    const std::vector<double>&  upper_bounds)
-    : num_parameters_(num_parameters),
-      num_residuals_(num_residuals),
+solver_wrapper::solver_wrapper(size_t num_parameters,
+    size_t                            num_residuals,
+    objective_function_type           objective_function,
+    objective_function_aad_type       objective_function_aad,
+    const std::vector<double>&        lower_bounds,
+    const std::vector<double>&        upper_bounds)
+    : num_parameters_(num_parameters), num_residuals_(num_residuals),
       objective_function_(std::move(objective_function)),
-      objective_function_aad_(std::move(objective_function_aad)),
-      lower_bounds_(lower_bounds),
+      objective_function_aad_(std::move(objective_function_aad)), lower_bounds_(lower_bounds),
       upper_bounds_(upper_bounds)
 {
     SOLVERS_CHECK(num_parameters > 0, "Number of parameters must be positive");
@@ -36,14 +33,12 @@ solver_wrapper::solver_wrapper(
     // Validate bounds if provided
     if (!lower_bounds_.empty())
     {
-        SOLVERS_CHECK(
-            lower_bounds_.size() == num_parameters_,
+        SOLVERS_CHECK(lower_bounds_.size() == num_parameters_,
             "Lower bounds size must match number of parameters");
     }
     if (!upper_bounds_.empty())
     {
-        SOLVERS_CHECK(
-            upper_bounds_.size() == num_parameters_,
+        SOLVERS_CHECK(upper_bounds_.size() == num_parameters_,
             "Upper bounds size must match number of parameters");
     }
 }
@@ -51,8 +46,7 @@ solver_wrapper::solver_wrapper(
 bool solver_wrapper::solve(
     std::vector<double>& parameters, const std::shared_ptr<const solver_options>& options) const
 {
-    SOLVERS_CHECK(
-        parameters.size() == num_parameters_,
+    SOLVERS_CHECK(parameters.size() == num_parameters_,
         "Parameter vector size must match number of parameters");
     SOLVERS_CHECK(options != nullptr, "Solver options cannot be null");
 
@@ -87,8 +81,7 @@ bool solver_wrapper::solve_ceres(
         return false;
     }
 
-    const auto& solver = std::make_unique<ceres_solver>(
-        num_parameters_,
+    const auto& solver = std::make_unique<ceres_solver>(num_parameters_,
         num_residuals_,
         objective_function_,
         options.aad_jacobian() ? objective_function_aad_ : nullptr,
@@ -102,16 +95,15 @@ bool solver_wrapper::solve_lm(
     std::vector<double>& parameters, const solver_options_lm& options) const
 {
     // Convert std::vector to solverslib::vector for LM solver
-    vector_type quarisma_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
+    vector_type solver_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
 
-    levenberg_marquardt_solver solver(
-        num_parameters_,
+    levenberg_marquardt_solver solver(num_parameters_,
         num_residuals_,
         objective_function_,
         options.aad_jacobian() ? objective_function_aad_ : nullptr);
 
-    auto result = solver.solve(quarisma_params, options);
-    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = quarisma_params;
+    auto result = solver.solve(solver_params, options);
+    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = solver_params;
 
     if (options.verbose())
     {
@@ -129,8 +121,7 @@ bool solver_wrapper::solve_nlopt(
         return false;
     }
 
-    nlopt_solver solver(
-        num_parameters_,
+    nlopt_solver solver(num_parameters_,
         num_residuals_,
         objective_function_,
         options.aad_jacobian() ? objective_function_aad_ : nullptr,
@@ -145,16 +136,15 @@ bool solver_wrapper::solve_nlopt(
 bool solver_wrapper::solve_lbfgs(
     std::vector<double>& parameters, const solver_options_bfgs& options) const
 {
-    vector_type quarisma_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
+    vector_type solver_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
 
-    const auto& solver = std::make_unique<lbfgs_solver>(
-        num_parameters_,
+    const auto& solver = std::make_unique<lbfgs_solver>(num_parameters_,
         num_residuals_,
         objective_function_,
         options.aad_jacobian() ? objective_function_aad_ : nullptr);
 
-    auto result = solver->solve(quarisma_params, options);
-    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = quarisma_params;
+    auto result = solver->solve(solver_params, options);
+    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = solver_params;
 
     if (options.verbose())
     {

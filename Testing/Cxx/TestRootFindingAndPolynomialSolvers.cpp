@@ -19,7 +19,7 @@ constexpr double kPi = 3.14159265358979323846;
 
 TEST(RootFindingBrent, FindsRootOfQuadratic)
 {
-    double root = 0.0;
+    double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
         [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, 0.0, 1e-12);
 
@@ -30,7 +30,7 @@ TEST(RootFindingBrent, FindsRootOfQuadratic)
 TEST(RootFindingBrent, FindsRootOfTranscendentalFixedPoint)
 {
     // cos(x) - x == 0 is the classic fixed-point benchmark, root ~ 0.7390851332.
-    double root = 0.0;
+    double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
         [](double x) { return std::cos(x) - x; }, 0.0, 1.0, root, 0.0, 1e-12);
 
@@ -40,7 +40,7 @@ TEST(RootFindingBrent, FindsRootOfTranscendentalFixedPoint)
 
 TEST(RootFindingBrent, FindsRootOfCubic)
 {
-    double root = 0.0;
+    double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
         [](double x) { return x * x * x - x - 2.0; }, 1.0, 2.0, root, 0.0, 1e-12);
 
@@ -51,7 +51,7 @@ TEST(RootFindingBrent, FindsRootOfCubic)
 TEST(RootFindingBrent, HonorsFunctionOffset)
 {
     // Solves cos(x) == 0.5 by passing f_0 rather than folding it into the lambda.
-    double root = 0.0;
+    double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
         [](double x) { return std::cos(x); }, 0.0, 1.2, root, 0.5, 1e-12);
 
@@ -70,10 +70,15 @@ TEST(RootFindingBrent, ThrowsWhenBracketDoesNotContainRoot)
 TEST(RootFindingBrent, ReturnsFalseWhenIterationBudgetIsExhausted)
 {
     // Machine-epsilon tolerances with only a handful of iterations cannot converge.
-    double root = 0.0;
-    const bool converged = root_finding_algorithms::brent(
-        [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, 0.0,
-        std::numeric_limits<double>::epsilon(), std::numeric_limits<double>::epsilon(), 2);
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::brent([](double x) { return x * x - 4.0; },
+        0.0,
+        3.0,
+        root,
+        0.0,
+        std::numeric_limits<double>::epsilon(),
+        std::numeric_limits<double>::epsilon(),
+        2);
 
     EXPECT_FALSE(converged);
 }
@@ -84,9 +89,10 @@ TEST(RootFindingBrent, ReturnsFalseWhenIterationBudgetIsExhausted)
 
 TEST(RootFindingDekker, FindsRootOfQuadratic)
 {
-    double root = 0.0;
+    double     root      = 0.0;
     const bool converged = root_finding_algorithms::dekker(
-        [](double x, double& df_dx) {
+        [](double x, double& df_dx)
+        {
             df_dx = 2.0 * x;
             return x * x - 4.0;
         },
@@ -103,9 +109,10 @@ TEST(RootFindingDekker, FindsRootOfQuadratic)
 TEST(RootFindingDekker, FindsRootOfCubic)
 {
     // x^3 - 2x - 5 == 0, root ~ 2.0945514815.
-    double root = 0.0;
+    double     root      = 0.0;
     const bool converged = root_finding_algorithms::dekker(
-        [](double x, double& df_dx) {
+        [](double x, double& df_dx)
+        {
             df_dx = 3.0 * x * x - 2.0;
             return x * x * x - 2.0 * x - 5.0;
         },
@@ -121,9 +128,10 @@ TEST(RootFindingDekker, FindsRootOfCubic)
 
 TEST(RootFindingDekker, ConvergesEarlyWhenBracketEndpointIsExactRoot)
 {
-    double root = 0.0;
+    double     root      = 0.0;
     const bool converged = root_finding_algorithms::dekker(
-        [](double x, double& df_dx) {
+        [](double x, double& df_dx)
+        {
             df_dx = 2.0 * x;
             return x * x - 4.0;
         },
@@ -138,15 +146,15 @@ TEST(RootFindingDekker, ConvergesEarlyWhenBracketEndpointIsExactRoot)
 TEST(RootFindingDekker, ThrowsWhenBracketDoesNotContainRoot)
 {
     double root = 0.0;
-    EXPECT_THROW(
-        root_finding_algorithms::dekker(
-            [](double x, double& df_dx) {
-                df_dx = 2.0 * x;
-                return x * x - 4.0;
-            },
-            3.0,
-            5.0,
-            root),
+    EXPECT_THROW(root_finding_algorithms::dekker(
+                     [](double x, double& df_dx)
+                     {
+                         df_dx = 2.0 * x;
+                         return x * x - 4.0;
+                     },
+                     3.0,
+                     5.0,
+                     root),
         std::invalid_argument);
 }
 

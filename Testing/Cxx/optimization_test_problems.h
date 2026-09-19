@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <functional>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,15 @@ struct optimization_test_problem
     residual_function_type residuals;
     jacobian_function_type jacobian;
 };
+
+// Found via ADL by GoogleTest's universal printer. Without this, every
+// parameterized test using optimization_test_problem (gtest_list_tests,
+// ctest -N, and any assertion failure involving GetParam()) prints a raw
+// "152-byte object <hex ...>" dump instead of the problem name.
+inline void PrintTo(const optimization_test_problem& problem, std::ostream* os)
+{
+    *os << problem.name;
+}
 
 // Scalar affine residual: r(x) = x - 2. The simplest possible sanity check.
 inline optimization_test_problem make_linear_scalar_problem()

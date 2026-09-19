@@ -1,4 +1,4 @@
-# Quarisma Math Library
+# Solver Math Library
 
 ![C++17](https://img.shields.io/badge/C++-17-blue.svg?style=flat&logo=c%2B%2B)
 ![License](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)
@@ -16,7 +16,7 @@ Developed and maintained by [QuarismAnalytix](https://github.com/QuarismAnalytix
 - Special functions for finance
 - Matrix operations with GPU support
 - Cross-platform compatibility
-- Integration with Quarisma quantitative analysis ecosystem
+- Integration with Solver quantitative analysis ecosystem
 
 ## Source organization
 
@@ -36,8 +36,8 @@ placed in the closest named component instead of `common/`.
 ### Using CMake
 
 ```cmake
-find_package(QuarismaMath REQUIRED)
-target_link_libraries(your_target PRIVATE Quarisma::Math)
+find_package(SolverMath REQUIRED)
+target_link_libraries(your_target PRIVATE Solver::Math)
 ```
 
 ### Building from Source
@@ -50,9 +50,9 @@ cmake --build .
 
 ## Dependencies
 
-- Quarisma::Core
-- Quarisma::Serialization
-- Quarisma::Vectorization
+- Solver::Core
+- Solver::Serialization
+- Solver::Vectorization
 
 ## License
 

@@ -19,6 +19,7 @@
 
 #include <Eigen/Core>
 
+#include "optimization_test_problems.h"
 #include "solver_options/solver_options_bfgs.h"
 #include "solver_options/solver_options_ceres.h"
 #include "solver_options/solver_options_lm.h"
@@ -26,7 +27,6 @@
 #include "solver_wrapper.h"
 #include "solvers/ceres_solver.h"
 #include "solvers/nlopt_solver.h"
-#include "optimization_test_problems.h"
 
 namespace solverslib
 {
@@ -41,7 +41,8 @@ struct timing_result
     double median_ms;
 };
 
-double residual_norm(const optimization_test_problem& problem, const std::vector<double>& parameters)
+double residual_norm(
+    const optimization_test_problem& problem, const std::vector<double>& parameters)
 {
     Eigen::VectorXd x = Eigen::Map<const Eigen::VectorXd>(parameters.data(), parameters.size());
     Eigen::VectorXd r(static_cast<Eigen::Index>(problem.num_residuals));
@@ -53,10 +54,10 @@ double residual_norm(const optimization_test_problem& problem, const std::vector
 // guess before every call since solve() mutates it in place.
 template <typename Attempt>
 timing_result time_solve(const optimization_test_problem& problem,
-    std::vector<double>&                                   parameters,
-    Attempt&&                                               attempt,
-    int                                                     warmup_runs = 2,
-    int                                                     timed_runs  = 7)
+    std::vector<double>&                                  parameters,
+    Attempt&&                                             attempt,
+    int                                                   warmup_runs = 2,
+    int                                                   timed_runs  = 7)
 {
     for (int i = 0; i < warmup_runs; ++i)
     {
@@ -68,10 +69,10 @@ timing_result time_solve(const optimization_test_problem& problem,
     samples_ms.reserve(static_cast<size_t>(timed_runs));
     for (int i = 0; i < timed_runs; ++i)
     {
-        parameters           = problem.initial_guess;
-        const auto start     = clock_type::now();
+        parameters       = problem.initial_guess;
+        const auto start = clock_type::now();
         attempt(parameters);
-        const auto end       = clock_type::now();
+        const auto end = clock_type::now();
         samples_ms.push_back(std::chrono::duration<double, std::milli>(end - start).count());
     }
 
@@ -96,8 +97,8 @@ void print_row(const std::string& problem_name,
     }
 
     std::cout << std::setw(11) << (converged ? "converged" : "FAILED") << std::setw(16)
-               << final_residual << "best=" << std::fixed << std::setprecision(4) << timing.best_ms
-               << "ms median=" << timing.median_ms << "ms\n";
+              << final_residual << "best=" << std::fixed << std::setprecision(4) << timing.best_ms
+              << "ms median=" << timing.median_ms << "ms\n";
 }
 
 void benchmark_problem(const optimization_test_problem& problem)
@@ -108,31 +109,40 @@ void benchmark_problem(const optimization_test_problem& problem)
     {
         solver_wrapper wrapper(
             problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
-        auto options = std::make_shared<solver_options_lm>(500, 1e-14, 1e-14, 1e-14);
-        bool converged = false;
-        const auto timing = time_solve(problem, parameters, [&](std::vector<double>& p) {
-            converged = wrapper.solve(p, options);
-        });
-        print_row(problem.name, "LM (native)", true, converged, residual_norm(problem, parameters), timing);
+        auto       options   = std::make_shared<solver_options_lm>(500, 1e-14, 1e-14, 1e-14);
+        bool       converged = false;
+        const auto timing    = time_solve(problem,
+            parameters,
+            [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
+        print_row(problem.name,
+            "LM (native)",
+            true,
+            converged,
+            residual_norm(problem, parameters),
+            timing);
     }
 
     // Native L-BFGS.
     {
         solver_wrapper wrapper(
             problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
-        auto options = std::make_shared<solver_options_bfgs>(500, 1e-14, 1e-14, 1e-14);
-        bool converged = false;
-        const auto timing = time_solve(problem, parameters, [&](std::vector<double>& p) {
-            converged = wrapper.solve(p, options);
-        });
-        print_row(
-            problem.name, "LBFGS (native)", true, converged, residual_norm(problem, parameters), timing);
+        auto       options   = std::make_shared<solver_options_bfgs>(500, 1e-14, 1e-14, 1e-14);
+        bool       converged = false;
+        const auto timing    = time_solve(problem,
+            parameters,
+            [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
+        print_row(problem.name,
+            "LBFGS (native)",
+            true,
+            converged,
+            residual_norm(problem, parameters),
+            timing);
     }
 
     // NLopt (LD_LBFGS), optional backend.
     {
-        const bool available = nlopt_solver::is_supported();
-        bool       converged = false;
+        const bool    available = nlopt_solver::is_supported();
+        bool          converged = false;
         timing_result timing{0.0, 0.0};
         if (available)
         {
@@ -140,29 +150,38 @@ void benchmark_problem(const optimization_test_problem& problem)
                 problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
             auto options = std::make_shared<solver_options_nlopt>(
                 nlopt_algo_name_enum::LBFGS, 500, 1e-14, 1e-14, 1e-14);
-            timing = time_solve(problem, parameters, [&](std::vector<double>& p) {
-                converged = wrapper.solve(p, options);
-            });
+            timing = time_solve(problem,
+                parameters,
+                [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
         }
-        print_row(
-            problem.name, "NLopt", available, converged, residual_norm(problem, parameters), timing);
+        print_row(problem.name,
+            "NLopt",
+            available,
+            converged,
+            residual_norm(problem, parameters),
+            timing);
     }
 
     // Ceres, optional backend.
     {
-        const bool available = ceres_solver::is_supported();
-        bool       converged = false;
+        const bool    available = ceres_solver::is_supported();
+        bool          converged = false;
         timing_result timing{0.0, 0.0};
         if (available)
         {
             solver_wrapper wrapper(
                 problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
             auto options = std::make_shared<solver_options_ceres>(500, 1e-14, 1e-14, 1e-14);
-            timing = time_solve(problem, parameters, [&](std::vector<double>& p) {
-                converged = wrapper.solve(p, options);
-            });
+            timing       = time_solve(problem,
+                parameters,
+                [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
         }
-        print_row(problem.name, "Ceres", available, converged, residual_norm(problem, parameters), timing);
+        print_row(problem.name,
+            "Ceres",
+            available,
+            converged,
+            residual_norm(problem, parameters),
+            timing);
     }
 }
 
