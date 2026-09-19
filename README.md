@@ -18,6 +18,19 @@ Developed and maintained by [QuarismAnalytix](https://github.com/QuarismAnalytix
 - Cross-platform compatibility
 - Integration with Quarisma quantitative analysis ecosystem
 
+## Source organization
+
+Numerical grid and stencil algorithms are grouped under `numerical_operation/`:
+
+- `discretization`
+- `finite_difference`
+- `tridiagonal_operations`
+- `pentadiagonal_operations`
+
+The `common/` directory is reserved for shared algorithms that do not belong to
+a more specific mathematical component. New numerical algorithms should be
+placed in the closest named component instead of `common/`.
+
 ## Installation
 
 ### Using CMake

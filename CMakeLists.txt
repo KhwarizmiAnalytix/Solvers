@@ -1,98 +1,50 @@
-set(MATH_INCLUDE_LIBS "${QUARISMA_DEPENDENCY_LIBS}")
+cmake_minimum_required(VERSION 3.20)
+project(Solvers VERSION 1.0.0 LANGUAGES C CXX)
 
-# -----------------------------------------------------------------------------
-# An optional dependency on CUDA
-if(QUARISMA_ENABLE_CUDA)
-  list(APPEND MATH_INCLUDE_DIRS "${CUDA_INCLUDE_DIRS}")
-  list(APPEND MATH_INCLUDE_LIBS "${CUDA_CUDA_LIBRARY}")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Cmake")
+option(SOLVERS_ENABLE_TESTING "Build the GoogleTest solver suite" ${PROJECT_IS_TOP_LEVEL})
+option(SOLVERS_ENABLE_CERES "Build the optional Ceres backend" OFF)
+option(SOLVERS_ENABLE_NLOPT "Build the optional NLopt backend" OFF)
+option(SOLVERS_ENABLE_SANITIZER "Enable address and undefined behavior sanitizers" OFF)
+option(SOLVERS_ENABLE_COVERAGE "Enable coverage instrumentation" OFF)
+option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+include(SolversDependencies)
 
-  file(
-    GLOB_RECURSE CUDA_SOURCES
-    LIST_DIRECTORIES false
-    "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.cu")
-
-  set_source_files_properties(${CUDA_SOURCES} PROPERTIES LANGUAGE "CUDA")
-
-  set(GLOB_RECURSE CUDA_HEADERS LIST_DIRECTORIES false
-                   "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.h")
+file(GLOB_RECURSE solvers_sources CONFIGURE_DEPENDS "include/**/*.cxx")
+add_library(Solvers ${solvers_sources})
+add_library(Solvers::Solvers ALIAS Solvers)
+target_include_directories(Solvers
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+)
+target_compile_features(Solvers PUBLIC cxx_std_17)
+target_link_libraries(Solvers PUBLIC Eigen3::Eigen magic_enum::magic_enum)
+target_compile_definitions(Solvers PUBLIC
+  SOLVERS_HAS_CERES=$<BOOL:${SOLVERS_ENABLE_CERES}>
+  SOLVERS_HAS_NLOPT=$<BOOL:${SOLVERS_ENABLE_NLOPT}>)
+if(BUILD_SHARED_LIBS)
+  target_compile_definitions(Solvers PUBLIC SOLVERS_SHARED PRIVATE SOLVERS_BUILDING)
+  set_target_properties(Solvers PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
-
-#message("QUARISMA_SMP_IMPLEMENTATION_TYPE: ${QUARISMA_SMP_IMPLEMENTATION_TYPE}")
-
-if(QUARISMA_ENABLE_MKL)
-  list(APPEND MATH_INCLUDE_DIRS "${QUARISMA_MKL_INCLUDE_DIRS}")
-  list(APPEND MATH_INCLUDE_LIBS "${QUARISMA_MKL_INCLUDE_LIBS}")
+if(SOLVERS_ENABLE_CERES)
+  target_link_libraries(Solvers PRIVATE Ceres::ceres)
 endif()
-# -----------------------------------------------------------------------------
-file(
-  GLOB_RECURSE sources
-  LIST_DIRECTORIES false
-  "${CMAKE_CURRENT_SOURCE_DIR}/*.cxx")
-
-file(
-  GLOB_RECURSE headers
-  LIST_DIRECTORIES false
-  "${CMAKE_CURRENT_SOURCE_DIR}/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/*.inl")
-
-file(
-  GLOB_RECURSE templates
-  LIST_DIRECTORIES false
-  "${CMAKE_CURRENT_SOURCE_DIR}/*.hxx")
-
-list(FILTER sources EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/Testing")
-list(FILTER headers EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/Testing")
-
-if(NOT QUARISMA_ENABLE_CUDA)
-  list(FILTER sources EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cuda/")
-  list(FILTER headers EXCLUDE REGEX "${CMAKE_CURRENT_SOURCE_DIR}/cuda/")
+if(SOLVERS_ENABLE_NLOPT)
+  target_link_libraries(Solvers PRIVATE nlopt)
 endif()
-
-file(
-  GLOB_RECURSE wrap_headers
-  LIST_DIRECTORIES false
-  "${CMAKE_CURRENT_SOURCE_DIR}/distribution/*.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/copula/*.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/laplace_inverter/*.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/interpolator/interpolator_enum.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/quadrature/*.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/optimization_algorithm/*.h")
-
-quarisma_module_add_module(
-  QUARISMA::Math
-  SOURCES
-  ${sources}
-  ${CUDA_SOURCES}
-  HEADERS
-  ${headers}
-  ${CUDA_HEADERS}
-  TEMPLATES
-  ${templates}
-  WRAP_HEADERS
-  ${wrap_headers})
-
-if(MATH_INCLUDE_DIRS)
-  quarisma_module_include(QUARISMA::Math PUBLIC ${MATH_INCLUDE_DIRS})
+if(SOLVERS_ENABLE_SANITIZER AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(Solvers PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(Solvers PUBLIC -fsanitize=address,undefined)
 endif()
-#target_link_libraries(Math PRIVATE quarismaeigen)
-
-quarisma_module_link(QUARISMA::Math PUBLIC ${MATH_INCLUDE_LIBS})
-
-quarisma_module_compile_features(QUARISMA::Math PUBLIC cxx_std_${QUARISMA_CXX_STANDARD})
-quarisma_module_create_filters("${CMAKE_CURRENT_SOURCE_DIR}")
-
-set_target_properties(Math PROPERTIES
-                      POSITION_INDEPENDENT_CODE ON
-                      CUDA_ARCHITECTURES OFF
-                      # CUDA_SEPARABLE_COMPILATION ON
-                      )
-
-if (MSVC)
-    set_target_properties(Math
-                            PROPERTIES
-                            CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+if(SOLVERS_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(Solvers PUBLIC --coverage)
+  target_link_options(Solvers PUBLIC --coverage)
 endif()
-set_target_properties(Math PROPERTIES CXX_INCLUDE_WHAT_YOU_USE "${INCLUDE_WHAT_YOU_USE}")
-if(CLANG_TIDY_FOUND)
-  quarisma_module_enable_clang_tidy(Math)
+if(SOLVERS_ENABLE_TESTING)
+  enable_testing()
+  add_subdirectory(Testing/Cxx)
 endif()
-

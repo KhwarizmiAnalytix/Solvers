@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "common/pointer.h"
-#include "optimization_algorithm/solver_options/solver_options_lm.h"
-#include "optimization_algorithm/solver_wrapper.h"
+#include "solvers/solver_options/solver_options_lm.h"
+#include "solvers/solver_wrapper.h"
 #include "quarismaTest.h"
 #include "quarismaTesting.h"
 

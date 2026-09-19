@@ -2,12 +2,12 @@
 #include <cstddef>
 
 #include "expressions/expressions.h"
-#include "optimization_algorithm/root_finding_algorithms.h"
-#include "optimization_algorithm/solver_options/solver_options_bfgs.h"
-#include "optimization_algorithm/solver_options/solver_options_lm.h"
-#include "optimization_algorithm/solvers/lbfgs_solver.h"
-#include "optimization_algorithm/solvers/levenberg_marquardt_solver.h"
-#include "optimization_algorithm/solvers/nlopt_solver.h"
+#include "solvers/root_finding_algorithms.h"
+#include "solvers/solver_options/solver_options_bfgs.h"
+#include "solvers/solver_options/solver_options_lm.h"
+#include "solvers/solvers/lbfgs_solver.h"
+#include "solvers/solvers/levenberg_marquardt_solver.h"
+#include "solvers/solvers/nlopt_solver.h"
 #include "terminals/matrix.h"
 #include "terminals/vector.h"
 #include "quarismaTest.h"
