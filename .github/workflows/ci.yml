@@ -30,6 +30,12 @@ jobs:
             args: config.build.test.nlopt
           - name: ceres-nlopt
             args: config.build.test.ceres.nlopt
+          - name: ceres-nlopt-benchmark
+            args: config.build.test.ceres.nlopt.benchmark
+          - name: gcc
+            args: config.build.test.gcc
+          - name: clangtidy
+            args: config.build.clangtidy
 
     steps:
       - name: Check out repository
@@ -45,6 +51,10 @@ jobs:
 
       - name: Install CMake
         uses: lukka/get-cmake@latest
+
+      - name: Install clang-tidy
+        if: matrix.name == 'clangtidy'
+        run: sudo apt-get update && sudo apt-get install --yes clang-tidy
 
       - name: Configure, build, and test
         working-directory: Scripts
