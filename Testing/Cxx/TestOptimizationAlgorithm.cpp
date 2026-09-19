@@ -1,4 +1,3 @@
-#include <Eigen/Core>
 #include <gtest/gtest.h>
 
 #include "solver_options/solver_options_lm.h"
@@ -15,11 +14,11 @@ TEST(OptimizationAlgorithm, LevenbergMarquardtSolvesScalarResidual)
     levenberg_marquardt_solver solver(
         1,
         1,
-        [](const Eigen::VectorXd& parameters, Eigen::VectorXd& residuals)
+        [](const vector_type& parameters, vector_type& residuals)
         { residuals[0] = parameters[0] - 3.0; },
-        [](const Eigen::VectorXd&, Eigen::MatrixXd& jacobian) { jacobian(0, 0) = 1.0; });
+        [](const vector_type&, matrix_type& jacobian) { jacobian(0, 0) = 1.0; });
     solver_options_lm options(100, 1e-12, 1e-12, 1e-12);
-    Eigen::VectorXd   parameters(1);
+    vector_type        parameters(1);
     parameters[0] = 0.0;
 
     const solver_output result = solver.solve(parameters, options);

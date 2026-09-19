@@ -94,8 +94,8 @@ bool solver_wrapper::solve_ceres(
 bool solver_wrapper::solve_lm(
     std::vector<double>& parameters, const solver_options_lm& options) const
 {
-    // Convert std::vector to solverslib::vector for LM solver
-    vector_type solver_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
+    // Convert std::vector to solverslib::vector_type for the LM solver
+    vector_type solver_params = to_vector_type(parameters);
 
     levenberg_marquardt_solver solver(num_parameters_,
         num_residuals_,
@@ -103,7 +103,7 @@ bool solver_wrapper::solve_lm(
         options.aad_jacobian() ? objective_function_aad_ : nullptr);
 
     auto result = solver.solve(solver_params, options);
-    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = solver_params;
+    copy_into(parameters, solver_params);
 
     if (options.verbose())
     {
@@ -136,7 +136,7 @@ bool solver_wrapper::solve_nlopt(
 bool solver_wrapper::solve_lbfgs(
     std::vector<double>& parameters, const solver_options_bfgs& options) const
 {
-    vector_type solver_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
+    vector_type solver_params = to_vector_type(parameters);
 
     const auto& solver = std::make_unique<lbfgs_solver>(num_parameters_,
         num_residuals_,
@@ -144,7 +144,7 @@ bool solver_wrapper::solve_lbfgs(
         options.aad_jacobian() ? objective_function_aad_ : nullptr);
 
     auto result = solver->solve(solver_params, options);
-    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = solver_params;
+    copy_into(parameters, solver_params);
 
     if (options.verbose())
     {

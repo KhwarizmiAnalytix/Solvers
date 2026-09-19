@@ -33,16 +33,16 @@ public:
     bool Evaluate(
         double const* const* parameters, double* residuals, double** jacobians) const override
     {
-        Eigen::VectorXd params_double = Eigen::Map<const Eigen::VectorXd>(parameters[0], num_parameters_);
+        vector_type params_double = to_vector_type(parameters[0], num_parameters_);
 
-        Eigen::VectorXd residual_values(num_residuals_);
+        vector_type residual_values = make_vector(num_residuals_);
         cost_function_(params_double, residual_values);
-        Eigen::Map<Eigen::VectorXd>(residuals, num_residuals_) = residual_values;
+        copy_into(residuals, num_residuals_, residual_values);
 
 #if DEBUG_AAD
         double bump = 0.00001;
 
-        auto cost_function_bump = [this, bump](Eigen::VectorXd const& x, Eigen::MatrixXd& dy_dx)
+        auto cost_function_bump = [this, bump](vector_type const& x, matrix_type& dy_dx)
         {
             auto number_of_parameters = x.size();
 
@@ -50,11 +50,11 @@ public:
 
             auto number_of_targets = dy_dx.rows();
 
-            Eigen::VectorXd y_plus(number_of_targets);
-            Eigen::VectorXd y_minus(number_of_targets);
+            vector_type y_plus  = make_vector(number_of_targets);
+            vector_type y_minus = make_vector(number_of_targets);
 
-            Eigen::VectorXd x_tmp(number_of_parameters);
-            x_tmp = x;
+            vector_type x_tmp = make_vector(number_of_parameters);
+            x_tmp             = x;
 
             for (size_t i = 0; i < number_of_parameters; ++i)
             {
@@ -77,12 +77,12 @@ public:
 
         if (jacobians != nullptr && jacobians[0] != nullptr)
         {
-            Eigen::MatrixXd grad(num_residuals_, num_parameters_);
+            matrix_type grad = make_matrix(num_residuals_, num_parameters_);
             cost_function_aad_(params_double, grad);
-            Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(jacobians[0], num_residuals_, num_parameters_) = grad;
+            copy_row_major(jacobians[0], grad);
 
 #if DEBUG_AAD
-            Eigen::MatrixXd grad2(num_residuals_, num_parameters_);
+            matrix_type grad2 = make_matrix(num_residuals_, num_parameters_);
             cost_function_bump(params_double, grad2);
 #endif
 
@@ -335,7 +335,7 @@ bool ceres_solver::solve(
     {
         double bump = 1e-8;
 
-        cost_function_aad_ = [this, bump](Eigen::VectorXd const& x, Eigen::MatrixXd& dy_dx)
+        cost_function_aad_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
         {
             auto number_of_parameters = x.size();
 
@@ -343,11 +343,11 @@ bool ceres_solver::solve(
 
             auto number_of_targets = dy_dx.rows();
 
-            Eigen::VectorXd y_plus(number_of_targets);
-            Eigen::VectorXd y_minus(number_of_targets);
+            vector_type y_plus  = make_vector(number_of_targets);
+            vector_type y_minus = make_vector(number_of_targets);
 
-            Eigen::VectorXd x_tmp(number_of_parameters);
-            x_tmp = x;
+            vector_type x_tmp = make_vector(number_of_parameters);
+            x_tmp             = x;
 
             for (size_t i = 0; i < number_of_parameters; ++i)
             {

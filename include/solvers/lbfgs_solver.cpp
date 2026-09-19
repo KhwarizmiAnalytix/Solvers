@@ -28,7 +28,6 @@ class line_search<lbfgs_line_search_type::NOCEDAL_WRIGHT>
 {
     using scalar_type   = double;
     using size_type     = size_t;
-    using vector_type   = Eigen::VectorXd;
     using function_type = std::function<scalar_type(vector_type const&, vector_type&)>;
 
 public:
@@ -156,7 +155,6 @@ class line_search<lbfgs_line_search_type::BACKTRACKING>
 {
     using scalar_type   = double;
     using size_type     = size_t;
-    using vector_type   = Eigen::VectorXd;
     using function_type = std::function<scalar_type(vector_type const&, vector_type&)>;
 
 public:
@@ -249,7 +247,6 @@ class line_search<lbfgs_line_search_type::BRACKETING>
 {
     using scalar_type   = double;
     using size_type     = size_t;
-    using vector_type   = Eigen::VectorXd;
     using function_type = std::function<scalar_type(vector_type const&, vector_type&)>;
 
 public:
@@ -338,7 +335,7 @@ lbfgs_solver::lbfgs_solver(
       num_residuals_(num_residuals) {};
 
 solver_output lbfgs_solver::solve(
-    Eigen::VectorXd& parameters, const solver_options_bfgs& options) const
+    vector_type& parameters, const solver_options_bfgs& options) const
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
 

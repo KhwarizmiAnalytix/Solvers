@@ -1,7 +1,6 @@
 #include <memory>
 #include <vector>
 
-#include <Eigen/Core>
 #include <gtest/gtest.h>
 
 #include "optimization_test_problems.h"
@@ -22,8 +21,8 @@ using testing::optimization_test_problem;
 double residual_norm(
     const optimization_test_problem& problem, const std::vector<double>& parameters)
 {
-    Eigen::VectorXd x = Eigen::Map<const Eigen::VectorXd>(parameters.data(), parameters.size());
-    Eigen::VectorXd r(static_cast<Eigen::Index>(problem.num_residuals));
+    vector_type x = to_vector_type(parameters);
+    vector_type r = make_vector(problem.num_residuals);
     problem.residuals(x, r);
     return r.norm();
 }

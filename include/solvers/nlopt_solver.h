@@ -20,9 +20,9 @@ namespace solverslib
 class nlopt_solver
 {
 public:
-    using ObjFunc     = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
-    using ObjFunc_aad = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
-    // using ConFunc = std::function<double(const Eigen::VectorXd&, Eigen::VectorXd&)>;
+    using ObjFunc     = std::function<void(const vector_type&, vector_type&)>;
+    using ObjFunc_aad = std::function<void(const vector_type&, matrix_type&)>;
+    // using ConFunc = std::function<double(const vector_type&, vector_type&)>;
 
     SOLVER_API nlopt_solver(size_t num_parameters,
         size_t                     num_residuals,

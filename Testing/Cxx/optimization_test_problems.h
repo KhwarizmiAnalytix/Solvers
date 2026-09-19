@@ -1,12 +1,13 @@
 #pragma once
 
-#include <Eigen/Core>
 #include <cmath>
 #include <cstddef>
 #include <functional>
 #include <ostream>
 #include <string>
 #include <vector>
+
+#include "detail/support.h"
 
 namespace solverslib::testing
 {
@@ -17,8 +18,8 @@ namespace solverslib::testing
 // backend (LM, LBFGS, NLopt, Ceres) minimizes 0.5 * ||r(x)||^2.
 struct optimization_test_problem
 {
-    using residual_function_type = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
-    using jacobian_function_type = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
+    using residual_function_type = std::function<void(const vector_type&, vector_type&)>;
+    using jacobian_function_type = std::function<void(const vector_type&, matrix_type&)>;
 
     std::string            name;
     size_t                 num_parameters;
@@ -46,8 +47,8 @@ inline optimization_test_problem make_linear_scalar_problem()
         1,
         {0.0},
         {2.0},
-        [](const Eigen::VectorXd& x, Eigen::VectorXd& r) { r[0] = x[0] - 2.0; },
-        [](const Eigen::VectorXd&, Eigen::MatrixXd& j) { j(0, 0) = 1.0; }};
+        [](const vector_type& x, vector_type& r) { r[0] = x[0] - 2.0; },
+        [](const vector_type&, matrix_type& j) { j(0, 0) = 1.0; }};
 }
 
 // Rosenbrock's "banana" function in least-squares residual form:
@@ -60,12 +61,12 @@ inline optimization_test_problem make_rosenbrock_problem()
         2,
         {-1.2, 1.0},
         {1.0, 1.0},
-        [](const Eigen::VectorXd& x, Eigen::VectorXd& r)
+        [](const vector_type& x, vector_type& r)
         {
             r[0] = 10.0 * (x[1] - x[0] * x[0]);
             r[1] = 1.0 - x[0];
         },
-        [](const Eigen::VectorXd& x, Eigen::MatrixXd& j)
+        [](const vector_type& x, matrix_type& j)
         {
             j(0, 0) = -20.0 * x[0];
             j(0, 1) = 10.0;
@@ -84,14 +85,14 @@ inline optimization_test_problem make_powell_singular_problem()
         4,
         {3.0, -1.0, 0.0, 1.0},
         {0.0, 0.0, 0.0, 0.0},
-        [](const Eigen::VectorXd& x, Eigen::VectorXd& r)
+        [](const vector_type& x, vector_type& r)
         {
             r[0] = x[0] + 10.0 * x[1];
             r[1] = std::sqrt(5.0) * (x[2] - x[3]);
             r[2] = (x[1] - 2.0 * x[2]) * (x[1] - 2.0 * x[2]);
             r[3] = std::sqrt(10.0) * (x[0] - x[3]) * (x[0] - x[3]);
         },
-        [](const Eigen::VectorXd& x, Eigen::MatrixXd& j)
+        [](const vector_type& x, matrix_type& j)
         {
             j.setZero();
             j(0, 0) = 1.0;
@@ -125,22 +126,22 @@ inline optimization_test_problem make_exponential_fit_problem()
         num_samples,
         {1.0, 0.0},
         {true_a, true_b},
-        [sample_times, sample_values](const Eigen::VectorXd& x, Eigen::VectorXd& r)
+        [sample_times, sample_values](const vector_type& x, vector_type& r)
         {
             for (size_t i = 0; i < sample_times.size(); ++i)
             {
-                r[static_cast<Eigen::Index>(i)] =
+                r[static_cast<index_type>(i)] =
                     x[0] * std::exp(x[1] * sample_times[i]) - sample_values[i];
             }
         },
-        [sample_times](const Eigen::VectorXd& x, Eigen::MatrixXd& j)
+        [sample_times](const vector_type& x, matrix_type& j)
         {
             for (size_t i = 0; i < sample_times.size(); ++i)
             {
                 const double t                     = sample_times[i];
                 const double exp_bt                = std::exp(x[1] * t);
-                j(static_cast<Eigen::Index>(i), 0) = exp_bt;
-                j(static_cast<Eigen::Index>(i), 1) = x[0] * t * exp_bt;
+                j(static_cast<index_type>(i), 0) = exp_bt;
+                j(static_cast<index_type>(i), 1) = x[0] * t * exp_bt;
             }
         }};
 }

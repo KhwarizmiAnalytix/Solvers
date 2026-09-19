@@ -1,6 +1,5 @@
 #include "levenberg_marquardt_solver.h"
 
-#include <Eigen/LU>
 #include <iomanip>
 
 #include "detail/support.h"
@@ -25,7 +24,7 @@ levenberg_marquardt_solver::levenberg_marquardt_solver(size_t num_parameters,
 }
 
 solver_output levenberg_marquardt_solver::solve(
-    Eigen::VectorXd& parameters, const solver_options_lm& options) const
+    vector_type& parameters, const solver_options_lm& options) const
 {
     auto jacobian = jacobian_;
     if (jacobian == nullptr)
@@ -139,7 +138,7 @@ solver_output levenberg_marquardt_solver::solve(
                 break;
             }
             }
-            Eigen::PartialPivLU<matrix_type> factorization(JtWJ_lambda);
+            linear_system_solver factorization(JtWJ_lambda);
             step = factorization.solve(JtWdy);
 
             if (options.use_geodesic())
@@ -151,7 +150,7 @@ solver_output levenberg_marquardt_solver::solve(
 
                 tmp = Jt * (Dh * ((y_p_new - y_p) + epsilon * y_tmp));
 
-                tmp = factorization.solve(tmp).eval();
+                tmp = factorization.solve(tmp);
 
                 if (2. * l2_norm(tmp) < l2_norm(step) * alpha)
                 {

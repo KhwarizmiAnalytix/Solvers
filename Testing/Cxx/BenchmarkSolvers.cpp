@@ -17,8 +17,6 @@
 #include <string>
 #include <vector>
 
-#include <Eigen/Core>
-
 #include "optimization_test_problems.h"
 #include "solver_options/solver_options_bfgs.h"
 #include "solver_options/solver_options_ceres.h"
@@ -44,8 +42,8 @@ struct timing_result
 double residual_norm(
     const optimization_test_problem& problem, const std::vector<double>& parameters)
 {
-    Eigen::VectorXd x = Eigen::Map<const Eigen::VectorXd>(parameters.data(), parameters.size());
-    Eigen::VectorXd r(static_cast<Eigen::Index>(problem.num_residuals));
+    vector_type x = to_vector_type(parameters);
+    vector_type r = make_vector(problem.num_residuals);
     problem.residuals(x, r);
     return r.norm();
 }

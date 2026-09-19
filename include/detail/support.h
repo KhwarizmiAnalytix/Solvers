@@ -1,5 +1,4 @@
 #pragma once
-#include <Eigen/Core>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -11,6 +10,8 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+
+#include "include/detail/eigen_support.h"
 
 namespace solverslib::detail
 {
@@ -59,13 +60,6 @@ template <typename... Args> std::string message(Args&&... args)
     } while (false)
 namespace solverslib
 {
-// Canonical dense vector/matrix aliases, shared across every solver_options,
-// solver_output, and solver header so they only ever need <Eigen/Core>
-// (this header's own include) rather than each pulling in <Eigen/Dense> and
-// its decomposition modules.
-using vector_type = Eigen::VectorXd;
-using matrix_type = Eigen::MatrixXd;
-
 template <typename T>
 inline bool is_almost_zero(T value, T tolerance = std::numeric_limits<T>::epsilon())
 {

@@ -11,12 +11,12 @@ namespace solverslib
 namespace
 {
 
-TEST(OptimizerWrapper, SolvesEigenBackedObjective)
+TEST(OptimizerWrapper, SolvesVectorBackedObjective)
 {
     solver_wrapper optimizer(
         1,
         1,
-        [](const Eigen::VectorXd& parameters, Eigen::VectorXd& residuals) {
+        [](const vector_type& parameters, vector_type& residuals) {
             residuals[0] = parameters[0] - 2.0;
         });
     std::shared_ptr<const solver_options> options =

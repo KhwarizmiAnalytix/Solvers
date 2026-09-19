@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "detail/support.h"
-#include "detail/support.h"
 #include "solver_options/solver_options_nlopt.h"
 
 namespace solverslib
@@ -77,7 +76,7 @@ nlopt_solver::nlopt_solver(
     {
         double bump = 1e-8;
 
-        objfun_aad_ = [this, bump](Eigen::VectorXd const& x, Eigen::MatrixXd& dy_dx)
+        objfun_aad_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
         {
             auto number_of_parameters = x.size();
 
@@ -85,11 +84,11 @@ nlopt_solver::nlopt_solver(
 
             auto number_of_targets = dy_dx.rows();
 
-            Eigen::VectorXd y_plus(number_of_targets);
-            Eigen::VectorXd y_minus(number_of_targets);
+            vector_type y_plus  = make_vector(number_of_targets);
+            vector_type y_minus = make_vector(number_of_targets);
 
-            Eigen::VectorXd x_tmp(number_of_parameters);
-            x_tmp = x;
+            vector_type x_tmp = make_vector(number_of_parameters);
+            x_tmp             = x;
 
             for (size_t i = 0; i < number_of_parameters; ++i)
             {
@@ -158,8 +157,8 @@ double nlopt_solver::OBJFUN(const std::vector<double>& x, std::vector<double>& g
 {
     auto* self = static_cast<nlopt_solver*>(data);
 
-    Eigen::VectorXd x_tmp = Eigen::Map<const Eigen::VectorXd>(x.data(), x.size());
-    Eigen::VectorXd f_tmp(self->num_residuals_);
+    vector_type x_tmp = to_vector_type(x.data(), x.size());
+    vector_type f_tmp = make_vector(self->num_residuals_);
 
     self->objfun_(x_tmp, f_tmp);
 
@@ -167,12 +166,12 @@ double nlopt_solver::OBJFUN(const std::vector<double>& x, std::vector<double>& g
 
     if (!grad.empty())
     {
-        Eigen::VectorXd grad_tmp = Eigen::Map<const Eigen::VectorXd>(grad.data(), grad.size());
+        vector_type grad_tmp = to_vector_type(grad.data(), grad.size());
 
-        Eigen::MatrixXd f_aad_tmp(self->num_residuals_, self->num_parameters_);
+        matrix_type f_aad_tmp = make_matrix(self->num_residuals_, self->num_parameters_);
         self->objfun_aad_(x_tmp, f_aad_tmp);
         grad_tmp = 2. * (f_aad_tmp.transpose() * f_tmp);
-        Eigen::Map<Eigen::VectorXd>(grad.data(), grad.size()) = grad_tmp;
+        copy_into(grad.data(), grad.size(), grad_tmp);
     }
 
     return result;
@@ -183,9 +182,9 @@ double nlopt_solver::CONFUN(
     SOLVERS_UNUSED std::vector<double>& grad,
     SOLVERS_UNUSED void*                data)
 {
-    //auto*          self = static_cast<nlopt_solver*>(data);
-    //Eigen::VectorXd x_tmp = Eigen::Map<const Eigen::VectorXd>(x.data(), x.size());
-    //Eigen::VectorXd grad_tmp = Eigen::Map<const Eigen::VectorXd>(grad.data(), grad.size());
+    //auto*       self    = static_cast<nlopt_solver*>(data);
+    //vector_type x_tmp    = to_vector_type(x.data(), x.size());
+    //vector_type grad_tmp = to_vector_type(grad.data(), grad.size());
 
     double result = 0.;
     //self->confun_(x_tmp, grad_tmp);
