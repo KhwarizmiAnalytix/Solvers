@@ -188,12 +188,10 @@ bool solver_wrapper::is_supported(solver_enum optimizer_type)
     {
     case solver_enum::CERES:
         return ceres_solver::is_supported();
-    case solver_enum::LM:
-        return true;
     case solver_enum::NLOPT:
         return nlopt_solver::is_supported();
+    case solver_enum::LM:
     case solver_enum::LBFGS:
-        return true;
     case solver_enum::GAUSS_NEWTON:
         return true;
     default:
