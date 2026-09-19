@@ -472,7 +472,7 @@ bool ceres_solver_algorithms::solve(
     ceres::Solver::Summary summary;
     ceres::Solve(output_options, &problem, &summary);
 
-    if (options.debug())
+    if (options.verbose())
     {
         SOLVERS_LOG_INFO("ceres solver summary: " << summary.BriefReport());
     }

@@ -118,7 +118,7 @@ optimization_algorithm_output levenberg_marquardt::solve(
             JtWJ_lambda = JtWJ;
             switch (options.type())
             {
-            case levenberg_marquardt_type::LEVENBERG:
+            case levenberg_marquardt_solver_enum::LEVENBERG:
             {
                 for (size_t i = 0; i < n; ++i)
                 {
@@ -127,7 +127,7 @@ optimization_algorithm_output levenberg_marquardt::solve(
                 }
                 break;
             }
-            case levenberg_marquardt_type::QUADRATIC:
+            case levenberg_marquardt_solver_enum::QUADRATIC:
             {
                 for (size_t i = 0; i < n; ++i)
                 {
@@ -135,7 +135,7 @@ optimization_algorithm_output levenberg_marquardt::solve(
                 }
                 break;
             }
-            case levenberg_marquardt_type::NIELSEN:
+            case levenberg_marquardt_solver_enum::NIELSEN:
             {
                 for (size_t i = 0; i < n; ++i)
                 {
@@ -170,7 +170,7 @@ optimization_algorithm_output levenberg_marquardt::solve(
 
             scalar_type alpha_quadratic = 0.;
 
-            if (options.type() == levenberg_marquardt_type::QUADRATIC)
+            if (options.type() == levenberg_marquardt_solver_enum::QUADRATIC)
             {
                 auto dot_product = step.dot(JtWdy);
 
@@ -227,15 +227,15 @@ optimization_algorithm_output levenberg_marquardt::solve(
                 // decrease lambda == > Gauss - Newton method
                 switch (options.type())
                 {
-                case levenberg_marquardt_type::LEVENBERG:
+                case levenberg_marquardt_solver_enum::LEVENBERG:
                     lambda = std::max(lambda / options.lambda_down_fac(), 1.e-7);
                     break;
 
-                case levenberg_marquardt_type::QUADRATIC:
+                case levenberg_marquardt_solver_enum::QUADRATIC:
                     lambda = std::max(lambda / (1 + 2. * alpha_quadratic), 1.e-7);
                     break;
 
-                case levenberg_marquardt_type::NIELSEN:
+                case levenberg_marquardt_solver_enum::NIELSEN:
                     auto rho = numerator_rho / denominator_rho;
                     lambda *= std::fmax(1. / 3., 1. - std::fabs(pow(2. * rho - 1., 3.)));
                     nu = 2;
@@ -269,15 +269,15 @@ optimization_algorithm_output levenberg_marquardt::solve(
                 // increase lambda == > gradient descent method
                 switch (options.type())
                 {
-                case levenberg_marquardt_type::LEVENBERG:
+                case levenberg_marquardt_solver_enum::LEVENBERG:
                     lambda = std::min(lambda * options.lambda_up_fac(), 1.e7);
                     break;
 
-                case levenberg_marquardt_type::QUADRATIC:
+                case levenberg_marquardt_solver_enum::QUADRATIC:
                     lambda = lambda + std::fabs(0.5 * (x2_p - x2_p_new) / alpha_quadratic);
                     break;
 
-                case levenberg_marquardt_type::NIELSEN:
+                case levenberg_marquardt_solver_enum::NIELSEN:
                     lambda *= nu;
                     nu *= 2;
                     break;

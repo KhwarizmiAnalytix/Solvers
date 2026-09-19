@@ -18,39 +18,39 @@
 namespace solverslib
 {
 #if SOLVERS_HAS_NLOPT
-// Function to map nlopt_algo_name enum to nlopt::algorithm enum
-nlopt::algorithm getNloptEnum(nlopt_algo_name algo)
+// Function to map the public NLopt enum to nlopt::algorithm.
+nlopt::algorithm getNloptEnum(nlopt_algo_name_enum algo)
 {
     switch (algo)
     {
-    case nlopt_algo_name::AUGMENTED_LAGRANGIAN:
+    case nlopt_algo_name_enum::AUGMENTED_LAGRANGIAN:
         return nlopt::LD_AUGLAG;
-    case nlopt_algo_name::AUGMENTED_LAGRANGIAN_WITH_EQUALITY_CONSTRAINTS:
-    case nlopt_algo_name::AUGMENTED_LAGRANGIAN_WITH_COBYLA:
-    case nlopt_algo_name::AUGMENTED_LAGRANGIAN_WITH_BOBYQA:
+    case nlopt_algo_name_enum::AUGMENTED_LAGRANGIAN_WITH_EQUALITY_CONSTRAINTS:
+    case nlopt_algo_name_enum::AUGMENTED_LAGRANGIAN_WITH_COBYLA:
+    case nlopt_algo_name_enum::AUGMENTED_LAGRANGIAN_WITH_BOBYQA:
         return nlopt::LD_AUGLAG_EQ;  // Adjust depending on the inner solver
 
-    case nlopt_algo_name::METHOD_OF_MOVING_ASYMPTOTES:
+    case nlopt_algo_name_enum::METHOD_OF_MOVING_ASYMPTOTES:
         return nlopt::LD_MMA;
-    case nlopt_algo_name::CONSTRAINED_OPTIMIZATION_BY_LINEAR_APPROXIMATIONS:
+    case nlopt_algo_name_enum::CONSTRAINED_OPTIMIZATION_BY_LINEAR_APPROXIMATIONS:
         return nlopt::LN_COBYLA;
-    case nlopt_algo_name::SEQUENTIAL_LEAST_SQUARES_PROGRAMMING:
+    case nlopt_algo_name_enum::SEQUENTIAL_LEAST_SQUARES_PROGRAMMING:
         return nlopt::LD_SLSQP;
-    case nlopt_algo_name::BOUND_OPTIMIZATION_BY_QUADRATIC_APPROXIMATION:
+    case nlopt_algo_name_enum::BOUND_OPTIMIZATION_BY_QUADRATIC_APPROXIMATION:
         return nlopt::LN_BOBYQA;
-    case nlopt_algo_name::LBFGS:
+    case nlopt_algo_name_enum::LBFGS:
         return nlopt::LD_LBFGS;
 
-    case nlopt_algo_name::IMPROVED_STOCHASTIC_RANKING_EVOLUTION_STRATEGY:
+    case nlopt_algo_name_enum::IMPROVED_STOCHASTIC_RANKING_EVOLUTION_STRATEGY:
         return nlopt::GN_ISRES;
-    case nlopt_algo_name::CONTROLLED_RANDOM_SEARCH_WITH_LOCAL_MUTATION:
+    case nlopt_algo_name_enum::CONTROLLED_RANDOM_SEARCH_WITH_LOCAL_MUTATION:
         return nlopt::GN_CRS2_LM;
-    case nlopt_algo_name::DIVIDING_RECTANGLES:
+    case nlopt_algo_name_enum::DIVIDING_RECTANGLES:
         return nlopt::GN_ORIG_DIRECT_L;
 
-    case nlopt_algo_name::PRECONDITIONED_TRUNCATED_NEWTON_METHOD:
+    case nlopt_algo_name_enum::PRECONDITIONED_TRUNCATED_NEWTON_METHOD:
         return nlopt::LD_TNEWTON_PRECOND;
-    case nlopt_algo_name::VARIABLE_METRIC_METHOD:
+    case nlopt_algo_name_enum::VARIABLE_METRIC_METHOD:
         return nlopt::LD_VAR1;
 
     default:

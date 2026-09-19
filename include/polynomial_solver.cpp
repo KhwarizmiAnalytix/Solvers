@@ -130,13 +130,13 @@ double polynomial_solver::third_degree_polynomial_solver(double b, double c, dou
         const auto term1 = std::cbrt((delta_1 > 0.) ? delta_1 + sqrt_delta : delta_1 - sqrt_delta);
         const auto term2 = delta_0 / term1;
 
-        result = (-b + term1 + term2) * constants::ONE_THIRD;
+        result = (-b + term1 + term2) / 3.0;
     }
     else
     {
         const auto norm = sqrt(delta_0);
-        const auto phi  = atan2(sqrt_delta, delta_1) * constants::ONE_THIRD;
-        result          = (-b + 2. * cos(phi) * norm) * constants::ONE_THIRD;
+        const auto phi  = atan2(sqrt_delta, delta_1) / 3.0;
+        result          = (-b + 2. * cos(phi) * norm) / 3.0;
     }
 
     SOLVERS_LOG_IF(

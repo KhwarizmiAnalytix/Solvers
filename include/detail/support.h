@@ -14,7 +14,7 @@
 namespace solverslib::detail {
 template <typename... Args> std::string message(Args&&... args) {
     std::ostringstream out;
-    (out << ... << std::forward<Args>(args));
+    (void)(out << ... << std::forward<Args>(args));
     return out.str();
 }
 }
@@ -27,12 +27,13 @@ template <typename... Args> std::string message(Args&&... args) {
 #define SOLVERS_FORCE_INLINE inline
 #define SOLVERS_UNUSED [[maybe_unused]]
 #define SOLVERS_DELETE_CLASS(T) T() = delete
-#define MATH_API
-#define MATH_VISIBILITY
+#define SOLVER_API
+#define SOLVER_VISIBILITY
 #define SOLVERS_LOGF(level, ...) do { std::fprintf(stderr, __VA_ARGS__); std::fputc('\n', stderr); } while (false)
 #define SOLVERS_LOG_INFO(value) do { std::clog << value << '\n'; } while (false)
 #define SOLVERS_LOG_ERROR(value) SOLVERS_LOG_INFO(value)
 #define SOLVERS_LOG_IF(level, condition, value) do { if (condition) { SOLVERS_LOG_INFO(value); } } while (false)
 namespace solverslib {
 inline bool is_almost_zero(double value) { return std::abs(value) < 1e-15; }
+inline bool is_almost_zero(double value, double tolerance) { return std::abs(value) < tolerance; }
 }
