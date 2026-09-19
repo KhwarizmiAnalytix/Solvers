@@ -4,10 +4,12 @@
 #include "solver_options/solver_options.h"
 #include "solver_options/solver_options_bfgs.h"
 #include "solver_options/solver_options_ceres.h"
+#include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_lm.h"
 #include "solver_options/solver_options_nlopt.h"
 #include "solver_output.h"
 #include "solvers/ceres_solver.h"
+#include "solvers/gauss_newton_solver.h"
 #include "solvers/lbfgs_solver.h"
 #include "solvers/levenberg_marquardt_solver.h"
 #include "solvers/nlopt_solver.h"
@@ -68,6 +70,11 @@ bool solver_wrapper::solve(
     if (const auto& bfgs_options = std::dynamic_pointer_cast<const solver_options_bfgs>(options))
     {
         return solve_lbfgs(parameters, *bfgs_options);
+    }
+
+    if (const auto& gn_options = std::dynamic_pointer_cast<const solver_options_gn>(options))
+    {
+        return solve_gn(parameters, *gn_options);
     }
 
     SOLVERS_THROW("Unsupported solver_options");
@@ -154,6 +161,27 @@ bool solver_wrapper::solve_lbfgs(
     return result.status_ != solver_convergence_enum::NOT_CONVERGED;
 }
 
+bool solver_wrapper::solve_gn(
+    std::vector<double>& parameters, const solver_options_gn& options) const
+{
+    vector_type solver_params = to_vector_type(parameters);
+
+    gauss_newton_solver solver(num_parameters_,
+        num_residuals_,
+        objective_function_,
+        options.aad_jacobian() ? objective_function_aad_ : nullptr);
+
+    auto result = solver.solve(solver_params, options);
+    copy_into(parameters, solver_params);
+
+    if (options.verbose())
+    {
+        result.print();
+    }
+
+    return result.status_ != solver_convergence_enum::NOT_CONVERGED;
+}
+
 bool solver_wrapper::is_supported(solver_enum optimizer_type)
 {
     switch (optimizer_type)
@@ -165,6 +193,8 @@ bool solver_wrapper::is_supported(solver_enum optimizer_type)
     case solver_enum::NLOPT:
         return nlopt_solver::is_supported();
     case solver_enum::LBFGS:
+        return true;
+    case solver_enum::GAUSS_NEWTON:
         return true;
     default:
         return false;

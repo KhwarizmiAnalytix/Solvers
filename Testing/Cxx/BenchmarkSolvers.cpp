@@ -20,6 +20,7 @@
 #include "optimization_test_problems.h"
 #include "solver_options/solver_options_bfgs.h"
 #include "solver_options/solver_options_ceres.h"
+#include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_lm.h"
 #include "solver_options/solver_options_nlopt.h"
 #include "solver_wrapper.h"
@@ -131,6 +132,23 @@ void benchmark_problem(const optimization_test_problem& problem)
             [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
         print_row(problem.name,
             "LBFGS (native)",
+            true,
+            converged,
+            residual_norm(problem, parameters),
+            timing);
+    }
+
+    // Native Gauss-Newton.
+    {
+        solver_wrapper wrapper(
+            problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
+        auto       options   = std::make_shared<solver_options_gn>(500, 1e-14, 1e-14, 1e-14);
+        bool       converged = false;
+        const auto timing    = time_solve(problem,
+            parameters,
+            [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
+        print_row(problem.name,
+            "Gauss-Newton",
             true,
             converged,
             residual_norm(problem, parameters),

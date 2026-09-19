@@ -12,9 +12,10 @@ namespace solverslib
 {
 enum class solver_enum : int
 {
-    LM    = 0,
-    LBFGS = 1,
-    NLOPT = 2,
-    CERES = 3
+    LM           = 0,
+    LBFGS        = 1,
+    NLOPT        = 2,
+    CERES        = 3,
+    GAUSS_NEWTON = 4
 };
 }  // namespace solverslib

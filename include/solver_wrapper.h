@@ -14,6 +14,7 @@ class solver_options_ceres;
 class solver_options_lm;
 class solver_options_nlopt;
 class solver_options_bfgs;
+class solver_options_gn;
 
 /**
  * @brief Universal optimizer wrapper that automatically selects the appropriate optimizer
@@ -90,6 +91,7 @@ private:
     bool solve_lm(std::vector<double>& parameters, const solver_options_lm& options) const;
     bool solve_nlopt(std::vector<double>& parameters, const solver_options_nlopt& options) const;
     bool solve_lbfgs(std::vector<double>& parameters, const solver_options_bfgs& options) const;
+    bool solve_gn(std::vector<double>& parameters, const solver_options_gn& options) const;
 
     // Member variables
     size_t num_parameters_;
