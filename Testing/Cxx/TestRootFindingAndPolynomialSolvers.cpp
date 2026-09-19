@@ -17,11 +17,19 @@ constexpr double kPi = 3.14159265358979323846;
 // root_finding_algorithms::brent
 // ---------------------------------------------------------------------------
 
+namespace
+{
+const root_finding_options kTightTolerance = root_finding_options_builder()
+                                                  .with_tolerance_function(1e-12)
+                                                  .with_tolerance_parameter(1e-12)
+                                                  .build();
+}  // namespace
+
 TEST(RootFindingBrent, FindsRootOfQuadratic)
 {
     double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
-        [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, 0.0, 1e-12);
+        [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, kTightTolerance);
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, 2.0, 1e-9);
@@ -32,7 +40,7 @@ TEST(RootFindingBrent, FindsRootOfTranscendentalFixedPoint)
     // cos(x) - x == 0 is the classic fixed-point benchmark, root ~ 0.7390851332.
     double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
-        [](double x) { return std::cos(x) - x; }, 0.0, 1.0, root, 0.0, 1e-12);
+        [](double x) { return std::cos(x) - x; }, 0.0, 1.0, root, kTightTolerance);
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, 0.7390851332, 1e-8);
@@ -42,7 +50,7 @@ TEST(RootFindingBrent, FindsRootOfCubic)
 {
     double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
-        [](double x) { return x * x * x - x - 2.0; }, 1.0, 2.0, root, 0.0, 1e-12);
+        [](double x) { return x * x * x - x - 2.0; }, 1.0, 2.0, root, kTightTolerance);
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, 1.5213797068, 1e-8);
@@ -50,10 +58,17 @@ TEST(RootFindingBrent, FindsRootOfCubic)
 
 TEST(RootFindingBrent, HonorsFunctionOffset)
 {
-    // Solves cos(x) == 0.5 by passing f_0 rather than folding it into the lambda.
+    // Solves cos(x) == 0.5 by passing function_offset rather than folding it
+    // into the lambda.
     double     root      = 0.0;
-    const bool converged = root_finding_algorithms::brent(
-        [](double x) { return std::cos(x); }, 0.0, 1.2, root, 0.5, 1e-12);
+    const bool converged = root_finding_algorithms::brent([](double x) { return std::cos(x); },
+        0.0,
+        1.2,
+        root,
+        root_finding_options_builder()
+            .with_tolerance_function(1e-12)
+            .with_function_offset(0.5)
+            .build());
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, kPi / 3.0, 1e-8);
@@ -75,10 +90,11 @@ TEST(RootFindingBrent, ReturnsFalseWhenIterationBudgetIsExhausted)
         0.0,
         3.0,
         root,
-        0.0,
-        std::numeric_limits<double>::epsilon(),
-        std::numeric_limits<double>::epsilon(),
-        2);
+        root_finding_options_builder()
+            .with_tolerance_function(std::numeric_limits<double>::epsilon())
+            .with_tolerance_parameter(std::numeric_limits<double>::epsilon())
+            .with_max_iterations(2)
+            .build());
 
     EXPECT_FALSE(converged);
 }
@@ -99,8 +115,7 @@ TEST(RootFindingDekker, FindsRootOfQuadratic)
         0.0,
         3.0,
         root,
-        1e-12,
-        1e-12);
+        kTightTolerance);
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, 2.0, 1e-9);
@@ -119,8 +134,7 @@ TEST(RootFindingDekker, FindsRootOfCubic)
         2.0,
         3.0,
         root,
-        1e-12,
-        1e-12);
+        kTightTolerance);
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, 2.0945514815, 1e-8);
@@ -156,6 +170,204 @@ TEST(RootFindingDekker, ThrowsWhenBracketDoesNotContainRoot)
                      5.0,
                      root),
         std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// root_finding_algorithms::bisection
+// ---------------------------------------------------------------------------
+
+TEST(RootFindingBisection, FindsRootOfQuadratic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::bisection(
+        [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 2.0, 1e-9);
+}
+
+TEST(RootFindingBisection, FindsRootOfCubic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::bisection(
+        [](double x) { return x * x * x - x - 2.0; }, 1.0, 2.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 1.5213797068, 1e-8);
+}
+
+TEST(RootFindingBisection, ThrowsWhenBracketDoesNotContainRoot)
+{
+    double root = 0.0;
+    EXPECT_THROW(
+        root_finding_algorithms::bisection([](double x) { return x * x - 4.0; }, 3.0, 5.0, root),
+        std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// root_finding_algorithms::false_position
+// ---------------------------------------------------------------------------
+
+TEST(RootFindingFalsePosition, FindsRootOfQuadratic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::false_position(
+        [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 2.0, 1e-9);
+}
+
+TEST(RootFindingFalsePosition, FindsRootOfCubic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::false_position(
+        [](double x) { return x * x * x - x - 2.0; }, 1.0, 2.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 1.5213797068, 1e-8);
+}
+
+TEST(RootFindingFalsePosition, ThrowsWhenBracketDoesNotContainRoot)
+{
+    double root = 0.0;
+    EXPECT_THROW(root_finding_algorithms::false_position(
+                     [](double x) { return x * x - 4.0; }, 3.0, 5.0, root),
+        std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// root_finding_algorithms::ridders
+// ---------------------------------------------------------------------------
+
+TEST(RootFindingRidders, FindsRootOfQuadratic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::ridders(
+        [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 2.0, 1e-9);
+}
+
+TEST(RootFindingRidders, FindsRootOfTranscendentalFixedPoint)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::ridders(
+        [](double x) { return std::cos(x) - x; }, 0.0, 1.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 0.7390851332, 1e-8);
+}
+
+TEST(RootFindingRidders, ThrowsWhenBracketDoesNotContainRoot)
+{
+    double root = 0.0;
+    EXPECT_THROW(
+        root_finding_algorithms::ridders([](double x) { return x * x - 4.0; }, 3.0, 5.0, root),
+        std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// root_finding_algorithms::newton_raphson
+// ---------------------------------------------------------------------------
+
+TEST(RootFindingNewtonRaphson, FindsRootOfQuadratic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::newton_raphson(
+        [](double x, double& df_dx)
+        {
+            df_dx = 2.0 * x;
+            return x * x - 4.0;
+        },
+        3.0,
+        root,
+        kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 2.0, 1e-9);
+}
+
+TEST(RootFindingNewtonRaphson, FindsRootOfCubic)
+{
+    // x^3 - 2x - 5 == 0, root ~ 2.0945514815.
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::newton_raphson(
+        [](double x, double& df_dx)
+        {
+            df_dx = 3.0 * x * x - 2.0;
+            return x * x * x - 2.0 * x - 5.0;
+        },
+        2.0,
+        root,
+        kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 2.0945514815, 1e-8);
+}
+
+TEST(RootFindingNewtonRaphson, ThrowsWhenDerivativeVanishes)
+{
+    double root = 0.0;
+    // f(x) = x^2 - 4 has f'(x) = 2x, which vanishes at the starting guess
+    // x0 = 0 even though f(0) = -4 has not yet converged.
+    EXPECT_THROW(root_finding_algorithms::newton_raphson(
+                     [](double x, double& df_dx)
+                     {
+                         df_dx = 2.0 * x;
+                         return x * x - 4.0;
+                     },
+                     0.0,
+                     root),
+        std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// root_finding_algorithms::secant
+// ---------------------------------------------------------------------------
+
+TEST(RootFindingSecant, FindsRootOfQuadratic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::secant(
+        [](double x) { return x * x - 4.0; }, 0.0, 3.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 2.0, 1e-9);
+}
+
+TEST(RootFindingSecant, FindsRootOfCubic)
+{
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::secant(
+        [](double x) { return x * x * x - x - 2.0; }, 1.0, 2.0, root, kTightTolerance);
+
+    EXPECT_TRUE(converged);
+    EXPECT_NEAR(root, 1.5213797068, 1e-8);
+}
+
+// ---------------------------------------------------------------------------
+// Cross-checks: every bracketing method should agree on the same root for
+// the same problem.
+// ---------------------------------------------------------------------------
+
+TEST(RootFindingConsistency, AllBracketingMethodsAgreeOnQuadraticRoot)
+{
+    auto problem = [](double x) { return x * x - 4.0; };
+
+    double bisection_root = 0.0, false_position_root = 0.0, ridders_root = 0.0, brent_root = 0.0;
+
+    ASSERT_TRUE(root_finding_algorithms::bisection(problem, 0.0, 3.0, bisection_root, kTightTolerance));
+    ASSERT_TRUE(
+        root_finding_algorithms::false_position(problem, 0.0, 3.0, false_position_root, kTightTolerance));
+    ASSERT_TRUE(root_finding_algorithms::ridders(problem, 0.0, 3.0, ridders_root, kTightTolerance));
+    ASSERT_TRUE(root_finding_algorithms::brent(problem, 0.0, 3.0, brent_root, kTightTolerance));
+
+    EXPECT_NEAR(bisection_root, 2.0, 1e-8);
+    EXPECT_NEAR(false_position_root, 2.0, 1e-8);
+    EXPECT_NEAR(ridders_root, 2.0, 1e-8);
+    EXPECT_NEAR(brent_root, 2.0, 1e-8);
 }
 
 // ---------------------------------------------------------------------------
@@ -250,7 +462,7 @@ TEST(PolynomialAndRootFindingConsistency, AgreeOnQuadraticRoot)
 
     double iterative_root = 0.0;
     ASSERT_TRUE(root_finding_algorithms::brent(
-        [](double x) { return x * x - 5.0 * x + 6.0; }, 1.5, 2.5, iterative_root, 0.0, 1e-12));
+        [](double x) { return x * x - 5.0 * x + 6.0; }, 1.5, 2.5, iterative_root, kTightTolerance));
 
     EXPECT_NEAR(closed_form, iterative_root, 1e-8);
 }

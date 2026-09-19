@@ -10,4 +10,7 @@ option(SOLVERS_ENABLE_BENCHMARKS "Build the Ceres/NLopt/native solver benchmark 
 if(SOLVERS_ENABLE_BENCHMARKS)
     add_executable(SolversBenchmark BenchmarkSolvers.cpp)
     target_link_libraries(SolversBenchmark PRIVATE Solvers::Solvers)
+
+    add_executable(RootFindersBenchmark BenchmarkRootFinders.cpp)
+    target_link_libraries(RootFindersBenchmark PRIVATE Solvers::Solvers)
 endif()

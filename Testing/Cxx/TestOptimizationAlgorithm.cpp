@@ -31,7 +31,11 @@ TEST(OptimizationAlgorithm, BrentFindsRoot)
 {
     double     root      = 0.0;
     const bool converged = root_finding_algorithms::brent(
-        [](double value) { return value * value - 4.0; }, 0.0, 3.0, root, 0.0, 1e-12);
+        [](double value) { return value * value - 4.0; },
+        0.0,
+        3.0,
+        root,
+        root_finding_options_builder().with_tolerance_function(1e-12).build());
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, 2.0, 1e-10);

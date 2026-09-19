@@ -116,6 +116,8 @@ def main(arguments: list[str]) -> int:
                 return 1
             print_status("Running solver backend benchmark (LM/LBFGS vs. NLopt/Ceres)")
             run([str(find_built_executable(build_dir, "SolversBenchmark"))])
+            print_status("Running root-finder benchmark (bisection/false_position/ridders/dekker/brent/newton_raphson/secant)")
+            run([str(find_built_executable(build_dir, "RootFindersBenchmark"))])
         if "coverage" in tokens:
             print_status("Coverage instrumentation is enabled; use the repository coverage tooling to collect reports.")
     except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
