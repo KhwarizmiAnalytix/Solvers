@@ -1,6 +1,7 @@
 #include "levenberg_marquardt_solver.h"
 
 #include <iomanip>
+#include <sstream>
 
 #include "detail/support.h"
 #include "solver_options/solver_options_lm.h"
@@ -9,6 +10,27 @@
 
 namespace solverslib
 {
+namespace
+{
+// logging::strings::format only substitutes plain "{}" placeholders (no
+// format specifiers), so the width/precision manipulators the diagnostic
+// log lines below rely on are applied here, once, before handing the
+// resulting string off to SOLVERS_LOG_IF.
+std::string fmt_iter(size_t value)
+{
+    std::ostringstream oss;
+    oss << std::setw(3) << value;
+    return oss.str();
+}
+
+std::string fmt_sci(double value, int precision)
+{
+    std::ostringstream oss;
+    oss << std::scientific << std::setprecision(precision) << value;
+    return oss.str();
+}
+}  // namespace
+
 template <typename T> inline double l2_norm(T const& h)
 {
     return h.norm();
@@ -220,14 +242,14 @@ solver_output levenberg_marquardt_solver::solve(
                 // Enhanced logging for accepted steps
                 SOLVERS_LOG_IF(INFO,
                     options.verbose(),
-                    "LM Iter " << std::setw(3) << iteration << " | ACCEPTED STEP | "
-                               << "f(x) = " << std::scientific << std::setprecision(3) << x2_p
-                               << " | prev = " << std::scientific << std::setprecision(3)
-                               << previous_x2 << " | improvement = " << std::scientific
-                               << std::setprecision(2) << (previous_x2 - x2_p)
-                               << " | lambda = " << std::scientific << std::setprecision(2)
-                               << lambda << " | step_norm = " << std::scientific
-                               << std::setprecision(2) << l2_norm(step));
+                    "LM Iter {} | ACCEPTED STEP | f(x) = {} | prev = {} | improvement = {} | "
+                    "lambda = {} | step_norm = {}",
+                    fmt_iter(iteration),
+                    fmt_sci(x2_p, 3),
+                    fmt_sci(previous_x2, 3),
+                    fmt_sci(previous_x2 - x2_p, 2),
+                    fmt_sci(lambda, 2),
+                    fmt_sci(l2_norm(step), 2));
 
                 // decrease lambda == > Gauss - Newton method
                 switch (options.type())
@@ -270,12 +292,11 @@ solver_output levenberg_marquardt_solver::solve(
                 {
                     SOLVERS_LOG_IF(INFO,
                         options.verbose(),
-                        "LM Iter " << std::setw(3) << iteration << " | CONVERGENCE CHECK | "
-                                   << "rel_step = " << std::scientific << std::setprecision(2)
-                                   << (step_norm / param_norm)
-                                   << " | grad_norm = " << std::scientific << std::setprecision(2)
-                                   << gradient_norm << " | f(x) = " << std::scientific
-                                   << std::setprecision(3) << x2_p);
+                        "LM Iter {} | CONVERGENCE CHECK | rel_step = {} | grad_norm = {} | f(x) = {}",
+                        fmt_iter(iteration),
+                        fmt_sci(step_norm / param_norm, 2),
+                        fmt_sci(gradient_norm, 2),
+                        fmt_sci(x2_p, 3));
                 }
 
                 stop = parameters_converged || gradient_converged || x2_converged;
@@ -290,13 +311,13 @@ solver_output levenberg_marquardt_solver::solve(
                 // Enhanced logging for rejected steps
                 SOLVERS_LOG_IF(INFO,
                     options.verbose(),
-                    "LM Iter " << std::setw(3) << iteration << " | REJECTED STEP | "
-                               << "f(x) = " << std::scientific << std::setprecision(3) << x2_p
-                               << " | trial = " << std::scientific << std::setprecision(3)
-                               << x2_p_new << " | worsening = " << std::scientific
-                               << std::setprecision(2) << (x2_p_new - x2_p)
-                               << " | lambda = " << std::scientific << std::setprecision(2)
-                               << lambda << " -> increasing");
+                    "LM Iter {} | REJECTED STEP | f(x) = {} | trial = {} | worsening = {} | "
+                    "lambda = {} -> increasing",
+                    fmt_iter(iteration),
+                    fmt_sci(x2_p, 3),
+                    fmt_sci(x2_p_new, 3),
+                    fmt_sci(x2_p_new - x2_p, 2),
+                    fmt_sci(lambda, 2));
 
                 // increase lambda == > gradient descent method
                 switch (options.type())
@@ -320,8 +341,9 @@ solver_output levenberg_marquardt_solver::solve(
                 // Log the new lambda value after adjustment
                 SOLVERS_LOG_IF(INFO,
                     options.verbose(),
-                    "LM Iter " << std::setw(3) << iteration << " | lambda increased to "
-                               << std::scientific << std::setprecision(2) << lambda);
+                    "LM Iter {} | lambda increased to {}",
+                    fmt_iter(iteration),
+                    fmt_sci(lambda, 2));
                 if (options.type() == levenberg_marquardt_solver_enum::NIELSEN &&
                     lambda >= MAX_LAMBDA)
                 {
@@ -334,12 +356,13 @@ solver_output levenberg_marquardt_solver::solve(
     // Log final optimization status
     SOLVERS_LOG_IF(INFO,
         options.verbose(),
-        "LM COMPLETED | iterations = " << iteration << " | final f(x) = " << std::scientific
-                                       << std::setprecision(3) << x2_p << " | "
-                                       << (x2_converged ? "FUNCTION_CONVERGED " : "")
-                                       << (parameters_converged ? "PARAMETERS_CONVERGED " : "")
-                                       << (gradient_converged ? "GRADIENT_CONVERGED " : "")
-                                       << (iteration >= max_iter ? "MAX_ITERATIONS_REACHED " : ""));
+        "LM COMPLETED | iterations = {} | final f(x) = {} | {}{}{}{}",
+        iteration,
+        fmt_sci(x2_p, 3),
+        (x2_converged ? "FUNCTION_CONVERGED " : ""),
+        (parameters_converged ? "PARAMETERS_CONVERGED " : ""),
+        (gradient_converged ? "GRADIENT_CONVERGED " : ""),
+        (iteration >= max_iter ? "MAX_ITERATIONS_REACHED " : ""));
 
     solver_output output(num_residuals_);
 

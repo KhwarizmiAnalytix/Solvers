@@ -54,6 +54,7 @@ def cmake_args(tokens: set[str], build_dir: Path) -> list[str]:
     args = [
         "-S", str(ROOT),
         "-B", str(build_dir),
+        "-G", "Ninja",
         f"-DCMAKE_BUILD_TYPE={build_type}",
         f"-DSOLVERS_ENABLE_TESTING={'ON' if enable_testing else 'OFF'}",
         f"-DSOLVERS_ENABLE_CERES={'ON' if 'ceres' in tokens else 'OFF'}",
@@ -61,11 +62,15 @@ def cmake_args(tokens: set[str], build_dir: Path) -> list[str]:
         f"-DSOLVERS_ENABLE_BENCHMARKS={'ON' if 'benchmark' in tokens else 'OFF'}",
         f"-DSOLVERS_ENABLE_SANITIZER={'ON' if 'sanitizer' in tokens or 'asan' in tokens else 'OFF'}",
         f"-DSOLVERS_ENABLE_COVERAGE={'ON' if 'coverage' in tokens else 'OFF'}",
+        f"-DSOLVERS_ENABLE_CLANGTIDY={'ON' if 'clangtidy' in tokens else 'OFF'}",
         f"-DBUILD_SHARED_LIBS={'ON' if 'shared' in tokens else 'OFF'}",
     ]
+    # Clang is the default toolchain (matching the default Ninja generator
+    # above); pass .gcc to opt into GCC instead. Left alone on Windows, where
+    # the native MSVC toolchain remains the default.
     if "gcc" in tokens:
         args.extend(["-DCMAKE_C_COMPILER=gcc", "-DCMAKE_CXX_COMPILER=g++"])
-    elif "clang" in tokens and platform.system() != "Windows":
+    elif platform.system() != "Windows":
         args.extend(["-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++"])
     return args
 
@@ -103,13 +108,22 @@ def main(arguments: list[str]) -> int:
             print_status(f"Removed {build_dir}")
             return 0
 
+        verbose = "vv" in tokens
         find_program("cmake")
+        find_program("ninja")
         if "config" in tokens or "build" in tokens or "test" in tokens or "coverage" in tokens:
             run(["cmake", *cmake_args(tokens, build_dir)])
         if "build" in tokens:
-            run(["cmake", "--build", str(build_dir), "--parallel"])
+            build_command = ["cmake", "--build", str(build_dir), "--parallel"]
+            if verbose:
+                build_command.append("--verbose")
+            run(build_command)
         if "test" in tokens:
-            run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
+            test_command = ["ctest", "--test-dir", str(build_dir)]
+            # -VV (extra verbose: prints every test's full output as it runs)
+            # subsumes --output-on-failure, so only pass one or the other.
+            test_command.append("-VV" if verbose else "--output-on-failure")
+            run(test_command)
         if "benchmark" in tokens:
             if "build" not in tokens:
                 print_status("'benchmark' requires 'build'; add .build to actually compile it", "ERROR")

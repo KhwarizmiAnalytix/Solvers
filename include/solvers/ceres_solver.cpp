@@ -20,8 +20,8 @@ public:
         ceres_solver::CostFunctionLambda_aad cost_function_aad,
         size_t                               num_parameters,
         size_t                               num_residuals)
-        : cost_function_(cost_function),
-          cost_function_aad_(cost_function_aad),
+        : cost_function_(std::move(cost_function)),
+          cost_function_aad_(std::move(cost_function_aad)),
           num_parameters_(num_parameters),
           num_residuals_(num_residuals)
     {
@@ -306,8 +306,8 @@ ceres_solver::ceres_solver(
     CostFunctionLambda_aad     cost_function_aad,
     const std::vector<double>& lower_bounds,
     const std::vector<double>& upper_bounds)
-    : cost_function_(cost_function),
-      cost_function_aad_(cost_function_aad),
+    : cost_function_(std::move(cost_function)),
+      cost_function_aad_(std::move(cost_function_aad)),
       lower_bounds_(lower_bounds),
       upper_bounds_(upper_bounds),
       num_parameters_(num_parameters),
@@ -482,7 +482,7 @@ bool ceres_solver::solve(
 
     if (options.verbose())
     {
-        SOLVERS_LOG_INFO("ceres solver summary: " << summary.BriefReport());
+        SOLVERS_LOG_INFO("ceres solver summary: {}", summary.BriefReport());
     }
 
     return summary.IsSolutionUsable();

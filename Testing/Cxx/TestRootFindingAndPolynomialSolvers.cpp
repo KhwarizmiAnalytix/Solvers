@@ -1,8 +1,8 @@
 #include <cmath>
-#include <stdexcept>
 
 #include <gtest/gtest.h>
 
+#include "logging/util/exception.h"
 #include "solvers/polynomial_solver.h"
 #include "solvers/root_finding_algorithms.h"
 
@@ -79,7 +79,7 @@ TEST(RootFindingBrent, ThrowsWhenBracketDoesNotContainRoot)
     double root = 0.0;
     EXPECT_THROW(
         root_finding_algorithms::brent([](double x) { return x * x - 4.0; }, 3.0, 5.0, root),
-        std::invalid_argument);
+        logging::exception);
 }
 
 TEST(RootFindingBrent, ReturnsFalseWhenIterationBudgetIsExhausted)
@@ -169,7 +169,7 @@ TEST(RootFindingDekker, ThrowsWhenBracketDoesNotContainRoot)
                      3.0,
                      5.0,
                      root),
-        std::invalid_argument);
+        logging::exception);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ TEST(RootFindingBisection, ThrowsWhenBracketDoesNotContainRoot)
     double root = 0.0;
     EXPECT_THROW(
         root_finding_algorithms::bisection([](double x) { return x * x - 4.0; }, 3.0, 5.0, root),
-        std::invalid_argument);
+        logging::exception);
 }
 
 // ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ TEST(RootFindingFalsePosition, ThrowsWhenBracketDoesNotContainRoot)
     double root = 0.0;
     EXPECT_THROW(root_finding_algorithms::false_position(
                      [](double x) { return x * x - 4.0; }, 3.0, 5.0, root),
-        std::invalid_argument);
+        logging::exception);
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +265,7 @@ TEST(RootFindingRidders, ThrowsWhenBracketDoesNotContainRoot)
     double root = 0.0;
     EXPECT_THROW(
         root_finding_algorithms::ridders([](double x) { return x * x - 4.0; }, 3.0, 5.0, root),
-        std::invalid_argument);
+        logging::exception);
 }
 
 // ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ TEST(RootFindingNewtonRaphson, ThrowsWhenDerivativeVanishes)
                      },
                      0.0,
                      root),
-        std::invalid_argument);
+        logging::exception);
 }
 
 // ---------------------------------------------------------------------------

@@ -103,12 +103,10 @@ double polynomial_solver::fourth_degree_polynomial_solver(
         }
     }
 
-    SOLVERS_LOG_IF(WARNING,
-        !is_almost_zero(
-            root * root * root * root + a3 * root * root * root + a2 * root * root + a1 * root + a0,
-            0.00005),
-        "cubic solver has a problem: " << root * root * root * root + a3 * root * root * root +
-                                              a2 * root * root + a1 * root + a0);
+    const double residual =
+        root * root * root * root + a3 * root * root * root + a2 * root * root + a1 * root + a0;
+    SOLVERS_LOG_IF(
+        WARNING, !is_almost_zero(residual, 0.00005), "cubic solver has a problem: {}", residual);
 
     return std::max(root, threshold);
 }
@@ -139,9 +137,8 @@ double polynomial_solver::third_degree_polynomial_solver(double b, double c, dou
         result          = (-b + 2. * cos(phi) * norm) / 3.0;
     }
 
-    SOLVERS_LOG_IF(WARNING,
-        !is_almost_zero(d + result * (c + result * (b + result)), 0.00001),
-        "cubic solver has a problem: " << d + result * (c + result * (b + result)));
+    const double residual = d + result * (c + result * (b + result));
+    SOLVERS_LOG_IF(WARNING, !is_almost_zero(residual, 0.00001), "cubic solver has a problem: {}", residual);
 
     return result;
 }

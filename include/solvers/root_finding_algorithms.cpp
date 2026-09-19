@@ -18,7 +18,7 @@ bool root_finding_algorithms::bisection(function_type const& func,
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
-    SOLVERS_CHECK(f1 * f2 <= 0., " f1 ", f1, " f2 ", f2);
+    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
 
     if (std::fabs(f1) < options.tolerance_function())
     {
@@ -69,7 +69,7 @@ bool root_finding_algorithms::false_position(function_type const& func,
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
-    SOLVERS_CHECK(f1 * f2 <= 0., " f1 ", f1, " f2 ", f2);
+    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
 
     if (std::fabs(f1) < options.tolerance_function())
     {
@@ -132,7 +132,7 @@ bool root_finding_algorithms::ridders(function_type const& func,
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
-    SOLVERS_CHECK(f1 * f2 <= 0., " f1 ", f1, " f2 ", f2);
+    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
 
     if (std::fabs(f1) < options.tolerance_function())
     {
@@ -227,7 +227,7 @@ bool root_finding_algorithms::dekker(const function_gradient_type& func,
     auto f1 = func(x1, df_dx);
     auto f2 = func(x2, df_dx);
 
-    SOLVERS_CHECK(f1 * f2 <= 0., " f1 ", f1, " f2 ", f2);
+    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
 
     if (std::abs(f1) < tolerance_function)
     {
@@ -305,7 +305,7 @@ bool root_finding_algorithms::brent(  // NOLINT
 
     auto f1 = func(x1) - f_0;
     auto f2 = func(x2) - f_0;
-    SOLVERS_CHECK(f1 * f2 <= 0., " f1 ", f1, " f2 ", f2);
+    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
 
     auto   c  = x2;
     double d  = 0.;
@@ -412,7 +412,7 @@ bool root_finding_algorithms::newton_raphson(function_gradient_type const& func,
             return true;
         }
 
-        SOLVERS_CHECK(!is_almost_zero(df_dx), "newton_raphson: derivative vanished at x = ", x);
+        SOLVERS_CHECK(!is_almost_zero(df_dx), "newton_raphson: derivative vanished at x = {}", x);
 
         const double dx = f / df_dx;
         x -= dx;

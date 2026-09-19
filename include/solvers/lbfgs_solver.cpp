@@ -177,7 +177,7 @@ public:
         const scalar_type dg_init = -grad.dot(direction);
 
         SOLVERS_CHECK(
-            dg_init < 0, "the moving direction increases the objective function value", dg_init);
+            dg_init < 0, "the moving direction increases the objective function value: {}", dg_init);
 
         const scalar_type dg_test = param.linesearch_tolerance() * dg_init;
         scalar_type       width;
@@ -230,11 +230,9 @@ public:
 
             SOLVERS_CHECK(
                 step >= param.step_min() && step <= param.step_max(),
-                "the line search step :",
+                "the line search step: {} is out of the boundaries. step_min_: {} step_max_: {}",
                 step,
-                " is out of the boundaries. step_min_: ",
                 param.step_min(),
-                " step_max_ ",
                 param.step_max());
 
             step *= width;

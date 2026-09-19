@@ -1,6 +1,6 @@
 # Pinned submodules provide deterministic, offline configuration after checkout.
 set(_solvers_tp "${CMAKE_CURRENT_LIST_DIR}/../ThirdParty")
-foreach(_dep eigen magic_enum)
+foreach(_dep eigen magic_enum Logging)
   if(NOT EXISTS "${_solvers_tp}/${_dep}/CMakeLists.txt")
     message(FATAL_ERROR "Missing ThirdParty/${_dep}; run git submodule update --init --recursive")
   endif()
@@ -14,6 +14,19 @@ if(NOT TARGET magic_enum::magic_enum)
   add_library(solvers_magic_enum INTERFACE)
   target_include_directories(solvers_magic_enum SYSTEM INTERFACE "${_solvers_tp}/magic_enum/include")
   add_library(magic_enum::magic_enum ALIAS solvers_magic_enum)
+endif()
+# Logging (https://github.com/KhwarizmiAnalytix/Logging) backs every
+# SOLVERS_CHECK/SOLVERS_THROW/SOLVERS_LOGF/SOLVERS_LOG_* macro in
+# include/detail/support.h. Required unconditionally (unlike Ceres/NLopt)
+# since support.h is included practically everywhere. Its own magic_enum
+# dependency reuses this repo's copy (see Logging/CMakeLists.txt's
+# _logging_tp_root: fmt/magic_enum prefer the host's ThirdParty when present).
+if(NOT TARGET Logging::Logging)
+  set(LOGGING_ENABLE_TESTING OFF CACHE BOOL "Disable Logging's own test suite" FORCE)
+  set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "Disable Logging's own examples" FORCE)
+  set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "Disable Logging's own benchmarks" FORCE)
+  set(LOGGING_ENABLE_GTEST OFF CACHE BOOL "Logging testing is disabled; skip its GTest wiring" FORCE)
+  add_subdirectory("${_solvers_tp}/Logging" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging" EXCLUDE_FROM_ALL)
 endif()
 # Keep dependency-wide options scoped to this directory, away from the host project.
 function(solvers_add_optional_dependencies)

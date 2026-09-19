@@ -1,5 +1,8 @@
 #include "solver_output.h"
 
+#include <iomanip>
+#include <sstream>
+
 #include "detail/support.h"
 
 namespace solverslib
@@ -67,9 +70,11 @@ void solver_output::print() const
         SOLVERS_LOGF(INFO, "convergence: NOT_CONVERGED");
         break;
     }
-    SOLVERS_LOGF(INFO, "number of iterations %d", static_cast<int>(iterations_));
+    SOLVERS_LOGF(INFO, "number of iterations {}", static_cast<int>(iterations_));
 
-    SOLVERS_LOGF(INFO, "difference = %.2e", x2_);
+    std::ostringstream difference_oss;
+    difference_oss << std::scientific << std::setprecision(2) << x2_;
+    SOLVERS_LOGF(INFO, "difference = {}", difference_oss.str());
 }
 
 }  // namespace solverslib
