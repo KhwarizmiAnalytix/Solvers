@@ -26,11 +26,11 @@ class solver_options_bfgs;
  * Usage:
  * @code
  * // Define objective functions
- * auto objective_function = [&](const Eigen::VectorXd& x, Eigen::VectorXd& residuals) {
+ * auto objective_function = [&](const vector_type& x, vector_type& residuals) {
  *     // Your objective function implementation
  * };
  *
- * auto objective_function_aad = [&](const Eigen::VectorXd& x, Eigen::MatrixXd& jacobian) {
+ * auto objective_function_aad = [&](const vector_type& x, matrix_type& jacobian) {
  *     // Your AAD jacobian implementation (optional)
  * };
  *
@@ -46,9 +46,8 @@ class SOLVER_VISIBILITY solver_wrapper
 {
 public:
     // Function type definitions matching the optimizer interfaces
-    using objective_function_type = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
-    using objective_function_aad_type =
-        std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
+    using objective_function_type     = std::function<void(const vector_type&, vector_type&)>;
+    using objective_function_aad_type = std::function<void(const vector_type&, matrix_type&)>;
 
     /**
      * @brief Constructor with both objective function and AAD jacobian

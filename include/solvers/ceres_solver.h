@@ -1,5 +1,4 @@
 #pragma once
-#include <Eigen/Dense>
 #include <functional>
 #include <iostream>
 #include <vector>
@@ -14,8 +13,8 @@ class solver_options_ceres;
 class ceres_solver
 {
 public:
-    using CostFunctionLambda     = std::function<void(const Eigen::VectorXd&, Eigen::VectorXd&)>;
-    using CostFunctionLambda_aad = std::function<void(const Eigen::VectorXd&, Eigen::MatrixXd&)>;
+    using CostFunctionLambda     = std::function<void(const vector_type&, vector_type&)>;
+    using CostFunctionLambda_aad = std::function<void(const vector_type&, matrix_type&)>;
 
     SOLVER_API ceres_solver(size_t num_parameters,
         size_t                     num_residuals,

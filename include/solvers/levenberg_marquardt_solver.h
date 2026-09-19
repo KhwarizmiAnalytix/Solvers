@@ -18,8 +18,6 @@ class solver_options_lm;
 class levenberg_marquardt_solver
 {
     using scalar_type = double;
-    using vector_type = Eigen::VectorXd;
-    using matrix_type = Eigen::MatrixXd;
 
     using function_type = std::function<void(vector_type const&, vector_type&)>;
     using jacobian_type = std::function<void(vector_type const&, matrix_type&)>;
@@ -36,6 +34,6 @@ public:
         jacobian_type                            jacobian = nullptr);
 
     SOLVER_API solver_output solve(
-        Eigen::VectorXd& parameters, const solver_options_lm& options) const;
+        vector_type& parameters, const solver_options_lm& options) const;
 };
 }  // namespace solverslib

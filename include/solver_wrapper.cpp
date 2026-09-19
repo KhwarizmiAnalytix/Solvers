@@ -102,7 +102,7 @@ bool solver_wrapper::solve_lm(
     std::vector<double>& parameters, const solver_options_lm& options) const
 {
     // Convert std::vector to solverslib::vector for LM solver
-    Eigen::VectorXd quarisma_params = Eigen::Map<const Eigen::VectorXd>(parameters.data(), parameters.size());
+    vector_type quarisma_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
 
     levenberg_marquardt_solver solver(
         num_parameters_,
@@ -111,7 +111,7 @@ bool solver_wrapper::solve_lm(
         options.aad_jacobian() ? objective_function_aad_ : nullptr);
 
     auto result = solver.solve(quarisma_params, options);
-    Eigen::Map<Eigen::VectorXd>(parameters.data(), parameters.size()) = quarisma_params;
+    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = quarisma_params;
 
     if (options.verbose())
     {
@@ -145,7 +145,7 @@ bool solver_wrapper::solve_nlopt(
 bool solver_wrapper::solve_lbfgs(
     std::vector<double>& parameters, const solver_options_bfgs& options) const
 {
-    Eigen::VectorXd quarisma_params = Eigen::Map<const Eigen::VectorXd>(parameters.data(), parameters.size());
+    vector_type quarisma_params = Eigen::Map<const vector_type>(parameters.data(), parameters.size());
 
     const auto& solver = std::make_unique<lbfgs_solver>(
         num_parameters_,
@@ -154,7 +154,7 @@ bool solver_wrapper::solve_lbfgs(
         options.aad_jacobian() ? objective_function_aad_ : nullptr);
 
     auto result = solver->solve(quarisma_params, options);
-    Eigen::Map<Eigen::VectorXd>(parameters.data(), parameters.size()) = quarisma_params;
+    Eigen::Map<vector_type>(parameters.data(), parameters.size()) = quarisma_params;
 
     if (options.verbose())
     {

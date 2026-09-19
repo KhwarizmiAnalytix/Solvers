@@ -1,4 +1,4 @@
-#include "polynomial_solver.h"
+#include "solvers/polynomial_solver.h"
 
 #include <array>
 #include <complex>
@@ -7,55 +7,56 @@
 
 namespace solverslib
 {
-//std::vector<std::complex<double>> solve(double a3, double a2, double a1, double a0)
+// std::vector<std::complex<double>> solve(double a3, double a2, double a1, double a0)
 //{
-//    std::vector<std::complex<double>> roots;
+//     std::vector<std::complex<double>> roots;
 //
-//    // Convert to depressed quartic y^4 + py^2 + qy + r
-//    double p = a2 - 3.0 * a3 * a3 / 8.0;
-//    double q = a3 * a3 * a3 / 8.0 - a3 * a2 / 2.0 + a1;
-//    double r = -3. * a3 * a3 * a3 * a3 / 256.0 + a3 * a3 * a2 / 16. - a3 * a1 / 4 + a0;
+//     // Convert to depressed quartic y^4 + py^2 + qy + r
+//     double p = a2 - 3.0 * a3 * a3 / 8.0;
+//     double q = a3 * a3 * a3 / 8.0 - a3 * a2 / 2.0 + a1;
+//     double r = -3. * a3 * a3 * a3 * a3 / 256.0 + a3 * a3 * a2 / 16. - a3 * a1 / 4 + a0;
 //
-//    // Solve resolvent cubic
-//    double m =
-//        polynomial_solver::third_degree_polynomial_solver(p, 0.25 * p * p - r, -q * q * 0.125);
+//     // Solve resolvent cubic
+//     double m =
+//         polynomial_solver::third_degree_polynomial_solver(p, 0.25 * p * p - r, -q * q * 0.125);
 //
-//    //y^2+by+c
-//    {
-//        const auto b     = sqrt(2 * m);
-//        const auto c     = p / 2. + m - q / (2. * b);
-//        const auto delta = b * b - 4 * c;
+//     //y^2+by+c
+//     {
+//         const auto b     = sqrt(2 * m);
+//         const auto c     = p / 2. + m - q / (2. * b);
+//         const auto delta = b * b - 4 * c;
 //
-//        if (delta > 0.0)
-//        {
-//            roots.emplace_back(std::complex<double>((-b + std::sqrt(delta)) * 0.5 - a3 * 0.25, 0));
-//            roots.emplace_back(std::complex<double>((-b - std::sqrt(delta)) * 0.5 - a3 * 0.25, 0));
-//        }
-//        else
-//        {
-//            roots.emplace_back(std::complex<double>(-b - a3 / 4, std::sqrt(-delta)));
-//            roots.emplace_back(std::complex<double>(-b - a3 / 4, -std::sqrt(-delta)));
-//        }
-//    }
-//    {
-//        const auto b     = -sqrt(2 * m);
-//        const auto c     = p / 2. + m - q / (2. * b);
-//        const auto delta = b * b - 4 * c;
+//         if (delta > 0.0)
+//         {
+//             roots.emplace_back(std::complex<double>((-b + std::sqrt(delta)) * 0.5 - a3 * 0.25,
+//             0)); roots.emplace_back(std::complex<double>((-b - std::sqrt(delta)) * 0.5 - a3 *
+//             0.25, 0));
+//         }
+//         else
+//         {
+//             roots.emplace_back(std::complex<double>(-b - a3 / 4, std::sqrt(-delta)));
+//             roots.emplace_back(std::complex<double>(-b - a3 / 4, -std::sqrt(-delta)));
+//         }
+//     }
+//     {
+//         const auto b     = -sqrt(2 * m);
+//         const auto c     = p / 2. + m - q / (2. * b);
+//         const auto delta = b * b - 4 * c;
 //
-//        if (delta > 0.0)
-//        {
-//            roots.emplace_back({(-b + std::sqrt(delta)) * 0.5 - a3 * 0.25, 0
-//        });
-//            roots.emplace_back((-b - std::sqrt(delta)) * 0.5 - a3 * 0.25, 0));
-//        }
-//        else
-//        {
-//            roots.emplace_back(std::complex<double>(-b - a3 / 4, std::sqrt(-delta)));
-//            roots.emplace_back(std::complex<double>(-b - a3 / 4, -std::sqrt(-delta)));
-//        }
-//    }
-//    return roots;
-//}
+//         if (delta > 0.0)
+//         {
+//             roots.emplace_back({(-b + std::sqrt(delta)) * 0.5 - a3 * 0.25, 0
+//         });
+//             roots.emplace_back((-b - std::sqrt(delta)) * 0.5 - a3 * 0.25, 0));
+//         }
+//         else
+//         {
+//             roots.emplace_back(std::complex<double>(-b - a3 / 4, std::sqrt(-delta)));
+//             roots.emplace_back(std::complex<double>(-b - a3 / 4, -std::sqrt(-delta)));
+//         }
+//     }
+//     return roots;
+// }
 
 //------------------------------------------------------------------------------
 double polynomial_solver::fourth_degree_polynomial_solver(
@@ -102,8 +103,7 @@ double polynomial_solver::fourth_degree_polynomial_solver(
         }
     }
 
-    SOLVERS_LOG_IF(
-        WARNING,
+    SOLVERS_LOG_IF(WARNING,
         !is_almost_zero(
             root * root * root * root + a3 * root * root * root + a2 * root * root + a1 * root + a0,
             0.00005),
@@ -139,8 +139,7 @@ double polynomial_solver::third_degree_polynomial_solver(double b, double c, dou
         result          = (-b + 2. * cos(phi) * norm) / 3.0;
     }
 
-    SOLVERS_LOG_IF(
-        WARNING,
+    SOLVERS_LOG_IF(WARNING,
         !is_almost_zero(d + result * (c + result * (b + result)), 0.00001),
         "cubic solver has a problem: " << d + result * (c + result * (b + result)));
 

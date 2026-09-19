@@ -1,4 +1,4 @@
-#include "root_finding_algorithms.h"
+#include "solvers/root_finding_algorithms.h"
 
 #include <cmath>
 #include <limits>
@@ -7,14 +7,13 @@
 
 namespace solverslib
 {
-bool root_finding_algorithms::dekker(
-    const function_gradient_type& func,
-    double                        x1,
-    double                        x2,
-    double&                       result,
-    double                        tolerance_function,
-    double                        tolerance_parametes,
-    size_t                        max_iterations)
+bool root_finding_algorithms::dekker(const function_gradient_type& func,
+    double                                                         x1,
+    double                                                         x2,
+    double&                                                        result,
+    double                                                         tolerance_function,
+    double                                                         tolerance_parametes,
+    size_t                                                         max_iterations)
 {
     double df_dx;
 
@@ -82,7 +81,7 @@ bool root_finding_algorithms::dekker(
     return false;
 }
 
-bool root_finding_algorithms::brent(  //NOLINT
+bool root_finding_algorithms::brent(  // NOLINT
     root_finding_algorithms::function_type const& func,
     double                                        x1,
     double                                        x2,

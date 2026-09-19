@@ -1,5 +1,6 @@
 #include "levenberg_marquardt_solver.h"
 
+#include <Eigen/LU>
 #include <iomanip>
 
 #include "detail/support.h"

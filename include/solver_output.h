@@ -27,11 +27,11 @@ struct solver_output
 
     SOLVER_API explicit solver_output(size_type m);
 
-    void update(bool           x2_converged,
-        bool                   parameters_converged,
-        bool                   gradient_converged,
-        size_type              iteration,
-        const Eigen::VectorXd& y_p);
+    void update(bool         x2_converged,
+        bool                 parameters_converged,
+        bool                 gradient_converged,
+        size_type            iteration,
+        const vector_type&   y_p);
 
     SOLVER_API void print() const;
 

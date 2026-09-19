@@ -16,8 +16,6 @@ class lbfgs_solver
 {
     using size_type   = size_t;
     using scalar_type = double;
-    using vector_type = Eigen::VectorXd;
-    using matrix_type = Eigen::MatrixXd;
 
     using function_type = std::function<void(vector_type const&, vector_type&)>;
     using jacobian_type = std::function<void(vector_type const&, matrix_type&)>;
@@ -33,6 +31,6 @@ public:
                       function_type                 function,
                       jacobian_type                 jacobian = nullptr);
     SOLVER_API solver_output solve(
-        Eigen::VectorXd& parameters, const solver_options_bfgs& options) const;
+        vector_type& parameters, const solver_options_bfgs& options) const;
 };
 }  // namespace solverslib

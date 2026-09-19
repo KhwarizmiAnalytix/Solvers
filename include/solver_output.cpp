@@ -24,11 +24,11 @@ solver_output::solver_output(size_type m)
 }
 
 void solver_output::update(
-    bool                       x2_converged,
-    bool                       parameters_converged,
-    bool                       gradient_converged,
-    size_type                  iteration,
-    const Eigen::VectorXd& y_p)
+    bool               x2_converged,
+    bool               parameters_converged,
+    bool               gradient_converged,
+    size_type          iteration,
+    const vector_type& y_p)
 {
     iterations_ = iteration;
     if (x2_converged)
