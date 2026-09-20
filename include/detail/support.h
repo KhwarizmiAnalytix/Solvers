@@ -12,7 +12,7 @@
 #include <utility>
 
 #include "include/detail/eigen_support.h"
-#include "logging/logging.h"
+#include "include/logging.h"
 
 // Direct aliases of the Logging library's own macros: SOLVERS_* is this
 // project's naming, LOGGING_* does the actual work (message formatting via

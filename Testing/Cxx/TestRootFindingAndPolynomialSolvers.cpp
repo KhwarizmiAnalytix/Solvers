@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#include "logging/util/exception.h"
+#include "include/util/exception.h"
 #include "solvers/polynomial_solver.h"
 #include "solvers/root_finding_algorithms.h"
 
