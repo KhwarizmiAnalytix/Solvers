@@ -13,4 +13,7 @@ if(SOLVERS_ENABLE_BENCHMARKS)
 
     add_executable(RootFindersBenchmark BenchmarkRootFinders.cpp)
     target_link_libraries(RootFindersBenchmark PRIVATE Solvers::Solvers)
+
+    add_executable(RootFindersVsLMBenchmark BenchmarkRootFindersVsLM.cpp)
+    target_link_libraries(RootFindersVsLMBenchmark PRIVATE Solvers::Solvers)
 endif()
