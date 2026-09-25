@@ -1,0 +1,13 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/toufikbellaj/dev/Solvers/build_ninja/cmake_install.cmake",
+		"/Users/toufikbellaj/dev/Solvers/build_ninja/ThirdParty/Logging/cmake_install.cmake",
+		"/Users/toufikbellaj/dev/Solvers/build_ninja/ThirdParty/Logging/loguru_build/cmake_install.cmake",
+		"/Users/toufikbellaj/dev/Solvers/build_ninja/ThirdParty/googletest/cmake_install.cmake",
+		"/Users/toufikbellaj/dev/Solvers/build_ninja/ThirdParty/googletest/googlemock/cmake_install.cmake",
+		"/Users/toufikbellaj/dev/Solvers/build_ninja/ThirdParty/googletest/googletest/cmake_install.cmake",
+		"/Users/toufikbellaj/dev/Solvers/build_ninja/Testing/Cxx/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

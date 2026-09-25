@@ -1,0 +1,5 @@
+if(EXISTS "/Users/toufikbellaj/dev/Solvers/build_ninja/Testing/Cxx/SolversTests[1]_tests.cmake")
+  include("/Users/toufikbellaj/dev/Solvers/build_ninja/Testing/Cxx/SolversTests[1]_tests.cmake")
+else()
+  add_test(SolversTests_NOT_BUILT SolversTests_NOT_BUILT)
+endif()

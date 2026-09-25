@@ -150,7 +150,7 @@ else()
   endif()
 endif()
 
-# Function to create IWYU wrapper script for enhanced solvers. Optional ARGN items are extra flags
+# Function to create IWYU wrapper script for enhanced logging. Optional ARGN items are extra flags
 # appended to IWYU args (e.g. per-language -D defines).
 function(xsigma_create_iwyu_wrapper target_name lang)
   set(WRAPPER_SCRIPT "${PROJECT_BINARY_DIR}/iwyu_wrapper_${target_name}_${lang}.cmake")
@@ -236,7 +236,7 @@ function(xsigma_apply_iwyu target_name)
   )
   xsigma_create_iwyu_wrapper(${target_name} C "-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH")
 
-  # Apply IWYU via the solvers wrapper (cmake -P; IWYU suggestions go to iwyu.log via stderr)
+  # Apply IWYU via the logging wrapper (cmake -P; IWYU suggestions go to iwyu.log via stderr)
   set_target_properties(
     ${target_name}
     PROPERTIES CXX_INCLUDE_WHAT_YOU_USE
@@ -245,5 +245,5 @@ function(xsigma_apply_iwyu target_name)
                "${CMAKE_COMMAND};-P;${PROJECT_BINARY_DIR}/iwyu_wrapper_${target_name}_C.cmake"
   )
 
-  message(STATUS "Applied IWYU to target: ${target_name} (solvers to ${IWYU_LOG_FILE})")
+  message(STATUS "Applied IWYU to target: ${target_name} (logging to ${IWYU_LOG_FILE})")
 endfunction()
