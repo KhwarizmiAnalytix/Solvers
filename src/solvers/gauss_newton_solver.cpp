@@ -1,4 +1,4 @@
-#include "gauss_newton_solver.h"
+#include "solvers/gauss_newton_solver.h"
 
 #include <iomanip>
 #include <sstream>

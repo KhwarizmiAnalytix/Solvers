@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 include(SolversDependencies)
 
-file(GLOB_RECURSE solvers_sources CONFIGURE_DEPENDS "include/*.cpp")
+file(GLOB_RECURSE solvers_sources CONFIGURE_DEPENDS "src/*.cpp")
 add_library(Solvers ${solvers_sources})
 add_library(Solvers::Solvers ALIAS Solvers)
 target_include_directories(Solvers

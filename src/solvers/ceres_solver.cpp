@@ -1,4 +1,4 @@
-#include "ceres_solver.h"
+#include "solvers/ceres_solver.h"
 
 #include "detail/support.h"
 

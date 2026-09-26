@@ -1,4 +1,4 @@
-#include "lbfgs_solver.h"
+#include "solvers/lbfgs_solver.h"
 
 #include "solver_options/solver_options_bfgs.h"
 

@@ -1,4 +1,4 @@
-#include "nlopt_solver.h"
+#include "solvers/nlopt_solver.h"
 
 #if SOLVERS_HAS_NLOPT
 #include <nlopt.hpp>
