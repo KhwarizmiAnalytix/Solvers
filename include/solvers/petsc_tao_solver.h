@@ -28,19 +28,19 @@ public:
 
     // General objective mode: minimize f(x) with optional Hessian and bounds.
     SOLVER_API petsc_tao_solver(size_t num_parameters,
-        objective_type                    objective,
-        gradient_type                     gradient,
-        hessian_type                      hessian      = nullptr,
-        std::vector<double>               lower_bounds = {},
-        std::vector<double>               upper_bounds = {});
+        objective_type                 objective,
+        gradient_type                  gradient,
+        hessian_type                   hessian      = nullptr,
+        std::vector<double>            lower_bounds = {},
+        std::vector<double>            upper_bounds = {});
 
     // Least-squares mode (POUNDERS / BRGN): minimize 0.5*||r(x)||^2.
     SOLVER_API petsc_tao_solver(size_t num_parameters,
-        size_t                            num_residuals,
-        residual_type                     residuals,
-        jacobian_type                     jacobian     = nullptr,
-        std::vector<double>               lower_bounds = {},
-        std::vector<double>               upper_bounds = {});
+        size_t                         num_residuals,
+        residual_type                  residuals,
+        jacobian_type                  jacobian     = nullptr,
+        std::vector<double>            lower_bounds = {},
+        std::vector<double>            upper_bounds = {});
 
     SOLVER_API static bool is_supported();
 

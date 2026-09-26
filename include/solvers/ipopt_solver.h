@@ -26,11 +26,11 @@ public:
     using hessian_type   = std::function<void(const vector_type&, matrix_type&)>;
 
     SOLVER_API ipopt_solver(size_t num_parameters,
-        objective_type                 objective,
-        gradient_type                  gradient,
-        hessian_type                   hessian      = nullptr,
-        std::vector<double>            lower_bounds = {},
-        std::vector<double>            upper_bounds = {});
+        objective_type             objective,
+        gradient_type              gradient,
+        hessian_type               hessian      = nullptr,
+        std::vector<double>        lower_bounds = {},
+        std::vector<double>        upper_bounds = {});
 
     SOLVER_API static bool is_supported();
 

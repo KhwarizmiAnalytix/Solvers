@@ -32,10 +32,10 @@ class SOLVER_VISIBILITY solver_options_petsc : public solver_options
 public:
     solver_options_petsc(tao_algorithm_enum tao_type,
         int                                 max_num_iterations,
-        double function_tolerance  = 1e-8,
-        double gradient_tolerance  = 1e-8,
-        double parameter_tolerance = 1e-8,
-        bool   verbose             = false)
+        double                              function_tolerance  = 1e-8,
+        double                              gradient_tolerance  = 1e-8,
+        double                              parameter_tolerance = 1e-8,
+        bool                                verbose             = false)
         : solver_options(solver_enum::PETSC_TAO,
               max_num_iterations,
               function_tolerance,

@@ -15,8 +15,8 @@ namespace solverslib
 // (redesign review section 10).
 enum class ipopt_hessian_approximation_enum : int
 {
-    EXACT           = 0,  // caller supplies a Hessian (or Hessian-vector) callback
-    LIMITED_MEMORY  = 1   // Ipopt's L-BFGS quasi-Newton approximation
+    EXACT          = 0,  // caller supplies a Hessian (or Hessian-vector) callback
+    LIMITED_MEMORY = 1   // Ipopt's L-BFGS quasi-Newton approximation
 };
 
 class SOLVER_VISIBILITY solver_options_ipopt : public solver_options
@@ -68,11 +68,12 @@ private:
     solver_options_ipopt() : solver_options(solverslib::solver_enum::IPOPT) {}
     void initialize() const {}
 
-    double                           tol_                   = 1e-8;
-    double                           acceptable_tol_        = 1e-6;
-    ipopt_hessian_approximation_enum hessian_approximation_ = ipopt_hessian_approximation_enum::LIMITED_MEMORY;
-    std::string                      linear_solver_         = "";
-    double                           max_wall_time_seconds_ = 1e9;
+    double                           tol_            = 1e-8;
+    double                           acceptable_tol_ = 1e-6;
+    ipopt_hessian_approximation_enum hessian_approximation_ =
+        ipopt_hessian_approximation_enum::LIMITED_MEMORY;
+    std::string linear_solver_         = "";
+    double      max_wall_time_seconds_ = 1e9;
 };
 
 class SOLVER_VISIBILITY solver_options_ipopt_builder

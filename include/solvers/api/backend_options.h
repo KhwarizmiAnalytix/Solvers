@@ -30,10 +30,11 @@ enum class ceres_trust_region_strategy
 
 struct ceres_options
 {
-    ceres_linear_solver         linear_solver           = ceres_linear_solver::dense_qr;
-    ceres_trust_region_strategy trust_region_strategy   = ceres_trust_region_strategy::levenberg_marquardt;
-    int                         num_threads             = 1;
-    double                      max_solver_time_seconds = 1e9;
+    ceres_linear_solver         linear_solver = ceres_linear_solver::dense_qr;
+    ceres_trust_region_strategy trust_region_strategy =
+        ceres_trust_region_strategy::levenberg_marquardt;
+    int    num_threads             = 1;
+    double max_solver_time_seconds = 1e9;
 };
 
 // -- NLopt -------------------------------------------------------------------
@@ -41,15 +42,15 @@ struct ceres_options
 // require a Jacobian; the derivative-free ones do not (the dispatcher checks).
 enum class nlopt_algorithm
 {
-    lbfgs,                                       // LD_LBFGS (gradient-based)
-    method_of_moving_asymptotes,                 // LD_MMA   (gradient-based)
-    sequential_least_squares_programming,        // LD_SLSQP (gradient-based)
-    preconditioned_truncated_newton,             // LD_TNEWTON_PRECOND (gradient-based)
-    variable_metric,                             // LD_VAR1  (gradient-based)
-    constrained_optimization_by_linear_approx,   // LN_COBYLA  (derivative-free)
-    bound_optimization_by_quadratic_approx,      // LN_BOBYQA  (derivative-free)
-    controlled_random_search,                    // GN_CRS2_LM (derivative-free)
-    dividing_rectangles                          // GN_ORIG_DIRECT_L (derivative-free)
+    lbfgs,                                      // LD_LBFGS (gradient-based)
+    method_of_moving_asymptotes,                // LD_MMA   (gradient-based)
+    sequential_least_squares_programming,       // LD_SLSQP (gradient-based)
+    preconditioned_truncated_newton,            // LD_TNEWTON_PRECOND (gradient-based)
+    variable_metric,                            // LD_VAR1  (gradient-based)
+    constrained_optimization_by_linear_approx,  // LN_COBYLA  (derivative-free)
+    bound_optimization_by_quadratic_approx,     // LN_BOBYQA  (derivative-free)
+    controlled_random_search,                   // GN_CRS2_LM (derivative-free)
+    dividing_rectangles                         // GN_ORIG_DIRECT_L (derivative-free)
 };
 
 struct nlopt_options
@@ -71,7 +72,7 @@ struct ipopt_options
     double             acceptable_tol        = 1e-6;
     double             max_wall_time_seconds = 1e9;
     // Ipopt linear solver name (e.g. "mumps"); empty keeps Ipopt's default.
-    std::string        linear_solver;
+    std::string linear_solver;
 };
 
 // -- PETSc / TAO (also realizes the POUNDERS backend) ------------------------
@@ -91,9 +92,9 @@ enum class tao_algorithm
 struct petsc_tao_options
 {
     tao_algorithm algorithm   = tao_algorithm::automatic;
-    double        gatol       = 1e-8;  // absolute gradient tolerance
-    double        grtol       = 1e-8;  // relative gradient tolerance
-    bool          matrix_free = false; // drive TAO with a Hessian-vector product
+    double        gatol       = 1e-8;   // absolute gradient tolerance
+    double        grtol       = 1e-8;   // relative gradient tolerance
+    bool          matrix_free = false;  // drive TAO with a Hessian-vector product
 };
 
 // True when the NLopt algorithm needs a Jacobian/gradient callback.
@@ -105,11 +106,13 @@ inline bool requires_gradient(nlopt_algorithm algorithm)
     case nlopt_algorithm::method_of_moving_asymptotes:
     case nlopt_algorithm::sequential_least_squares_programming:
     case nlopt_algorithm::preconditioned_truncated_newton:
-    case nlopt_algorithm::variable_metric: return true;
+    case nlopt_algorithm::variable_metric:
+        return true;
     case nlopt_algorithm::constrained_optimization_by_linear_approx:
     case nlopt_algorithm::bound_optimization_by_quadratic_approx:
     case nlopt_algorithm::controlled_random_search:
-    case nlopt_algorithm::dividing_rectangles: return false;
+    case nlopt_algorithm::dividing_rectangles:
+        return false;
     }
     return true;
 }

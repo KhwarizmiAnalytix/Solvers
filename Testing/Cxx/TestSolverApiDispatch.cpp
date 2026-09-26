@@ -26,9 +26,7 @@ least_squares_problem make_linear_problem(bool with_jacobian)
     if (with_jacobian)
     {
         problem.jacobian = [](const vector_type&, matrix_type& j)
-        {
-            j = matrix_type::Identity(2, 2);
-        };
+        { j = matrix_type::Identity(2, 2); };
     }
     return problem;
 }
@@ -97,8 +95,8 @@ TEST(SolverApiDispatch, GaussNewtonHonorsExplicitAlgorithm)
 
 TEST(SolverApiDispatch, BoundsRejectedRatherThanDropped)
 {
-    auto problem          = make_linear_problem(true);
-    problem.bounds.lower  = {0.0, -10.0};  // one-sided is enough to trigger
+    auto problem         = make_linear_problem(true);
+    problem.bounds.lower = {0.0, -10.0};  // one-sided is enough to trigger
 
     const solver_result result = solve(problem, vector_type::Zero(2));
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
@@ -171,8 +169,8 @@ TEST(SolverApiDispatch, CeresOptionsAreAccepted)
 {
     const auto    problem = make_linear_problem(true);
     solve_options options;
-    options.backend            = backend::ceres;
-    options.ceres              = ceres_options{};
+    options.backend              = backend::ceres;
+    options.ceres                = ceres_options{};
     options.ceres->linear_solver = ceres_linear_solver::dense_normal_cholesky;
     options.ceres->num_threads   = 2;
 
@@ -272,9 +270,9 @@ optimization_problem make_quadratic_problem(const vector_type& c, bool with_grad
 
 TEST(SolverApiDispatch, OptimizationConstraintsRouteToIpopt)
 {
-    auto problem                = make_quadratic_problem(vector_type::Ones(2), true);
+    auto problem                       = make_quadratic_problem(vector_type::Ones(2), true);
     problem.constraints.num_inequality = 1;
-    const problem_traits traits = inspect(problem);
+    const problem_traits traits        = inspect(problem);
     EXPECT_TRUE(traits.has_nonlinear_constraints);
     EXPECT_EQ(select_algorithm(traits, {}), algorithm::interior_point);
     EXPECT_EQ(select_backend(traits, {}), backend::ipopt);
@@ -282,9 +280,9 @@ TEST(SolverApiDispatch, OptimizationConstraintsRouteToIpopt)
 
 TEST(SolverApiDispatch, OptimizationHessianVectorRoutesToTao)
 {
-    auto problem = make_quadratic_problem(vector_type::Ones(2), true);
-    problem.hessian_vector =
-        [](const vector_type&, const vector_type& v, vector_type& out) { out = 2.0 * v; };
+    auto problem           = make_quadratic_problem(vector_type::Ones(2), true);
+    problem.hessian_vector = [](const vector_type&, const vector_type& v, vector_type& out)
+    { out = 2.0 * v; };
     const problem_traits traits = inspect(problem);
     EXPECT_TRUE(traits.has_hessian_vector_product);
     EXPECT_TRUE(is_large_scale(traits, {}));
@@ -296,7 +294,7 @@ TEST(SolverApiDispatch, OptimizationHessianVectorRoutesToTao)
 TEST(SolverApiDispatch, PoundersRouteUsesTaoAdapter)
 {
     const auto    problem = make_linear_problem(false);  // no Jacobian -> pounders
-    solve_options options;  // automatic
+    solve_options options;                               // automatic
 
     const solver_result result = solve(problem, vector_type::Zero(2), options);
     EXPECT_EQ(result.backend, backend::pounders);
@@ -368,8 +366,8 @@ TEST(SolverApiDispatch, NativeObjectivePathStillUnsupported)
 {
     // Small unconstrained objective auto-routes to native L-BFGS, which has no
     // scalar-objective kernel yet.
-    const auto    problem = make_quadratic_problem(vector_type::Ones(2), true);
-    const problem_traits traits = inspect(problem);
+    const auto           problem = make_quadratic_problem(vector_type::Ones(2), true);
+    const problem_traits traits  = inspect(problem);
     EXPECT_EQ(select_backend(traits, {}), backend::native);
 
     const solver_result result = solve(problem, vector_type::Zero(2));

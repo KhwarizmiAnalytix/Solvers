@@ -29,8 +29,8 @@ algorithm select_algorithm(const problem_traits& traits, const solve_options& op
 // being written back to caller storage (review: invariant 2, and "The new API
 // accepts an initial point and returns a result").
 solver_result solve(const least_squares_problem& problem,
-    const vector_type&                            initial_guess,
-    const solve_options&                          options = {});
+    const vector_type&                           initial_guess,
+    const solve_options&                         options = {});
 
 solver_result solve(const optimization_problem& problem,
     const vector_type&                          initial_guess,

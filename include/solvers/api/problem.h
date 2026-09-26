@@ -18,9 +18,9 @@ namespace solverslib::api
 using residual_function = std::function<void(const vector_type&, vector_type&)>;
 using jacobian_function = std::function<void(const vector_type&, matrix_type&)>;
 
-using objective_function       = std::function<double(const vector_type&)>;
-using gradient_function        = std::function<void(const vector_type&, vector_type&)>;
-using hessian_function         = std::function<void(const vector_type&, matrix_type&)>;
+using objective_function = std::function<double(const vector_type&)>;
+using gradient_function  = std::function<void(const vector_type&, vector_type&)>;
+using hessian_function   = std::function<void(const vector_type&, matrix_type&)>;
 // Matrix-free Hessian-vector product H(x) * v -> out. Its presence steers the
 // dispatcher toward a matrix-free (TAO/Newton-Krylov) backend even below the
 // size thresholds (review section 7).
@@ -67,10 +67,10 @@ struct optimization_problem
 {
     std::size_t num_parameters = 0;
 
-    objective_function                      objective;
-    std::optional<gradient_function>        gradient;
-    std::optional<hessian_function>         hessian;
-    std::optional<hessian_vector_function>  hessian_vector;
+    objective_function                     objective;
+    std::optional<gradient_function>       gradient;
+    std::optional<hessian_function>        hessian;
+    std::optional<hessian_vector_function> hessian_vector;
 
     api::bounds      bounds;
     api::constraints constraints;
@@ -80,13 +80,13 @@ struct optimization_problem
 // backend never has to be the primary abstraction (review section 2).
 struct problem_traits
 {
-    bool is_least_squares            = false;
-    bool has_jacobian                = false;
-    bool has_gradient                = false;
-    bool has_hessian                 = false;
-    bool has_hessian_vector_product  = false;
-    bool has_bounds                  = false;
-    bool has_nonlinear_constraints   = false;
+    bool is_least_squares           = false;
+    bool has_jacobian               = false;
+    bool has_gradient               = false;
+    bool has_hessian                = false;
+    bool has_hessian_vector_product = false;
+    bool has_bounds                 = false;
+    bool has_nonlinear_constraints  = false;
 
     std::size_t num_parameters = 0;
     std::size_t num_residuals  = 0;

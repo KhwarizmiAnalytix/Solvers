@@ -31,12 +31,12 @@ struct solver_result
     std::optional<double> gradient_norm;
     std::optional<double> step_norm;
 
-    std::size_t iterations            = 0;
-    std::size_t residual_evaluations  = 0;
-    std::size_t jacobian_evaluations  = 0;
-    std::size_t gradient_evaluations  = 0;
-    std::size_t accepted_steps        = 0;
-    std::size_t rejected_steps        = 0;
+    std::size_t iterations           = 0;
+    std::size_t residual_evaluations = 0;
+    std::size_t jacobian_evaluations = 0;
+    std::size_t gradient_evaluations = 0;
+    std::size_t accepted_steps       = 0;
+    std::size_t rejected_steps       = 0;
 
     // What actually ran, after Auto resolution.
     api::backend   backend   = api::backend::automatic;
