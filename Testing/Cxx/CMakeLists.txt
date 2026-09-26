@@ -3,7 +3,7 @@ add_executable(
     SolversTests TestOptimizationAlgorithm.cpp TestOptimizerWrapper.cpp TestSolverBackends.cpp
                  TestRootFindingAndPolynomialSolvers.cpp
 )
-target_link_libraries(SolversTests PRIVATE Solvers::Solvers GTest::gtest GTest::gtest_main)
+target_link_libraries(SolversTests PRIVATE Solvers::Solvers GTest::gtest_main)
 gtest_discover_tests(SolversTests)
 
 option(SOLVERS_ENABLE_BENCHMARKS "Build the Ceres/NLopt/native solver benchmark executable" OFF)
