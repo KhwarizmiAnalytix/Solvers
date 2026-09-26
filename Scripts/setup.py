@@ -38,7 +38,7 @@ try:
 except ImportError:  # Windows CLI smoke and some CI jobs skip pip install
 
     class Fore:  # pylint: disable=too-few-public-methods
-        CYAN = GREEN = YELLOW = RED = WHITE = ""
+        BLUE = CYAN = GREEN = YELLOW = RED = WHITE = ""
 
     class Style:  # pylint: disable=too-few-public-methods
         RESET_ALL = ""

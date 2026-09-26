@@ -125,9 +125,9 @@ const bool converged =
 
 For problems of the form
 
-\[
+$$
 \min_x \frac{1}{2}\|r(x)\|^2,
-\]
+$$
 
 the native layer provides:
 
@@ -138,14 +138,14 @@ These solvers are intended for calibration problems where the residual structure
 
 Typical examples include:
 
-\[
+$$
 \min_\theta
 \sum_i
 w_i
 \left(
 V_i^{model}(\theta)-V_i^{market}
 \right)^2.
-\]
+$$
 
 Applications include:
 
@@ -161,9 +161,9 @@ Applications include:
 
 For smooth objectives
 
-\[
+$$
 \min_x f(x),
-\]
+$$
 
 the native layer provides:
 
@@ -184,21 +184,21 @@ Third-party libraries are used only when they provide numerical capabilities not
 
 Ipopt is used for problems of the form:
 
-\[
+$$
 \min_x f(x)
-\]
+$$
 
 subject to
 
-\[
+$$
 g_L \leq g(x) \leq g_U
-\]
+$$
 
 and
 
-\[
+$$
 x_L \leq x \leq x_U.
-\]
+$$
 
 Typical use cases include:
 
@@ -250,12 +250,12 @@ TAO is distributed as part of PETSc and does not require a separate installation
 
 POUNDERS is used when the objective has least-squares structure
 
-\[
+$$
 F(x)
 =
 \frac12
 \sum_i r_i(x)^2
-\]
+$$
 
 but reliable Jacobians are unavailable.
 
@@ -339,7 +339,7 @@ Unconstrained
 
 A typical calibration problem is:
 
-\[
+$$
 \theta^\star
 =
 \arg\min_\theta
@@ -350,7 +350,7 @@ V_i^{model}(\theta)
 -
 V_i^{market}
 \right)^2.
-\]
+$$
 
 The solver architecture allows this structure to be preserved instead of flattening every calibration problem into a generic scalar objective.
 
