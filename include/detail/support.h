@@ -4,7 +4,6 @@
 #include <cstdio>
 #include <iostream>
 #include <limits>
-#include <magic_enum/magic_enum.hpp>
 #include <memory>
 #include <sstream>
 #include <stdexcept>

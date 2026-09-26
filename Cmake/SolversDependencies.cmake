@@ -1,6 +1,6 @@
 # Pinned submodules provide deterministic, offline configuration after checkout.
 set(_solvers_tp "${CMAKE_CURRENT_LIST_DIR}/../ThirdParty")
-foreach(_dep eigen magic_enum Logging)
+foreach(_dep eigen Logging)
   if(NOT EXISTS "${_solvers_tp}/${_dep}/CMakeLists.txt")
     message(FATAL_ERROR "Missing ThirdParty/${_dep}; run git submodule update --init --recursive")
   endif()
@@ -9,11 +9,6 @@ if(NOT TARGET Eigen3::Eigen)
   add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
   set_target_properties(Eigen3::Eigen PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${_solvers_tp}/eigen")
-endif()
-if(NOT TARGET magic_enum::magic_enum)
-  add_library(solvers_magic_enum INTERFACE)
-  target_include_directories(solvers_magic_enum SYSTEM INTERFACE "${_solvers_tp}/magic_enum/include")
-  add_library(magic_enum::magic_enum ALIAS solvers_magic_enum)
 endif()
 # Logging (https://github.com/KhwarizmiAnalytix/Logging) backs every
 # SOLVERS_CHECK/SOLVERS_THROW/SOLVERS_LOGF/SOLVERS_LOG_* macro in

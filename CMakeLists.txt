@@ -23,7 +23,7 @@ target_include_directories(Solvers
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
 )
 target_compile_features(Solvers PUBLIC cxx_std_17)
-target_link_libraries(Solvers PUBLIC Eigen3::Eigen magic_enum::magic_enum Logging::Logging)
+target_link_libraries(Solvers PUBLIC Eigen3::Eigen Logging::Logging)
 target_compile_definitions(Solvers PUBLIC
   SOLVERS_HAS_CERES=$<BOOL:${SOLVERS_ENABLE_CERES}>
   SOLVERS_HAS_NLOPT=$<BOOL:${SOLVERS_ENABLE_NLOPT}>)
