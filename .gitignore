@@ -1,5 +1,6 @@
 /build/
 /build-*/
+/build_*/
 *.log
 __pycache__/
 *.py[cod]

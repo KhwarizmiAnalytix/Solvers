@@ -169,13 +169,14 @@ command = [
 
 [[linter]]
 code = 'MYPY'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['**/*.py', '**/*.pyi']
 exclude_patterns = [
     'ThirdParty/**',
     '.git/**',
     'build/**',
     'build_*/**',
     '__pycache__/**',
+    'Scripts/setup.py',
 ]
 init_command = [
     'python3',
@@ -188,19 +189,21 @@ command = [
     'python3',
     '-m',
     'lint_tool.adapters.mypy_linter',
+    '--config=mypy.ini',
     '--',
     '@{{PATHSFILE}}',
 ]
 
 [[linter]]
 code = 'MYPYSTRICT'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
     '.git/**',
     'build/**',
     'build_*/**',
     '__pycache__/**',
+    'Scripts/setup.py',
 ]
 init_command = [
     'python3',
@@ -213,7 +216,8 @@ command = [
     'python3',
     '-m',
     'lint_tool.adapters.mypy_linter',
-    '--strict',
+    '--config=mypy-strict.ini',
+    '--code=MYPYSTRICT',
     '--',
     '@{{PATHSFILE}}',
 ]
@@ -293,25 +297,19 @@ command = [
     'python3',
     '-m',
     'lint_tool.adapters.pyrefly_linter',
-    '--',
-    '@{{PATHSFILE}}',
+    '--config=pyrefly.toml',
 ]
 
 [[linter]]
 code = 'IMPORT_LINTER'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
     '.git/**',
     'build/**',
+    'build_*/**',
     '__pycache__/**',
-]
-init_command = [
-    'python3',
-    '-m',
-    'lint_tool.adapters.pip_init',
-    '--dry-run={{DRYRUN}}',
-    'lint-import-linter>=1.0.0',
+    'Scripts/setup.py',
 ]
 command = [
     'python3',
@@ -323,24 +321,20 @@ command = [
 
 [[linter]]
 code = 'DOCSTRING_LINTER'
-include_patterns = ['**/*.py', 'Scripts/**/*.py']
+include_patterns = ['Scripts/**/*.py']
 exclude_patterns = [
     'ThirdParty/**',
     '.git/**',
     'build/**',
+    'build_*/**',
     '__pycache__/**',
-]
-init_command = [
-    'python3',
-    '-m',
-    'lint_tool.adapters.pip_init',
-    '--dry-run={{DRYRUN}}',
-    'pydocstyle>=6.0.0',
+    'Scripts/setup.py',
 ]
 command = [
     'python3',
     '-m',
     'lint_tool.adapters.docstring_linter',
+    '--lintrunner',
     '--',
     '@{{PATHSFILE}}',
 ]
@@ -487,10 +481,12 @@ command = [
 
 [[linter]]
 code = 'PYPROJECT'
-include_patterns = ['pyproject.toml', 'setup.py', 'setup.cfg']
+include_patterns = ['**/pyproject.toml']
 exclude_patterns = [
     'ThirdParty/**',
     '.git/**',
+    'build/**',
+    'build_*/**',
 ]
 command = [
     'python3',
@@ -498,6 +494,14 @@ command = [
     'lint_tool.adapters.pyproject_linter',
     '--',
     '@{{PATHSFILE}}',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'packaging==25.0',
+    'tomli==2.2.1 ; python_version < "3.11"',
 ]
 
 [[linter]]
@@ -540,11 +544,10 @@ command = [
     'python3',
     '-m',
     'lint_tool.adapters.grep_linter',
-    '--invert-match',
-    '--pattern=(Copyright|SPDX-License)',
+    '--pattern=Confidential and proprietary',
     '--linter-name=COPYRIGHT',
-    '--error-name=missing copyright header',
-    '--error-description=Add copyright/SPDX header to this file.',
+    '--error-name=Confidential Code',
+    '--error-description=Proprietary and confidential source code should not be contributed to the Solvers codebase.',
     '--',
     '@{{PATHSFILE}}',
 ]
@@ -670,23 +673,24 @@ command = [
 [[linter]]
 code = 'ROOT_LOGGING'
 include_patterns = [
-    'include/**/*.h',
-    'include/**/*.cpp',
-    'include/**/*.cxx',
+    '**/*.py',
 ]
 exclude_patterns = [
     'ThirdParty/**',
     '.git/**',
+    'build/**',
+    'build_*/**',
+    '__pycache__/**',
 ]
 command = [
     'python3',
     '-m',
     'lint_tool.adapters.grep_linter',
-    '--pattern=LOG(.*)\|SPDLOG.*\|logger->',
-    '--invert-match',
+    '--pattern=logging\.(debug|info|warn|warning|error|critical|log|exception)\(',
+    '--replace-pattern=s/logging\.(debug|info|warn|warning|error|critical|log|exception)\(/log.\1(/',
     '--linter-name=ROOT_LOGGING',
-    '--error-name=logging not from logger param',
-    '--error-description=Use logger->info/debug/warn/error instead of direct logging.',
+    '--error-name=use of root logger',
+    '--error-description=Do not use the root logger (logging.info, etc) directly; define log = logging.getLogger(__name__) and call log.info().',
     '--',
     '@{{PATHSFILE}}',
 ]
@@ -703,26 +707,33 @@ command = [
     'python3',
     '-m',
     'lint_tool.adapters.grep_linter',
-    '--pattern=noqa|NOLINT|pylint:.*disable',
+    '--pattern=# noqa([^:]|$)',
     '--linter-name=NOQA',
-    '--error-name=suppression directive found',
-    '--error-description=Code has inline suppressions; review if necessary or remove.',
+    '--error-name=unqualified noqa',
+    '--error-description=This line has an unqualified `noqa`; please convert it to `noqa: XXXX`.',
     '--',
     '@{{PATHSFILE}}',
 ]
 
 [[linter]]
 code = 'PYPIDEP'
-include_patterns = ['pyproject.toml', 'setup.py', 'requirements*.txt']
+include_patterns = ['.github/**']
 exclude_patterns = [
+    '**/*.rst',
+    '**/*.py',
+    '**/*.md',
+    '**/*.diff',
     'ThirdParty/**',
     '.git/**',
 ]
 command = [
     'python3',
     '-m',
-    'lint_tool.adapters.pip_init',
-    '--check-deps',
+    'lint_tool.adapters.grep_linter',
+    '--pattern=(pip|pip3|python -m pip|python3 -m pip|python3 -mpip|python -mpip) install ([a-zA-Z0-9][A-Za-z0-9\._\-]+)([^/=<>~!]+)[A-Za-z0-9\._\-\*\+\!]*$',
+    '--linter-name=PYPIDEP',
+    '--error-name=unpinned PyPI install',
+    '--error-description=This line has unpinned PyPi installs; please pin them to a specific version: e.g. thepackage==1.2.',
     '--',
     '@{{PATHSFILE}}',
 ]
@@ -750,22 +761,15 @@ command = [
 
 [[linter]]
 code = 'TYPENOSKIP'
-include_patterns = ['**/*.py']
-exclude_patterns = [
-    'ThirdParty/**',
-    '.git/**',
-    'build/**',
-    '__pycache__/**',
-]
+include_patterns = ['mypy.ini']
 command = [
     'python3',
     '-m',
     'lint_tool.adapters.grep_linter',
-    '--pattern=no_skip_libs\|no_skip_check',
-    '--invert-match',
+    '--pattern=follow_imports\s*=\s*skip',
     '--linter-name=TYPENOSKIP',
-    '--error-name=type skip not configured',
-    '--error-description=Configure skip settings in mypy config.',
+    '--error-name=use of follow_imports = skip',
+    '--error-description=follow_imports = skip is forbidden from mypy.ini; it is too easy to accidentally turn off type checking. Use a top level # mypy: ignore-errors or per-site # type: ignore instead.',
     '--',
     '@{{PATHSFILE}}',
 ]
