@@ -14,7 +14,6 @@ enum class solver_enum : int
 {
     LM           = 0,
     LBFGS        = 1,
-    NLOPT        = 2,
     CERES        = 3,
     GAUSS_NEWTON = 4,
     IPOPT        = 5,

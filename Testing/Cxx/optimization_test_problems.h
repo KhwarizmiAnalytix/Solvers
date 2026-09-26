@@ -15,7 +15,7 @@ namespace solverslib::testing
 // (TestSolverBackends.cpp) and the cross-backend benchmark
 // (BenchmarkSolvers.cpp), so every backend is measured against the same
 // objectives. All problems are posed as residual vectors r(x); every
-// backend (LM, LBFGS, NLopt, Ceres) minimizes 0.5 * ||r(x)||^2.
+// backend (LM, LBFGS, Ceres) minimizes 0.5 * ||r(x)||^2.
 struct optimization_test_problem
 {
     using residual_function_type = std::function<void(const vector_type&, vector_type&)>;

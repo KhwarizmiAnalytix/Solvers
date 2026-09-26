@@ -14,8 +14,8 @@ class solver_options_ipopt;
 // Adapter around Ipopt's interior-point NLP solver for general (optionally
 // bound-constrained) scalar-objective optimization. Ipopt's own types
 // (Ipopt::TNLP, SmartPtr, IpoptApplication) never cross this header - only
-// std::function callbacks and std::vector<double>, mirroring ceres_solver /
-// nlopt_solver. The implementation is compiled against Ipopt only when
+// std::function callbacks and std::vector<double>, mirroring ceres_solver.
+// The implementation is compiled against Ipopt only when
 // SOLVERS_HAS_IPOPT is set; otherwise is_supported() is false and solve() is a
 // no-op the dispatcher never reaches.
 class ipopt_solver

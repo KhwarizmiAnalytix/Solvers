@@ -35,7 +35,6 @@ struct solve_options
     // Optional backend-specific tuning. Consulted only when the corresponding
     // backend is chosen; ignored otherwise. Absent means "backend defaults".
     std::optional<api::ceres_options>     ceres;
-    std::optional<api::nlopt_options>     nlopt;
     std::optional<api::ipopt_options>     ipopt;
     std::optional<api::petsc_tao_options> petsc_tao;
 };

@@ -16,7 +16,7 @@ gtest_discover_tests(SolversTests
     DISCOVERY_TIMEOUT 60
     PROPERTIES LABELS "Solvers")
 
-option(SOLVERS_ENABLE_BENCHMARKS "Build the Ceres/NLopt/native solver benchmark executable" OFF)
+option(SOLVERS_ENABLE_BENCHMARKS "Build the Ceres/native solver benchmark executable" OFF)
 if(SOLVERS_ENABLE_BENCHMARKS)
     add_executable(SolversBenchmark BenchmarkSolvers.cpp)
     target_link_libraries(SolversBenchmark PRIVATE Solvers::Solvers)

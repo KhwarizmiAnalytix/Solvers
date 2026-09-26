@@ -9,7 +9,6 @@
 #include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_ipopt.h"
 #include "solver_options/solver_options_lm.h"
-#include "solver_options/solver_options_nlopt.h"
 #include "solver_options/solver_options_petsc.h"
 #include "solver_output.h"
 #include "solvers/ceres_solver.h"
@@ -17,7 +16,6 @@
 #include "solvers/ipopt_solver.h"
 #include "solvers/lbfgs_solver.h"
 #include "solvers/levenberg_marquardt_solver.h"
-#include "solvers/nlopt_solver.h"
 #include "solvers/petsc_tao_solver.h"
 
 // Central dispatcher for the problem-structure API. It derives traits, resolves
@@ -345,105 +343,6 @@ solver_result run_ceres(const least_squares_problem& problem,
     return result;
 }
 
-// -- NLopt option mapping ----------------------------------------------------
-nlopt_algo_name_enum map_nlopt_algorithm(nlopt_algorithm value)
-{
-    switch (value)
-    {
-    case nlopt_algorithm::lbfgs:
-        return nlopt_algo_name_enum::LBFGS;
-    case nlopt_algorithm::method_of_moving_asymptotes:
-        return nlopt_algo_name_enum::METHOD_OF_MOVING_ASYMPTOTES;
-    case nlopt_algorithm::sequential_least_squares_programming:
-        return nlopt_algo_name_enum::SEQUENTIAL_LEAST_SQUARES_PROGRAMMING;
-    case nlopt_algorithm::preconditioned_truncated_newton:
-        return nlopt_algo_name_enum::PRECONDITIONED_TRUNCATED_NEWTON_METHOD;
-    case nlopt_algorithm::variable_metric:
-        return nlopt_algo_name_enum::VARIABLE_METRIC_METHOD;
-    case nlopt_algorithm::constrained_optimization_by_linear_approx:
-        return nlopt_algo_name_enum::CONSTRAINED_OPTIMIZATION_BY_LINEAR_APPROXIMATIONS;
-    case nlopt_algorithm::bound_optimization_by_quadratic_approx:
-        return nlopt_algo_name_enum::BOUND_OPTIMIZATION_BY_QUADRATIC_APPROXIMATION;
-    case nlopt_algorithm::controlled_random_search:
-        return nlopt_algo_name_enum::CONTROLLED_RANDOM_SEARCH_WITH_LOCAL_MUTATION;
-    case nlopt_algorithm::dividing_rectangles:
-        return nlopt_algo_name_enum::DIVIDING_RECTANGLES;
-    }
-    return nlopt_algo_name_enum::LBFGS;
-}
-
-solver_result run_nlopt(const least_squares_problem& problem,
-    const vector_type&                               initial_guess,
-    const solve_options&                             options)
-{
-    const nlopt_options nlopt_cfg = options.nlopt.value_or(nlopt_options{});
-
-    solver_result result;
-    result.parameters = initial_guess;
-    result.backend    = backend::nlopt;
-    result.algorithm =
-        options.algorithm == algorithm::automatic ? algorithm::lbfgs : options.algorithm;
-
-    if (!nlopt_solver::is_supported())
-    {
-        result.status  = solver_status::backend_unavailable;
-        result.message = "NLopt backend was not compiled in (SOLVERS_ENABLE_NLOPT=OFF)";
-        return result;
-    }
-
-    // A gradient-based NLopt algorithm calls the Jacobian callback; reject
-    // rather than dereference a missing one (review F11/F12).
-    if (requires_gradient(nlopt_cfg.algorithm) && !problem.jacobian)
-    {
-        result.status  = solver_status::unsupported_capability;
-        result.message = "selected NLopt algorithm needs a Jacobian; provide one or pick a "
-                         "derivative-free algorithm";
-        return result;
-    }
-
-    auto nlopt_opts = solver_options_nlopt_builder()
-                          .with_algorithm(map_nlopt_algorithm(nlopt_cfg.algorithm))
-                          .with_max_iterations(options.max_iterations)
-                          .with_function_tolerance(options.function_tolerance)
-                          .with_gradient_tolerance(options.gradient_tolerance)
-                          .with_parameter_tolerance(options.parameter_tolerance)
-                          .with_verbose(options.verbose)
-                          .build();
-
-    std::vector<double> parameters(
-        initial_guess.data(), initial_guess.data() + initial_guess.size());
-
-    nlopt_solver::ObjFunc_aad jac =
-        problem.jacobian ? *problem.jacobian : nlopt_solver::ObjFunc_aad{};
-
-    nlopt_solver solver(problem.num_parameters,
-        problem.num_residuals,
-        problem.residuals,
-        jac,
-        problem.bounds.lower,
-        problem.bounds.upper);
-
-    try
-    {
-        solver.solve(parameters, *nlopt_opts);  // void; throws on NLopt failure
-    }
-    catch (const std::exception& e)
-    {
-        result.status  = solver_status::numerical_failure;
-        result.message = std::string("NLopt threw: ") + e.what();
-        return result;
-    }
-
-    result.parameters =
-        to_vector_type(parameters.data(), static_cast<std::size_t>(parameters.size()));
-    const double rnorm   = residual_norm_at(problem, result.parameters);
-    result.residual_norm = rnorm;
-    result.objective     = 0.5 * rnorm * rnorm;
-    result.status        = solver_status::converged;
-    result.message       = "NLopt completed";
-    return result;
-}
-
 // -- PETSc/TAO option mapping ------------------------------------------------
 tao_algorithm_enum map_tao_algorithm(tao_algorithm value, bool least_squares)
 {
@@ -540,6 +439,48 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
     result.objective     = 0.5 * rnorm * rnorm;
     result.status        = converged ? solver_status::converged : solver_status::max_iterations;
     result.message = converged ? "PETSc/TAO converged" : "PETSc/TAO stopped without convergence";
+    return result;
+}
+
+// Native scalar-objective path via L-BFGS.
+solver_result run_native_optimization(const optimization_problem& problem,
+    const vector_type&                                            initial_guess,
+    const solve_options&                                          options,
+    algorithm                                                     alg)
+{
+    if (!problem.gradient)
+    {
+        solver_result result = failed(solver_status::unsupported_capability,
+            "native L-BFGS requires a gradient callback on the optimization_problem",
+            initial_guess);
+        result.backend       = backend::native;
+        result.algorithm     = alg;
+        return result;
+    }
+
+    vector_type x = initial_guess;
+
+    auto native_opts = solver_options_bfgs_builder()
+                           .with_max_iterations(options.max_iterations)
+                           .with_function_tolerance(options.function_tolerance)
+                           .with_gradient_tolerance(options.gradient_tolerance)
+                           .with_parameter_tolerance(options.parameter_tolerance)
+                           .with_verbose(options.verbose)
+                           .build();
+
+    lbfgs_solver solver(problem.num_parameters, problem.objective, *problem.gradient);
+    auto         out = solver.solve(x, *native_opts);
+
+    solver_result result;
+    result.status     = translate_native(out.status_);
+    result.parameters = x;
+    result.objective  = problem.objective(x);
+    result.iterations = out.iterations_;
+    result.backend    = backend::native;
+    result.algorithm  = algorithm::lbfgs;
+    result.message    = (result.status == solver_status::converged)
+                            ? "native L-BFGS converged"
+                            : "native L-BFGS reached iteration limit";
     return result;
 }
 
@@ -727,8 +668,6 @@ solver_result solve(const least_squares_problem& problem,
     }
     case backend::ceres:
         return run_ceres(problem, initial_guess, options);
-    case backend::nlopt:
-        return run_nlopt(problem, initial_guess, options);
     case backend::pounders:
     case backend::petsc_tao:
         return run_petsc_tao_least_squares(problem, initial_guess, options, chosen);
@@ -776,16 +715,16 @@ solver_result solve(const optimization_problem& problem,
         return run_petsc_tao_objective(problem, initial_guess, options);
     case backend::native:
     {
-        // A native scalar-objective kernel is not yet present (review: "Keep
-        // general scalar objectives separate"). Report the gap explicitly
-        // instead of misrouting through the residual-based native L-BFGS.
-        solver_result result = failed(solver_status::unsupported_capability,
-            "native scalar-objective optimization is not yet implemented; pin an "
-            "external backend (ipopt / petsc_tao)",
-            initial_guess);
-        result.backend       = backend::native;
-        result.algorithm     = alg;
-        return result;
+        if (traits.has_bounds)
+        {
+            solver_result result = failed(solver_status::unsupported_capability,
+                "native backend does not enforce bounds; use a bound-capable backend",
+                initial_guess);
+            result.backend       = backend::native;
+            result.algorithm     = alg;
+            return result;
+        }
+        return run_native_optimization(problem, initial_guess, options, alg);
     }
     default:
     {

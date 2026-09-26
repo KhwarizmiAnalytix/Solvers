@@ -4,7 +4,6 @@
 #include "solvers/api/solve.h"
 #include "solvers/ceres_solver.h"
 #include "solvers/ipopt_solver.h"
-#include "solvers/nlopt_solver.h"
 #include "solvers/petsc_tao_solver.h"
 
 namespace solverslib::api
@@ -119,18 +118,37 @@ TEST(SolverApiDispatch, MismatchedInitialGuessRejected)
 
 TEST(SolverApiDispatch, UnwiredBackendReportedUnavailable)
 {
-    // PETSc/TAO has no adapter regardless of build flags, so this is a stable
-    // assertion of the backend_unavailable contract.
-    const auto    problem = make_linear_problem(true);
-    solve_options options;
-    options.backend = backend::petsc_tao;
+    // At least one of PETSc/Ipopt must be unwired for this test to exercise the
+    // backend_unavailable contract. When all backends are compiled in, skip.
+    const auto problem = make_linear_problem(true);
 
-    const solver_result result = solve(problem, vector_type::Zero(2), options);
-    EXPECT_EQ(result.status, solver_status::backend_unavailable);
-    EXPECT_EQ(result.backend, backend::petsc_tao);
+    if (!solverslib::petsc_tao_solver::is_supported())
+    {
+        solve_options options;
+        options.backend = backend::petsc_tao;
+        const solver_result result = solve(problem, vector_type::Zero(2), options);
+        EXPECT_EQ(result.status, solver_status::backend_unavailable);
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+    }
+    else if (!solverslib::ipopt_solver::is_supported())
+    {
+        optimization_problem opt;
+        opt.num_parameters = 2;
+        opt.objective      = [](const vector_type& x) { return x.squaredNorm(); };
+        opt.gradient       = [](const vector_type& x, vector_type& g) { g = 2.0 * x; };
+        solve_options options;
+        options.backend = backend::ipopt;
+        const solver_result result = solve(opt, vector_type::Zero(2), options);
+        EXPECT_EQ(result.status, solver_status::backend_unavailable);
+        EXPECT_EQ(result.backend, backend::ipopt);
+    }
+    else
+    {
+        GTEST_SKIP() << "All backends compiled in; unavailable path not exercised";
+    }
 }
 
-TEST(SolverApiDispatch, OptimizationProblemReportsUnimplementedNativePath)
+TEST(SolverApiDispatch, NativeObjectiveWithoutGradientIsUnsupported)
 {
     optimization_problem problem;
     problem.num_parameters = 2;
@@ -203,55 +221,6 @@ TEST(SolverApiDispatch, CeresHonorsBounds)
     EXPECT_EQ(result.backend, backend::ceres);
     EXPECT_TRUE(result.has_usable_iterate());
     EXPECT_LE(result.parameters[0], 1.0 + 1e-6);
-}
-
-// -- NLopt backend -----------------------------------------------------------
-TEST(SolverApiDispatch, NloptSolvesWhenAvailable)
-{
-    if (!solverslib::nlopt_solver::is_supported())
-    {
-        GTEST_SKIP() << "NLopt backend not compiled in";
-    }
-    const auto    problem = make_linear_problem(true);
-    solve_options options;
-    options.backend = backend::nlopt;
-    options.nlopt   = nlopt_options{};  // default LBFGS (gradient-based)
-
-    const solver_result result = solve(problem, vector_type::Zero(2), options);
-    EXPECT_EQ(result.backend, backend::nlopt);
-    EXPECT_TRUE(result.has_usable_iterate());
-    ASSERT_TRUE(result.residual_norm.has_value());
-    EXPECT_LT(*result.residual_norm, 1e-4);
-}
-
-TEST(SolverApiDispatch, NloptGradientAlgorithmNeedsJacobian)
-{
-    if (!solverslib::nlopt_solver::is_supported())
-    {
-        GTEST_SKIP() << "NLopt backend not compiled in";
-    }
-    const auto    problem = make_linear_problem(false);  // no Jacobian
-    solve_options options;
-    options.backend = backend::nlopt;
-    options.nlopt   = nlopt_options{};  // LBFGS requires a gradient
-
-    const solver_result result = solve(problem, vector_type::Zero(2), options);
-    EXPECT_EQ(result.status, solver_status::unsupported_capability);
-}
-
-TEST(SolverApiDispatch, NloptUnavailableReportsBackendUnavailable)
-{
-    if (solverslib::nlopt_solver::is_supported())
-    {
-        GTEST_SKIP() << "NLopt is compiled in; unavailable path not exercised";
-    }
-    const auto    problem = make_linear_problem(true);
-    solve_options options;
-    options.backend = backend::nlopt;
-
-    const solver_result result = solve(problem, vector_type::Zero(2), options);
-    EXPECT_EQ(result.status, solver_status::backend_unavailable);
-    EXPECT_EQ(result.backend, backend::nlopt);
 }
 
 // -- General optimization problem, and its routing --------------------------
@@ -362,13 +331,35 @@ TEST(SolverApiDispatch, IpoptRequiresGradientWhenAvailable)
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
 
-TEST(SolverApiDispatch, NativeObjectivePathStillUnsupported)
+TEST(SolverApiDispatch, NativeLbfgsSolvesQuadraticObjective)
 {
-    // Small unconstrained objective auto-routes to native L-BFGS, which has no
-    // scalar-objective kernel yet.
-    const auto           problem = make_quadratic_problem(vector_type::Ones(2), true);
+    const vector_type    c       = vector_type::Constant(2, 2.0);
+    const auto           problem = make_quadratic_problem(c, true);
     const problem_traits traits  = inspect(problem);
     EXPECT_EQ(select_backend(traits, {}), backend::native);
+
+    const solver_result result = solve(problem, vector_type::Zero(2));
+    EXPECT_TRUE(result.converged());
+    EXPECT_EQ(result.backend, backend::native);
+    EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+    ASSERT_EQ(result.parameters.size(), 2);
+    EXPECT_NEAR(result.parameters[0], 2.0, 1e-4);
+    EXPECT_NEAR(result.parameters[1], 2.0, 1e-4);
+    EXPECT_NEAR(result.objective, 0.0, 1e-6);
+}
+
+TEST(SolverApiDispatch, NativeLbfgsRequiresGradient)
+{
+    const auto          problem = make_quadratic_problem(vector_type::Ones(2), false);
+    const solver_result result  = solve(problem, vector_type::Zero(2));
+    EXPECT_EQ(result.status, solver_status::unsupported_capability);
+    EXPECT_EQ(result.backend, backend::native);
+}
+
+TEST(SolverApiDispatch, NativeObjectiveRejectsBounds)
+{
+    auto problem         = make_quadratic_problem(vector_type::Ones(2), true);
+    problem.bounds.lower = {0.0, 0.0};
 
     const solver_result result = solve(problem, vector_type::Zero(2));
     EXPECT_EQ(result.status, solver_status::unsupported_capability);

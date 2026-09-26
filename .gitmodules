@@ -4,9 +4,6 @@
 [submodule "ThirdParty/ceres"]
 	path = ThirdParty/ceres
 	url = https://github.com/ceres-solver/ceres-solver.git
-[submodule "ThirdParty/nlopt"]
-	path = ThirdParty/nlopt
-	url = https://github.com/stevengj/nlopt.git
 [submodule "ThirdParty/googletest"]
 	path = ThirdParty/googletest
 	url = https://github.com/google/googletest.git

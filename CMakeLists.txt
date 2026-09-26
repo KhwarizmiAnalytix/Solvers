@@ -4,7 +4,6 @@ project(Solvers VERSION 1.0.0 LANGUAGES C CXX)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Cmake")
 option(SOLVERS_ENABLE_TESTING "Build the GoogleTest solver suite" ${PROJECT_IS_TOP_LEVEL})
 option(SOLVERS_ENABLE_CERES "Build the optional Ceres backend" OFF)
-option(SOLVERS_ENABLE_NLOPT "Build the optional NLopt backend" OFF)
 # Ipopt (interior-point NLP) and PETSc/TAO (which also realizes POUNDERS) are
 # system libraries discovered through pkg-config rather than bundled submodules
 # (docs/reviews/solver-redesign-2026-09-26.md). Native LM never depends on them;
@@ -32,7 +31,6 @@ target_compile_features(Solvers PUBLIC cxx_std_17)
 target_link_libraries(Solvers PUBLIC Eigen3::Eigen Logging::Logging)
 target_compile_definitions(Solvers PUBLIC
   SOLVERS_HAS_CERES=$<BOOL:${SOLVERS_ENABLE_CERES}>
-  SOLVERS_HAS_NLOPT=$<BOOL:${SOLVERS_ENABLE_NLOPT}>
   SOLVERS_HAS_IPOPT=$<BOOL:${SOLVERS_ENABLE_IPOPT}>
   SOLVERS_HAS_PETSC=$<BOOL:${SOLVERS_ENABLE_PETSC}>)
 if(BUILD_SHARED_LIBS)
@@ -41,9 +39,6 @@ if(BUILD_SHARED_LIBS)
 endif()
 if(SOLVERS_ENABLE_CERES)
   target_link_libraries(Solvers PRIVATE Ceres::ceres)
-endif()
-if(SOLVERS_ENABLE_NLOPT)
-  target_link_libraries(Solvers PRIVATE nlopt)
 endif()
 if(SOLVERS_ENABLE_IPOPT OR SOLVERS_ENABLE_PETSC)
   find_package(PkgConfig REQUIRED)
@@ -56,7 +51,8 @@ endif()
 if(SOLVERS_ENABLE_PETSC)
   # PETSc (with TAO) ships a PETSc.pc / petsc.pc.
   pkg_check_modules(PETSC REQUIRED IMPORTED_TARGET PETSc)
-  target_link_libraries(Solvers PRIVATE PkgConfig::PETSC)
+  find_package(MPI REQUIRED COMPONENTS C)
+  target_link_libraries(Solvers PRIVATE PkgConfig::PETSC MPI::MPI_C)
 endif()
 if(SOLVERS_ENABLE_SANITIZER AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(Solvers PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)

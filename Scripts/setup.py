@@ -14,7 +14,7 @@ that drive helper scripts rather than CMake cache variables.
 Usage:
     python Scripts/setup.py config.build.test
     python Scripts/setup.py config.build.test.coverage
-    python Scripts/setup.py config.build.test.nlopt.ceres
+    python Scripts/setup.py config.build.test.ipopt.ceres
     python Scripts/setup.py config.build.test.gcc.release
 """
 
@@ -589,7 +589,8 @@ class SolversFlags:
             "static",
             "test",
             "ceres",
-            "nlopt",
+            "ipopt",
+            "petsc",
             "sanitizer",
             "sanitizer_enum",
             "coverage",
@@ -602,7 +603,8 @@ class SolversFlags:
             "build shared (default) or static libraries",
             "build the Solvers GoogleTest suite (SOLVERS_ENABLE_TESTING; default ON)",
             "build the optional Ceres backend (SOLVERS_ENABLE_CERES)",
-            "build the optional NLopt backend (SOLVERS_ENABLE_NLOPT)",
+            "build the optional Ipopt backend (SOLVERS_ENABLE_IPOPT)",
+            "build the optional PETSc/TAO backend (SOLVERS_ENABLE_PETSC)",
             "enable address+undefined sanitizers (SOLVERS_ENABLE_SANITIZER)",
             "sanitizer type for the test runner: address, undefined, thread, memory, leak",
             "enable code coverage instrumentation (SOLVERS_ENABLE_COVERAGE)",
@@ -621,7 +623,8 @@ class SolversFlags:
             "static": "BUILD_SHARED_LIBS",
             "test": "SOLVERS_ENABLE_TESTING",
             "ceres": "SOLVERS_ENABLE_CERES",
-            "nlopt": "SOLVERS_ENABLE_NLOPT",
+            "ipopt": "SOLVERS_ENABLE_IPOPT",
+            "petsc": "SOLVERS_ENABLE_PETSC",
             "sanitizer": "SOLVERS_ENABLE_SANITIZER",
             "coverage": "SOLVERS_ENABLE_COVERAGE",
             "clangtidy": "SOLVERS_ENABLE_CLANGTIDY",
@@ -659,6 +662,9 @@ class SolversFlags:
                 self.__value["sanitizer"] = self.ON
                 self.__value["sanitizer_enum"] = arg
                 self.builder_suffix += f"_{arg}"
+            elif arg == "tao":
+                self.__value["petsc"] = self.ON
+                self.builder_suffix += "_petsc"
             elif arg in self.__key:
                 # Solvers has no "default ON → token disables" flags (unlike
                 # XSigma's gtest/mimalloc/cache); every recognized token turns
@@ -1193,7 +1199,7 @@ def main():
         print("  4. Build with coverage (analysis runs automatically):")
         print("     setup.py config.build.test.coverage")
         print("  5. Build the optional backends:")
-        print("     setup.py config.build.test.nlopt.ceres")
+        print("     setup.py config.build.test.ipopt.petsc.ceres")
         print("\nBuild system generators:")
         print("  ninja     - Ninja build system (DEFAULT, fast, cross-platform)")
         print("  xcode     - Xcode (macOS only, full IDE integration)")

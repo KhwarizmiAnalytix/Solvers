@@ -12,7 +12,6 @@ namespace solverslib
 class solver_options;
 class solver_options_ceres;
 class solver_options_lm;
-class solver_options_nlopt;
 class solver_options_bfgs;
 class solver_options_gn;
 
@@ -20,7 +19,7 @@ class solver_options_gn;
  * @brief Universal optimizer wrapper that automatically selects the appropriate optimizer
  * based on solver_options type. Eliminates the need for switch statements in calibration functions.
  *
- * This wrapper provides a unified interface for all optimization algorithms (Ceres, LM, NLopt,
+ * This wrapper provides a unified interface for all optimization algorithms (Ceres, LM,
  * lbfgs_solver) and automatically dispatches to the correct optimizer based on the solver_options
  * type.
  *
@@ -89,7 +88,6 @@ private:
     // Internal solve methods for each optimizer type
     bool solve_ceres(std::vector<double>& parameters, const solver_options_ceres& options) const;
     bool solve_lm(std::vector<double>& parameters, const solver_options_lm& options) const;
-    bool solve_nlopt(std::vector<double>& parameters, const solver_options_nlopt& options) const;
     bool solve_lbfgs(std::vector<double>& parameters, const solver_options_bfgs& options) const;
     bool solve_gn(std::vector<double>& parameters, const solver_options_gn& options) const;
 

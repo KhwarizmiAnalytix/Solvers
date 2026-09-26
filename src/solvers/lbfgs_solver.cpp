@@ -6,32 +6,28 @@ namespace solverslib
 {
 namespace
 {
-template <typename T>
-inline double l2_norm(T const& h)
+template <typename T> inline double l2_norm(T const& h)
 {
     return h.norm();
 }
-template <typename T>
-inline double l_max_norm(T const& h)
+template <typename T> inline double l_max_norm(T const& h)
 {
     return h.cwiseAbs().maxCoeff();
 }
 }  // namespace
 
-template <lbfgs_line_search_type type>
-class line_search
+template <lbfgs_line_search_type type> class line_search
 {
 };
 
-template <>
-class line_search<lbfgs_line_search_type::NOCEDAL_WRIGHT>
+template <> class line_search<lbfgs_line_search_type::NOCEDAL_WRIGHT>
 {
     using scalar_type   = double;
     using size_type     = size_t;
     using function_type = std::function<scalar_type(vector_type const&, vector_type&)>;
 
 public:
-    static void search(  //NOLINT
+    static void search(  // NOLINT
         const function_type&       f,
         scalar_type&               fx,
         vector_type&               x,
@@ -116,8 +112,7 @@ public:
 
             if (fx - fx_init > step * dg_test || fx >= fx_lo)
             {
-                SOLVERS_CHECK(
-                    step != step_hi,
+                SOLVERS_CHECK(step != step_hi,
                     "the line search routine failed, possibly due to insufficient numeric "
                     "precision");
 
@@ -137,8 +132,7 @@ public:
                     fx_hi   = fx_lo;
                 }
 
-                SOLVERS_CHECK(
-                    step != step_lo,
+                SOLVERS_CHECK(step != step_lo,
                     "the line search routine failed, possibly due to insufficient numeric "
                     "preclaision");
 
@@ -150,15 +144,14 @@ public:
     }
 };
 
-template <>
-class line_search<lbfgs_line_search_type::BACKTRACKING>
+template <> class line_search<lbfgs_line_search_type::BACKTRACKING>
 {
     using scalar_type   = double;
     using size_type     = size_t;
     using function_type = std::function<scalar_type(vector_type const&, vector_type&)>;
 
 public:
-    static void search(  //NOLINT
+    static void search(  // NOLINT
         const function_type&       f,
         scalar_type&               fx,
         vector_type&               x,
@@ -176,8 +169,9 @@ public:
         const scalar_type fx_init = fx;
         const scalar_type dg_init = -grad.dot(direction);
 
-        SOLVERS_CHECK(
-            dg_init < 0, "the moving direction increases the objective function value: {}", dg_init);
+        SOLVERS_CHECK(dg_init < 0,
+            "the moving direction increases the objective function value: {}",
+            dg_init);
 
         const scalar_type dg_test = param.linesearch_tolerance() * dg_init;
         scalar_type       width;
@@ -224,12 +218,10 @@ public:
                 }
             }
 
-            SOLVERS_CHECK(
-                iter < param.max_iteration_linesearch(),
+            SOLVERS_CHECK(iter < param.max_iteration_linesearch(),
                 "the line search routine reached the maximum number of iterations");
 
-            SOLVERS_CHECK(
-                step >= param.step_min() && step <= param.step_max(),
+            SOLVERS_CHECK(step >= param.step_min() && step <= param.step_max(),
                 "the line search step: {} is out of the boundaries. step_min_: {} step_max_: {}",
                 step,
                 param.step_min(),
@@ -240,15 +232,14 @@ public:
     }
 };
 
-template <>
-class line_search<lbfgs_line_search_type::BRACKETING>
+template <> class line_search<lbfgs_line_search_type::BRACKETING>
 {
     using scalar_type   = double;
     using size_type     = size_t;
     using function_type = std::function<scalar_type(vector_type const&, vector_type&)>;
 
 public:
-    static void search(  //NOLINT
+    static void search(  // NOLINT
         const function_type&       f,
         scalar_type&               fx,
         vector_type&               x,
@@ -309,12 +300,10 @@ public:
 
             SOLVERS_CHECK(step_lo < step_hi, "step min is bigger than step max");
 
-            SOLVERS_CHECK(
-                iter < param.max_iteration_linesearch(),
+            SOLVERS_CHECK(iter < param.max_iteration_linesearch(),
                 "the line search routine reached the maximum number of iterations");
 
-            SOLVERS_CHECK(
-                step >= param.step_min(),
+            SOLVERS_CHECK(step >= param.step_min(),
                 "the line search step became smaller than the minimum value allowed");
 
             step = std::min(0.5 * (step_lo + step_hi), param.step_max());
@@ -322,70 +311,93 @@ public:
     }
 };
 
-lbfgs_solver::lbfgs_solver(
-    size_type                   num_parameters,
-    size_type                   num_residuals,
-    lbfgs_solver::function_type function,
-    lbfgs_solver::jacobian_type jacobian)
-    : function_(std::move(function)),
-      jacobian_(std::move(jacobian)),
-      num_parameters_(num_parameters),
-      num_residuals_(num_residuals) {};
+lbfgs_solver::lbfgs_solver(size_type num_parameters,
+    size_type                        num_residuals,
+    lbfgs_solver::function_type      function,
+    lbfgs_solver::jacobian_type      jacobian)
+    : function_(std::move(function)), jacobian_(std::move(jacobian)),
+      num_parameters_(num_parameters), num_residuals_(num_residuals) {};
 
-solver_output lbfgs_solver::solve(
-    vector_type& parameters, const solver_options_bfgs& options) const
+lbfgs_solver::lbfgs_solver(
+    size_type num_parameters, objective_type objective, gradient_type gradient)
+    : num_parameters_(num_parameters), num_residuals_(0), objective_(std::move(objective)),
+      gradient_(std::move(gradient)), scalar_mode_(true) {};
+
+solver_output lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
 
-    auto jacobian = jacobian_;
-    if (jacobian == nullptr)
+    // Scalar-objective mode: the caller supplied f(x) and ∇f(x) directly,
+    // so the L-BFGS loop operates on the true objective without a residual
+    // wrapping layer. Inspired by PyTorch's LBFGS optimizer, which always
+    // works with a scalar closure.
+    std::function<scalar_type(vector_type const&, vector_type&)> lbfg_function;
+
+    // These are only used in residual mode but must live until solve returns.
+    vector_type y_p;
+    matrix_type J;
+
+    if (scalar_mode_)
     {
-        auto bump = options.bump();
-
-        jacobian = [this, bump](vector_type const& x, matrix_type& dy_dx)
+        lbfg_function = [this](vector_type const& x, vector_type& grad)
         {
-            auto number_of_targets    = num_residuals_;
-            auto number_of_parameters = num_parameters_;
-
-            vector_type y_plus(number_of_targets);
-            vector_type y_minus(number_of_targets);
-
-            vector_type x_tmp(number_of_parameters);
-            x_tmp = x;
-
-            for (size_t i = 0; i < number_of_parameters; ++i)
-            {
-                x_tmp[i] += bump;
-
-                function_(x_tmp, y_plus);
-
-                x_tmp[i] -= 2 * bump;
-                function_(x_tmp, y_minus);
-
-                for (size_t j = 0; j < y_plus.size(); ++j)
-                {
-                    dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
-                }
-
-                x_tmp[i] = x[i];
-            }
+            double fx = objective_(x);
+            gradient_(x, grad);
+            return fx;
         };
     }
-
-    vector_type y_p(num_residuals_);
-    matrix_type J(num_residuals_, num_parameters_);
-
-    auto lbfg_function = [this, &y_p, &J, &jacobian](vector_type const& x, vector_type& grad)
+    else
     {
-        function_(x, y_p);
-        double fx = l2_norm(y_p);
-        fx *= fx;
+        auto jacobian = jacobian_;
+        if (jacobian == nullptr)
+        {
+            auto bump = options.bump();
 
-        jacobian(x, J);
-        grad = 2. * (J.transpose() * y_p);
+            jacobian = [this, bump](vector_type const& x, matrix_type& dy_dx)
+            {
+                auto number_of_targets    = num_residuals_;
+                auto number_of_parameters = num_parameters_;
 
-        return fx;
-    };
+                vector_type y_plus(number_of_targets);
+                vector_type y_minus(number_of_targets);
+
+                vector_type x_tmp(number_of_parameters);
+                x_tmp = x;
+
+                for (size_t i = 0; i < number_of_parameters; ++i)
+                {
+                    x_tmp[i] += bump;
+
+                    function_(x_tmp, y_plus);
+
+                    x_tmp[i] -= 2 * bump;
+                    function_(x_tmp, y_minus);
+
+                    for (size_t j = 0; j < y_plus.size(); ++j)
+                    {
+                        dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
+                    }
+
+                    x_tmp[i] = x[i];
+                }
+            };
+        }
+
+        y_p.resize(num_residuals_);
+        J.resize(num_residuals_, num_parameters_);
+
+        lbfg_function = [this, &y_p, &J, &jacobian](vector_type const& x, vector_type& grad)
+        {
+            function_(x, y_p);
+            double fx = l2_norm(y_p);
+            fx *= fx;
+
+            jacobian(x, J);
+            grad = 2. * (J.transpose() * y_p);
+
+            return fx;
+        };
+    }
 
     auto dim = parameters.size();
 
@@ -435,7 +447,7 @@ solver_output lbfgs_solver::solve(
 
         if (std::fabs(fx) < options.function_tolerance())
         {
-            parameters = p_new;
+            parameters   = p_new;
             x2_converged = true;
             break;
         }
@@ -443,14 +455,14 @@ solver_output lbfgs_solver::solve(
         if (l2_norm(parameters - p_new) <
             std::max(l2_norm(parameters), 1.) * options.parameter_tolerance())
         {
-            parameters = p_new;
+            parameters           = p_new;
             parameters_converged = true;
             break;
         }
 
         if (l2_norm(grad) < options.gradient_tolerance())
         {
-            parameters = p_new;
+            parameters         = p_new;
             gradient_converged = true;
             break;
         }
@@ -462,8 +474,9 @@ solver_output lbfgs_solver::solve(
 
         for (size_type j = 0; j <= iter_tau; ++j)
         {
-            alpha[j] = (v.row(j).transpose()).dot(q) / (v.row(j).transpose()).dot(r.row(j).transpose());
-            q        = q - alpha[j] * r.row(j).transpose();
+            alpha[j] =
+                (v.row(j).transpose()).dot(q) / (v.row(j).transpose()).dot(r.row(j).transpose());
+            q = q - alpha[j] * r.row(j).transpose();
         }
         const auto v_tau = v.row(iter_tau).transpose();
         const auto r_tau = r.row(iter_tau).transpose();
@@ -475,7 +488,8 @@ solver_output lbfgs_solver::solve(
             const auto offset = iter_tau - j;
 
             q = q +
-                (alpha[offset] - (r.row(offset).transpose()).dot(q) / (v.row(offset).transpose()).dot(r.row(offset).transpose())) *
+                (alpha[offset] - (r.row(offset).transpose()).dot(q) /
+                                     (v.row(offset).transpose()).dot(r.row(offset).transpose())) *
                     v.row(offset).transpose();
         }
 
@@ -485,7 +499,7 @@ solver_output lbfgs_solver::solve(
         direction = sign * q;
 
         parameters = p_new;
-        grad_old = grad;
+        grad_old   = grad;
 
         ++iter_tau;
         if (iter_tau >= options.tau())
@@ -494,9 +508,20 @@ solver_output lbfgs_solver::solve(
         }
     }
 
-    solver_output output(num_residuals_);
+    solver_output output(scalar_mode_ ? 1 : num_residuals_);
 
-    output.update(x2_converged, parameters_converged, gradient_converged, iter, y_p);
+    if (scalar_mode_)
+    {
+        // Store the final objective value as a single-element "residual" so
+        // that solver_output::x2_ reflects sqrt(|fx|).
+        vector_type fx_vec(1);
+        fx_vec[0] = std::sqrt(std::fabs(fx));
+        output.update(x2_converged, parameters_converged, gradient_converged, iter, fx_vec);
+    }
+    else
+    {
+        output.update(x2_converged, parameters_converged, gradient_converged, iter, y_p);
+    }
 
     return output;
 }

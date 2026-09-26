@@ -337,9 +337,10 @@ first implementation slice:
   with an explicit `unsupported_capability` status instead of solving the
   unconstrained relaxation.
 - **General scalar objectives stay a separate contract** from residual least
-  squares. The `optimization_problem` type is served by the Ipopt and PETSc/TAO
-  backends (below); only its *native* path still reports `unsupported_capability`,
-  since no native scalar-objective kernel exists yet.
+  squares. The `optimization_problem` type is served by native L-BFGS (when a
+  gradient is provided), Ipopt, and PETSc/TAO. The native L-BFGS scalar-objective
+  kernel reuses the same line search machinery as the residual path but bypasses
+  the residual→objective wrapping, operating on f(x) and ∇f(x) directly.
 
 ### Implementation status (as delivered)
 
@@ -348,7 +349,10 @@ The API layer lives under `include/solvers/api/` (`status.h`, `result.h`,
 `src/api/dispatch.cpp`; tests are in `Testing/Cxx/TestSolverApiDispatch.cpp`.
 
 - **Native LM / Gauss-Newton / L-BFGS** run the existing kernels for dense
-  least squares; bounds are rejected there per F01.
+  least squares; bounds are rejected there per F01. The L-BFGS solver also
+  supports a **scalar-objective mode** (`optimization_problem` with gradient)
+  that bypasses the residual→objective conversion and operates on f(x), ∇f(x)
+  directly through the same line search templates.
 - **Ceres and NLopt** are wired through the dispatcher for `backend::ceres` /
   `backend::nlopt`. They are reached by an explicit pin (never by the automatic
   path, which prefers native — "Ceres = explicit optional backend"), honor box

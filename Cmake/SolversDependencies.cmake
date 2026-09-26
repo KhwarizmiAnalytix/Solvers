@@ -12,7 +12,7 @@ if(NOT TARGET Eigen3::Eigen)
 endif()
 # Logging (https://github.com/KhwarizmiAnalytix/Logging) backs every
 # SOLVERS_CHECK/SOLVERS_THROW/SOLVERS_LOGF/SOLVERS_LOG_* macro in
-# include/detail/support.h. Required unconditionally (unlike Ceres/NLopt)
+# include/detail/support.h. Required unconditionally (unlike Ceres)
 # since support.h is included practically everywhere. Its own magic_enum
 # dependency reuses this repo's copy (see Logging/CMakeLists.txt's
 # _logging_tp_root: fmt/magic_enum prefer the host's ThirdParty when present).
@@ -41,15 +41,6 @@ function(solvers_add_optional_dependencies)
     include(CMakePackageConfigHelpers)
     write_basic_package_version_file("${Eigen3_DIR}/Eigen3ConfigVersion.cmake" VERSION 3.4.0 COMPATIBILITY SameMajorVersion)
     add_subdirectory("${_solvers_tp}/ceres" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/ceres" EXCLUDE_FROM_ALL)
-  endif()
-  if(SOLVERS_ENABLE_NLOPT AND NOT TARGET nlopt)
-    set(NLOPT_TESTS OFF CACHE BOOL "Disable NLopt tests")
-    set(NLOPT_PYTHON OFF CACHE BOOL "Disable Python bindings")
-    set(NLOPT_OCTAVE OFF CACHE BOOL "Disable Octave bindings")
-    set(NLOPT_MATLAB OFF CACHE BOOL "Disable Matlab bindings")
-    set(NLOPT_GUILE OFF CACHE BOOL "Disable Guile bindings")
-    set(NLOPT_SWIG OFF CACHE BOOL "Disable SWIG bindings")
-    add_subdirectory("${_solvers_tp}/nlopt" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/nlopt" EXCLUDE_FROM_ALL)
   endif()
 endfunction()
 solvers_add_optional_dependencies()

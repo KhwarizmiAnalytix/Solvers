@@ -5,7 +5,7 @@
 namespace solverslib::api
 {
 // One termination vocabulary shared across every backend. Adapters translate
-// their native codes (Ceres, NLopt, PETSc/TAO, Ipopt, or the native
+// their native codes (Ceres, PETSc/TAO, Ipopt, or the native
 // solver_convergence_enum) into exactly one of these. See the redesign review,
 // "Return a structured result", for the rationale on keeping this closed set.
 enum class solver_status : int
@@ -43,8 +43,7 @@ enum class backend : int
     ipopt,
     petsc_tao,
     pounders,
-    ceres,
-    nlopt
+    ceres
 };
 
 inline const char* to_string(solver_status status)
@@ -111,8 +110,6 @@ inline const char* to_string(backend value)
         return "pounders";
     case backend::ceres:
         return "ceres";
-    case backend::nlopt:
-        return "nlopt";
     }
     return "unknown";
 }

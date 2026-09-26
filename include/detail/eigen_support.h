@@ -38,7 +38,7 @@ inline matrix_type make_matrix(size_t rows, size_t cols)
 
 // -- interop with raw buffers / std::vector<double> --------------------------
 // The only place this library touches a bare double* or std::vector<double>
-// boundary: Ceres' and NLopt's C-style APIs, and solver_wrapper's
+// boundary: Ceres' C-style API, and solver_wrapper's
 // std::vector<double> parameter storage.
 inline vector_type to_vector_type(const double* data, size_t size)
 {

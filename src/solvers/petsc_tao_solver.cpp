@@ -206,7 +206,7 @@ bool petsc_tao_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
         {
             MatCreateSeqDense(
                 PETSC_COMM_SELF, static_cast<PetscInt>(num_residuals_), n, nullptr, &J);
-            TaoSetJacobianResidualRoutine(tao, J, J, residual_jac_tramp, &ctx, nullptr, nullptr);
+            TaoSetJacobianResidualRoutine(tao, J, J, residual_jac_tramp, &ctx);
         }
     }
     else

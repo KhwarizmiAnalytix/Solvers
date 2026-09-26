@@ -1,5 +1,5 @@
 // Cross-backend benchmark: times the native Levenberg-Marquardt and L-BFGS
-// solvers against the optional Ceres and NLopt backends on a shared set of
+// solvers against the optional Ceres backend on a shared set of
 // least-squares problems (Testing/Cxx/optimization_test_problems.h).
 //
 // Timing methodology follows the same idea as Eigen's bench/BenchTimer.h and
@@ -8,7 +8,7 @@
 // median wall-clock time rather than a single noisy sample.
 //
 // Build with -DSOLVERS_ENABLE_BENCHMARKS=ON (and -DSOLVERS_ENABLE_CERES=ON
-// -DSOLVERS_ENABLE_NLOPT=ON to include those backends in the comparison).
+// to include the Ceres backend in the comparison).
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
@@ -22,10 +22,8 @@
 #include "solver_options/solver_options_ceres.h"
 #include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_lm.h"
-#include "solver_options/solver_options_nlopt.h"
 #include "solver_wrapper.h"
 #include "solvers/ceres_solver.h"
-#include "solvers/nlopt_solver.h"
 
 namespace solverslib
 {
@@ -150,29 +148,6 @@ void benchmark_problem(const optimization_test_problem& problem)
         print_row(problem.name,
             "Gauss-Newton",
             true,
-            converged,
-            residual_norm(problem, parameters),
-            timing);
-    }
-
-    // NLopt (LD_LBFGS), optional backend.
-    {
-        const bool    available = nlopt_solver::is_supported();
-        bool          converged = false;
-        timing_result timing{0.0, 0.0};
-        if (available)
-        {
-            solver_wrapper wrapper(
-                problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
-            auto options = std::make_shared<solver_options_nlopt>(
-                nlopt_algo_name_enum::LBFGS, 500, 1e-14, 1e-14, 1e-14);
-            timing = time_solve(problem,
-                parameters,
-                [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
-        }
-        print_row(problem.name,
-            "NLopt",
-            available,
             converged,
             residual_norm(problem, parameters),
             timing);

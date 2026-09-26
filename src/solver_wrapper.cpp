@@ -6,14 +6,11 @@
 #include "solver_options/solver_options_ceres.h"
 #include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_lm.h"
-#include "solver_options/solver_options_nlopt.h"
 #include "solver_output.h"
 #include "solvers/ceres_solver.h"
 #include "solvers/gauss_newton_solver.h"
 #include "solvers/lbfgs_solver.h"
 #include "solvers/levenberg_marquardt_solver.h"
-#include "solvers/nlopt_solver.h"
-
 namespace solverslib
 {
 
@@ -60,11 +57,6 @@ bool solver_wrapper::solve(
     if (const auto& lm_options = std::dynamic_pointer_cast<const solver_options_lm>(options))
     {
         return solve_lm(parameters, *lm_options);
-    }
-
-    if (const auto& nlopt_options = std::dynamic_pointer_cast<const solver_options_nlopt>(options))
-    {
-        return solve_nlopt(parameters, *nlopt_options);
     }
 
     if (const auto& bfgs_options = std::dynamic_pointer_cast<const solver_options_bfgs>(options))
@@ -120,26 +112,6 @@ bool solver_wrapper::solve_lm(
     return result.status_ != solver_convergence_enum::NOT_CONVERGED;
 }
 
-bool solver_wrapper::solve_nlopt(
-    std::vector<double>& parameters, const solver_options_nlopt& options) const
-{
-    if (!nlopt_solver::is_supported())
-    {
-        return false;
-    }
-
-    nlopt_solver solver(num_parameters_,
-        num_residuals_,
-        objective_function_,
-        options.aad_jacobian() ? objective_function_aad_ : nullptr,
-        lower_bounds_,
-        upper_bounds_);
-
-    solver.solve(parameters, options);
-
-    return true;
-}
-
 bool solver_wrapper::solve_lbfgs(
     std::vector<double>& parameters, const solver_options_bfgs& options) const
 {
@@ -188,8 +160,6 @@ bool solver_wrapper::is_supported(solver_enum optimizer_type)
     {
     case solver_enum::CERES:
         return ceres_solver::is_supported();
-    case solver_enum::NLOPT:
-        return nlopt_solver::is_supported();
     case solver_enum::LM:
     case solver_enum::LBFGS:
     case solver_enum::GAUSS_NEWTON:
