@@ -59,4 +59,3 @@ jobs:
       - name: Configure, build, and test
         working-directory: Scripts
         run: python3 setup.py ${{ matrix.args }} --build-dir build-${{ matrix.name }}
-
