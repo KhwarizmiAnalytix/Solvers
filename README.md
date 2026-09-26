@@ -1,303 +1,750 @@
 # Solvers
 
-**High-performance numerical solving and optimization for modern C++.**
+**High-performance numerical solvers for modern C++.**
 
-Solvers combines optimized native algorithms for the numerical problems
-encountered most often in calibration and scientific computing with
-specialized third-party engines for constrained and large-scale optimization.
+`Solvers` provides optimized native implementations for the numerical problems most frequently encountered in quantitative finance, calibration, and scientific computing, while delegating specialized optimization problems to mature third-party engines only when they add genuinely new capabilities.
 
-**Native performance** &mdash;
-Brent &middot; Newton &middot; Ridders &middot; Levenberg&ndash;Marquardt &middot; Gauss&ndash;Newton &middot;
-BFGS &middot; L-BFGS &middot; Polynomial roots
+The design goal is simple:
 
-**Advanced optimization** &mdash;
-Ipopt &middot; PETSc/TAO &middot; POUNDERS
-
-**One API** &mdash;
-Describe the mathematical problem. Solvers selects the appropriate engine.
-
-Built for model calibration and performance-sensitive scientific applications.
-
-**Developed and maintained by [KhwarizmiAnalytix](https://github.com/KhwarizmiAnalytix)**
-
-![C++17](https://img.shields.io/badge/C++-17-blue.svg?style=flat&logo=c%2B%2B)
-![License](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)
+> **Native where performance matters. Specialized third-party engines where the mathematics requires them. One consistent C++ API.**
 
 ---
 
-## Problem &rarr; Solver
+## Overview
 
-Solvers chooses the numerical engine from the mathematical structure of
-the problem, rather than exposing a collection of unrelated backend APIs.
+`Solvers` covers four main problem families:
 
-```mermaid
-flowchart TD
-    A(["<b>solve(problem)</b>"]) --> B{"Problem type?"}
+- scalar root finding,
+- nonlinear least squares,
+- smooth unconstrained optimization,
+- advanced constrained and large-scale optimization.
 
-    B -->|Least Squares| C{"Jacobian<br>available?"}
-    B -->|General Objective| D{"Constraints?"}
+Common numerical problems are handled by optimized native implementations.
 
-    C -->|Yes| E{"Large scale?"}
-    C -->|No| F["<b>POUNDERS</b><br><i>PETSc/TAO</i>"]
+More specialized problems are routed to dedicated external engines:
 
-    E -->|Yes| G["<b>TAO</b><br><i>PETSc</i>"]
-    E -->|No| H["<b>LM</b><br><i>Native</i>"]
+- **Ipopt** for constrained nonlinear programming,
+- **PETSc/TAO** for large-scale and matrix-free optimization,
+- **POUNDERS** through PETSc/TAO for derivative-free nonlinear least squares.
 
-    D -->|Yes| I["<b>Ipopt</b><br><i>Interior Point</i>"]
-    D -->|No| J{"Large scale?"}
+No third-party library is introduced simply to duplicate an existing native solver.
 
-    J -->|Yes| K["<b>TAO</b><br><i>PETSc</i>"]
-    J -->|No| L["<b>L-BFGS</b><br><i>Native</i>"]
+---
 
-    style A fill:#2d333b,stroke:#539bf5,color:#adbac7
-    style B fill:#2d333b,stroke:#539bf5,color:#adbac7
-    style C fill:#2d333b,stroke:#539bf5,color:#adbac7
-    style D fill:#2d333b,stroke:#539bf5,color:#adbac7
-    style E fill:#2d333b,stroke:#539bf5,color:#adbac7
-    style J fill:#2d333b,stroke:#539bf5,color:#adbac7
-    style F fill:#1c4428,stroke:#2ea043,color:#adbac7
-    style G fill:#1c4428,stroke:#2ea043,color:#adbac7
-    style H fill:#1c4428,stroke:#2ea043,color:#adbac7
-    style I fill:#1c4428,stroke:#2ea043,color:#adbac7
-    style K fill:#1c4428,stroke:#2ea043,color:#adbac7
-    style L fill:#1c4428,stroke:#2ea043,color:#adbac7
+## Problem-Oriented Architecture
+
+`Solvers` is organized around the mathematical structure of the problem rather than around individual solver libraries.
+
+```text
+                           Problem
+                              │
+                 ┌────────────┴─────────────┐
+                 │                          │
+          Nonlinear Least Squares      General Objective
+                 │                          │
+          Jacobian available?          Constraints?
+            /          \               /         \
+          yes           no           yes          no
+           │             │            │            │
+      Large scale?    POUNDERS       IPOPT      Large scale?
+        /      \                                  /      \
+      yes      no                               yes       no
+       │        │                                │         │
+      TAO    Native LM/GN                       TAO   Native BFGS/
+                                                       L-BFGS
 ```
 
+Scalar root-finding problems use the native root-solving layer directly.
+
 ---
 
-## 30-Second Example
+# Core Capabilities
+
+| Problem | Algorithms / Engine | Implementation |
+|---|---|---|
+| Scalar root finding | Brent, Newton-Raphson, Ridders, Secant, Bisection, False Position, Dekker | Native |
+| Polynomial roots | Polynomial solver | Native |
+| Nonlinear least squares | Levenberg-Marquardt, Gauss-Newton | Native |
+| Smooth unconstrained optimization | BFGS, L-BFGS | Native |
+| Nonlinear constrained optimization | Interior-point nonlinear programming | Ipopt |
+| Large-scale optimization | Newton-Krylov, trust-region and matrix-free methods | PETSc/TAO |
+| Derivative-free nonlinear least squares | POUNDERS | PETSc/TAO |
+
+---
+
+# Native Core
+
+The native solver layer is designed for low overhead and performance-sensitive applications.
+
+## Root Finding
+
+Available scalar root solvers include:
+
+```text
+Bisection
+False Position
+Ridders
+Dekker
+Brent
+Newton-Raphson
+Secant
+```
+
+Typical applications include:
+
+- implied-volatility inversion,
+- yield solving,
+- curve bootstrapping,
+- par-rate solving,
+- strike inversion,
+- scalar model calibration.
+
+Example:
 
 ```cpp
-#include "solvers/api/solve.h"
-using namespace solverslib::api;
+#include <solvers/root_finding_algorithms.h>
 
-// Fit y = a * exp(b * t) to data
-least_squares_problem problem;
-problem.num_parameters = 2;
-problem.num_residuals  = data.size();
-problem.residuals = [&](const vector_type& x, vector_type& r) {
-    for (size_t i = 0; i < data.size(); ++i)
-        r[i] = x[0] * std::exp(x[1] * times[i]) - data[i];
+double root = 0.0;
+
+solvers::root_finding_options options;
+options.tolerance_function = 1e-12;
+options.tolerance_parameter = 1e-12;
+options.max_iterations = 100;
+
+const auto f = [](double x) {
+    return x * x - 2.0;
 };
-problem.jacobian = [&](const vector_type& x, matrix_type& J) {
-    for (size_t i = 0; i < data.size(); ++i) {
-        double e = std::exp(x[1] * times[i]);
-        J(i, 0) = e;
-        J(i, 1) = x[0] * times[i] * e;
-    }
+
+const bool converged =
+    solvers::brent(f, 0.0, 2.0, root, options);
+```
+
+---
+
+## Nonlinear Least Squares
+
+For problems of the form
+
+\[
+\min_x \frac{1}{2}\|r(x)\|^2,
+\]
+
+the native layer provides:
+
+- Levenberg-Marquardt,
+- Gauss-Newton.
+
+These solvers are intended for calibration problems where the residual structure is known and can be exploited directly.
+
+Typical examples include:
+
+\[
+\min_\theta
+\sum_i
+w_i
+\left(
+V_i^{model}(\theta)-V_i^{market}
+\right)^2.
+\]
+
+Applications include:
+
+- volatility-surface calibration,
+- interest-rate model calibration,
+- credit-model calibration,
+- curve fitting,
+- parameter estimation.
+
+---
+
+## Unconstrained Optimization
+
+For smooth objectives
+
+\[
+\min_x f(x),
+\]
+
+the native layer provides:
+
+- BFGS,
+- L-BFGS.
+
+L-BFGS is particularly suitable for larger parameter vectors where storing or factorizing a dense Hessian approximation would be undesirable.
+
+---
+
+# Advanced Optimization Backends
+
+Third-party libraries are used only when they provide numerical capabilities not already covered efficiently by the native implementation.
+
+## Ipopt
+
+**Purpose:** general constrained nonlinear optimization.
+
+Ipopt is used for problems of the form:
+
+\[
+\min_x f(x)
+\]
+
+subject to
+
+\[
+g_L \leq g(x) \leq g_U
+\]
+
+and
+
+\[
+x_L \leq x \leq x_U.
+\]
+
+Typical use cases include:
+
+- nonlinear equality constraints,
+- nonlinear inequality constraints,
+- parameter bounds,
+- structural calibration constraints,
+- smoothness constraints,
+- no-arbitrage constraints.
+
+Repository:
+
+```text
+https://github.com/coin-or/Ipopt
+```
+
+Ipopt is an optional dependency.
+
+---
+
+## PETSc / TAO
+
+**Purpose:** large-scale, sparse, matrix-free and Newton-Krylov optimization.
+
+TAO provides optimization algorithms designed for large numerical problems, including:
+
+- Newton-Krylov methods,
+- trust-region Newton methods,
+- matrix-free optimization,
+- Hessian-vector-product based methods,
+- sparse optimization,
+- distributed-memory problems.
+
+PETSc/TAO becomes useful when a problem is too large or too structured for a conventional dense local optimizer.
+
+Repository:
+
+```text
+https://github.com/petsc/petsc
+```
+
+TAO is distributed as part of PETSc and does not require a separate installation.
+
+---
+
+## POUNDERS
+
+**Purpose:** derivative-free nonlinear least squares.
+
+POUNDERS is used when the objective has least-squares structure
+
+\[
+F(x)
+=
+\frac12
+\sum_i r_i(x)^2
+\]
+
+but reliable Jacobians are unavailable.
+
+This is particularly useful for:
+
+- expensive PDE-based pricing models,
+- noisy residual functions,
+- legacy models without derivatives,
+- nested numerical calculations,
+- models where finite differences are prohibitively expensive.
+
+POUNDERS is provided through PETSc/TAO.
+
+---
+
+# Solver Selection
+
+The recommended solver depends on the mathematical structure of the problem.
+
+## Root Finding
+
+Use the native root solvers.
+
+```text
+Bracket available
+    ├── Brent
+    ├── Ridders
+    └── Bisection
+
+Derivative available
+    └── Newton-Raphson
+
+No derivative / no strict bracket requirement
+    └── Secant
+```
+
+## Nonlinear Least Squares
+
+```text
+Jacobian available
+    ├── normal-size problem
+    │      └── Native LM / Gauss-Newton
+    │
+    └── large / matrix-free problem
+           └── PETSc/TAO
+
+Jacobian unavailable
+    └── POUNDERS
+```
+
+## General Optimization
+
+```text
+Nonlinear constraints
+    └── Ipopt
+
+Unconstrained
+    ├── normal-size problem
+    │      └── Native BFGS / L-BFGS
+    │
+    └── large-scale / Hessian-vector formulation
+           └── PETSc/TAO
+```
+
+---
+
+# Quantitative Finance
+
+`Solvers` is designed with calibration and numerical finance workloads in mind.
+
+| Use case | Preferred solver |
+|---|---|
+| Yield-curve bootstrap | Brent / Newton |
+| Implied volatility | Brent / Newton |
+| Hazard-rate bootstrap | Brent |
+| Volatility-surface calibration | Native LM / GN |
+| Interest-rate model calibration | Native LM / L-BFGS |
+| Constrained parameter calibration | Ipopt |
+| Large-scale PDE calibration | PETSc/TAO |
+| Expensive least-squares model without derivatives | POUNDERS |
+
+A typical calibration problem is:
+
+\[
+\theta^\star
+=
+\arg\min_\theta
+\sum_{i=1}^{N}
+w_i
+\left(
+V_i^{model}(\theta)
+-
+V_i^{market}
+\right)^2.
+\]
+
+The solver architecture allows this structure to be preserved instead of flattening every calibration problem into a generic scalar objective.
+
+---
+
+# Design Principles
+
+## Native First
+
+Common numerical algorithms remain native.
+
+This keeps standard workflows lightweight and avoids introducing large third-party dependencies for ordinary calibration problems.
+
+```text
+Root finding       → Native
+LM / GN            → Native
+BFGS / L-BFGS      → Native
+Polynomial roots   → Native
+```
+
+---
+
+## Specialized Backends Only
+
+External libraries are introduced only for capabilities that materially extend the native solver layer.
+
+```text
+Constrained nonlinear programming → Ipopt
+Large-scale / matrix-free          → PETSc/TAO
+Derivative-free least squares      → POUNDERS
+```
+
+The project deliberately avoids wrapping multiple libraries that solve the same problem without adding significant value.
+
+---
+
+## Problem-Oriented API
+
+Application code should describe a numerical problem rather than depend directly on a third-party solver API.
+
+The target interface is conceptually:
+
+```cpp
+LeastSquaresProblem problem{
+    /* residual definition */
 };
 
-vector_type x0(2);
-x0 << 1.0, 0.0;
+SolverOptions options;
 
-auto result = solve(problem, x0);
-// Backend::Auto -> Native LM for this problem
-
-if (result.converged()) {
-    // result.parameters, result.objective, result.residual_norm
-}
+auto result = solve(problem, initial_guess, options);
 ```
 
-Every call returns a `solver_result` with uniform status, final iterate,
-objective value, iteration count, and which backend/algorithm actually ran.
-
----
-
-## Why Solvers?
-
-### Native where performance matters
-
-Common hot-path algorithms are implemented natively with no external
-runtime dependency:
-
-```
-Brent / Newton / Ridders          scalar root finding
-Levenberg-Marquardt / Gauss-Newton   nonlinear least squares
-BFGS / L-BFGS                    smooth unconstrained optimization
-Polynomial roots (degree 2-4)    closed-form with stability safeguards
-```
-
-If you only need these, you do not need PETSc or Ipopt.
-
-### Specialized engines where they add value
-
-```
-Ipopt       constrained nonlinear programming (interior point)
-PETSc/TAO   large-scale / Newton-Krylov / matrix-free optimization
-POUNDERS    derivative-free nonlinear least squares
-```
-
-No duplicate third-party backends solving the same problem.
-
-### One problem-oriented API
-
-Application code depends on:
+or:
 
 ```cpp
-least_squares_problem   // residuals + optional Jacobian
-optimization_problem    // objective + gradient + optional constraints
-solve_options           // tolerances, backend pin, algorithm pin
-solver_result           // status, parameters, objective, diagnostics
+OptimizationProblem problem{
+    /* objective and constraints */
+};
+
+auto result = solve(problem, initial_guess);
 ```
 
-Not on `Ipopt::TNLP`, `Tao`, or `ceres::Problem`.
-
-### Built for calibration
-
-Analytical Jacobians, finite-difference fallback, parameter bounds,
-convergence diagnostics, deterministic execution, configurable
-tolerances, explicit termination status.
+Backend-specific details remain isolated behind adapters.
 
 ---
 
-## Capabilities
+## Consistent Results
 
-| Problem | Solver | Implementation |
-|---------|--------|----------------|
-| *f*(*x*) = 0 | Brent, Newton, Ridders, Bisection, Secant | Native |
-| min &half;&Vert;*r*(*x*)&Vert;&sup2; with Jacobian | Levenberg&ndash;Marquardt, Gauss&ndash;Newton | Native |
-| min &half;&Vert;*r*(*x*)&Vert;&sup2; without Jacobian | POUNDERS | PETSc/TAO |
-| Smooth unconstrained min *f*(*x*) | BFGS, L-BFGS | Native |
-| Bound/equality/inequality constrained min *f*(*x*) | Interior Point | Ipopt |
-| Large-scale / matrix-free | Newton-Krylov, trust region | PETSc/TAO |
-| Polynomial roots (degree 2&ndash;4) | Closed-form solver | Native |
-
----
-
-## Native-First, Specialized When Necessary
-
-Solvers does not wrap multiple libraries that solve the same problem.
-
-Common performance-critical algorithms are implemented natively.
-External libraries are used only when they add a distinct numerical
-capability:
-
-| Backend | Library | Compile Flag | Discovery | Capability |
-|---------|---------|--------------|-----------|------------|
-| **Native** | Built-in | Always on | N/A | LM, GN, L-BFGS, root finding, polynomials |
-| **Ceres** | [Ceres Solver](http://ceres-solver.org/) | `SOLVERS_ENABLE_CERES` | Bundled submodule | LS with bounds, sparse solvers |
-| **Ipopt** | [Ipopt](https://github.com/coin-or/Ipopt) | `SOLVERS_ENABLE_IPOPT` | `pkg-config` | Interior-point NLP, general constraints |
-| **PETSc/TAO** | [PETSc](https://petsc.org/) | `SOLVERS_ENABLE_PETSC` | `pkg-config` + MPI | POUNDERS, Newton-Krylov, large-scale |
-
-When a backend is not compiled in, the dispatcher returns
-`solver_status::backend_unavailable` instead of silently falling back.
-
----
-
-## Pinning a Backend or Algorithm
-
-The dispatcher selects automatically, but you can override:
+All solvers should expose a common result model containing information such as:
 
 ```cpp
-solve_options options;
+struct SolverResult {
+    SolverStatus status;
 
-// Force Ceres for a least-squares problem
-options.backend = backend::ceres;
-options.ceres   = ceres_options{.linear_solver = ceres_linear_solver::dense_qr};
+    std::size_t iterations;
+    std::size_t function_evaluations;
+    std::size_t gradient_evaluations;
+    std::size_t jacobian_evaluations;
 
-// Force Ipopt for a bounded objective
-options.backend = backend::ipopt;
-options.ipopt   = ipopt_options{.tol = 1e-10};
+    double initial_objective;
+    double final_objective;
 
-// Force POUNDERS for derivative-free least squares
-options.algorithm = algorithm::pounders;
-options.petsc_tao = petsc_tao_options{.gatol = 1e-6};
-
-auto result = solve(problem, x0, options);
+    Backend backend;
+    Algorithm algorithm;
+};
 ```
 
-**Dispatch rules:**
-- **Bounds** require Ceres (least squares) or Ipopt (objective).
-- **Gradient required** on all objective paths.
-- **Gauss-Newton** is never auto-selected; pin it explicitly.
-- **Ceres** is reached only by explicit backend pin.
-- **Large scale** triggers above a threshold (default 1000 parameters / 10000 residuals) or with `prefer_matrix_free = true`.
+This makes native and third-party engines observable through the same interface.
 
 ---
 
-## Building
+# Dependencies
 
-### Requirements
+## Core
 
-- C++17 compiler (Clang, GCC, MSVC)
-- CMake 3.20+
-- Ninja (recommended) or Make
+The native library requires:
 
-### Optional Dependencies
+```text
+C++17
+CMake
+Eigen
+```
 
-| Dependency | Install | Purpose |
-|------------|---------|---------|
-| Ceres Solver | Bundled as submodule | Sparse least-squares backend |
-| Ipopt | `brew install ipopt` / system pkg-config | Interior-point NLP backend |
-| PETSc + MPI | `brew install petsc open-mpi` / system pkg-config | Large-scale / derivative-free backend |
-| Google Test | Bundled as submodule | Test suite |
+Optional project dependencies may also be used for logging and testing.
 
-### CMake
+## Advanced Backends
+
+```text
+Ipopt       constrained nonlinear programming
+PETSc/TAO   large-scale optimization
+POUNDERS    included through PETSc/TAO
+```
+
+These dependencies are optional.
+
+A user requiring only native root finding, LM, Gauss-Newton, BFGS or L-BFGS should not need to install Ipopt or PETSc.
+
+---
+
+# Building
+
+Clone the repository:
 
 ```bash
-git clone --recurse-submodules https://github.com/KhwarizmiAnalytix/Solvers.git
+git clone https://github.com/KhwarizmiAnalytix/Solvers.git
 cd Solvers
-
-# Minimal (native backends only)
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-
-# All backends
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DSOLVERS_ENABLE_CERES=ON \
-  -DSOLVERS_ENABLE_IPOPT=ON \
-  -DSOLVERS_ENABLE_PETSC=ON
-cmake --build build
-
-# Run tests
-ctest --test-dir build
 ```
 
-### CMake Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `SOLVERS_ENABLE_TESTING` | `ON` (top-level) | Build the GoogleTest suite |
-| `SOLVERS_ENABLE_CERES` | `OFF` | Build the Ceres backend |
-| `SOLVERS_ENABLE_IPOPT` | `OFF` | Build the Ipopt backend |
-| `SOLVERS_ENABLE_PETSC` | `OFF` | Build the PETSc/TAO backend |
-| `SOLVERS_ENABLE_SANITIZER` | `OFF` | Address + UB sanitizers |
-| `SOLVERS_ENABLE_COVERAGE` | `OFF` | Coverage instrumentation |
-| `SOLVERS_ENABLE_CLANGTIDY` | `OFF` | clang-tidy static analysis |
-| `BUILD_SHARED_LIBS` | `OFF` | Build as shared library |
-
-### setup.py (Build Script)
+Configure:
 
 ```bash
-# Configure, build, and test (native only)
-python Scripts/setup.py config.build.test
+cmake -S . -B build \
+    -DCMAKE_BUILD_TYPE=Release
+```
 
-# All backends
-python Scripts/setup.py config.build.test.ceres.ipopt.petsc
+Build:
 
-# GCC, debug, with coverage
-python Scripts/setup.py config.build.test.gcc.debug.coverage
+```bash
+cmake --build build --parallel
+```
+
+Run tests:
+
+```bash
+ctest --test-dir build --output-on-failure
 ```
 
 ---
 
-## Testing
+# Optional Backends
+
+The intended configuration model is:
 
 ```bash
-ctest --test-dir build
+cmake -S . -B build \
+    -DSOLVERS_ENABLE_IPOPT=ON \
+    -DSOLVERS_ENABLE_PETSC=ON
+```
 
-# Specific test
-./build/Testing/Cxx/SolversTests --gtest_filter="SolverApiDispatch.*"
+A minimal native-only build should remain:
 
-# Benchmarks
-./build/Testing/Cxx/SolversBenchmark
+```bash
+cmake -S . -B build
 ```
 
 ---
 
-## License
+# Installing Optional Dependencies
 
-BSD-3-Clause. See [LICENSE](./LICENSE) for the full text.
+## Ipopt
 
-Copyright (c) 2024 KhwarizmiAnalytix
+Repository:
+
+```text
+https://github.com/coin-or/Ipopt
+```
+
+Ipopt requires BLAS/LAPACK and a sparse linear solver such as MUMPS.
+
+COIN-OR's `coinbrew` can be used to build the complete dependency stack.
+
+---
+
+## PETSc / TAO
+
+Repository:
+
+```text
+https://github.com/petsc/petsc
+```
+
+On macOS:
+
+```bash
+brew install petsc
+```
+
+TAO and POUNDERS are included with PETSc.
+
+---
+
+# Testing
+
+Numerical solvers require more than simple convergence tests.
+
+The test suite should cover:
+
+- normal convergence,
+- poor initial guesses,
+- endpoint roots,
+- multiple roots,
+- almost-zero derivatives,
+- badly scaled variables,
+- badly scaled residuals,
+- nearly singular Jacobians,
+- rank-deficient Jacobians,
+- flat objectives,
+- numerical overflow,
+- `NaN` and `Inf` propagation,
+- maximum-iteration termination.
+
+Sanitizer and coverage builds are recommended as part of continuous integration.
+
+---
+
+# Benchmarking
+
+Performance comparisons should always be like-for-like.
+
+Recommended benchmark groups:
+
+## Root Finding
+
+```text
+Native Brent
+vs
+Boost.Math reference
+```
+
+## Nonlinear Least Squares
+
+```text
+Native LM / GN
+vs
+reference nonlinear least-squares implementations
+```
+
+## Optimization
+
+```text
+Native L-BFGS
+vs
+established L-BFGS reference implementations
+```
+
+Each benchmark should report:
+
+```text
+wall-clock time
+iterations
+function evaluations
+Jacobian evaluations
+final residual
+final objective
+```
+
+and should document:
+
+```text
+CPU
+compiler
+compiler flags
+problem dimensions
+initial guess
+solver tolerances
+```
+
+Performance claims should be based on reproducible benchmark results rather than isolated timings.
+
+---
+
+# Project Structure
+
+A problem-oriented layout is recommended:
+
+```text
+Solvers/
+│
+├── include/solvers/
+│   ├── problem.hpp
+│   ├── least_squares_problem.hpp
+│   ├── optimization_problem.hpp
+│   ├── constraints.hpp
+│   ├── options.hpp
+│   ├── result.hpp
+│   ├── status.hpp
+│   └── solve.hpp
+│
+├── src/
+│   ├── dispatch.cpp
+│   │
+│   └── backends/
+│       ├── native/
+│       │   ├── roots.cpp
+│       │   ├── lm.cpp
+│       │   ├── gauss_newton.cpp
+│       │   └── lbfgs.cpp
+│       │
+│       ├── ipopt/
+│       │   └── ipopt_adapter.cpp
+│       │
+│       └── petsc/
+│           ├── tao_adapter.cpp
+│           └── pounders_adapter.cpp
+│
+├── tests/
+└── benchmarks/
+```
+
+---
+
+# Roadmap
+
+The project direction is intentionally focused.
+
+### Native
+
+- [x] Scalar root finding
+- [x] Polynomial solving
+- [x] Levenberg-Marquardt
+- [x] Gauss-Newton
+- [x] BFGS / L-BFGS
+
+### Architecture
+
+- [ ] Unified `LeastSquaresProblem`
+- [ ] Unified `OptimizationProblem`
+- [ ] Common `SolverResult`
+- [ ] Automatic problem-trait based dispatch
+- [ ] Reusable solver workspaces
+- [ ] Consistent absolute/relative tolerances
+
+### Advanced Backends
+
+- [ ] Ipopt adapter
+- [ ] PETSc/TAO adapter
+- [ ] POUNDERS adapter
+
+### Numerical Infrastructure
+
+- [ ] Parameter scaling
+- [ ] Residual scaling
+- [ ] Weighted nonlinear least squares
+- [ ] Jacobian validation
+- [ ] Matrix-free Jacobian-vector products
+- [ ] Hessian-vector products
+
+### Engineering
+
+- [ ] Reproducible benchmark suite
+- [ ] CMake install/export package
+- [ ] External consumer build test
+- [ ] Continuous sanitizer testing
+- [ ] Performance regression tests
+
+---
+
+# Philosophy
+
+`Solvers` is not intended to become a collection of wrappers around every optimization library available.
+
+The project follows a simpler principle:
+
+```text
+Use optimized native algorithms for common numerical problems.
+
+Use specialized external engines only when they introduce a
+meaningfully different capability.
+
+Expose everything through one coherent C++ interface.
+```
+
+The result is intended to remain lightweight for ordinary use while scaling to substantially harder numerical optimization problems when required.
+
+---
+
+# License
+
+See the repository `LICENSE` file for licensing information.
+
+---
+
+# Repository
+
+```text
+https://github.com/KhwarizmiAnalytix/Solvers
+```

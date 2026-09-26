@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "include/detail/support.h"
-#include "include/solver_output.h"
+#include "include/detail/native_result.h"
 
 namespace solverslib
 {
@@ -33,6 +33,6 @@ public:
         function_type                            function,
         jacobian_type                            jacobian = nullptr);
 
-    SOLVER_API solver_output solve(vector_type& parameters, const solver_options_lm& options) const;
+    SOLVER_API native_result solve(vector_type& parameters, const solver_options_lm& options) const;
 };
 }  // namespace solverslib

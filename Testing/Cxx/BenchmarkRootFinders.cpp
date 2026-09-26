@@ -33,8 +33,7 @@ struct timing_result
     double median_ms;
 };
 
-// Root-finding calls take no in/out state beyond their return values (unlike
-// solver_wrapper::solve(), which mutates its parameter vector in place), so
+// Root-finding calls take no in/out state beyond their return values, so
 // each repeat is independent - no need to reset anything between runs.
 template <typename Attempt>
 timing_result time_solve(Attempt&& attempt, int warmup_runs = 3, int timed_runs = 9)

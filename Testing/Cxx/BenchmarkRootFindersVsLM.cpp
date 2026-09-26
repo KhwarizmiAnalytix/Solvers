@@ -1,30 +1,18 @@
 // Benchmark comparing direct root-finding algorithms against
-// Levenberg-Marquardt solver formulated as a least-squares problem.
-//
-// Motivation: finding a root of f(x) = 0 can be approached two ways:
-// 1. Direct: use root_finding_algorithms (bisection, newton_raphson, brent, etc.)
-// 2. Indirect: minimize ||f(x)||^2 using an optimization solver (LM)
-//
-// This benchmark demonstrates the trade-off between specialized root finders
-// (faster, simpler) and general-purpose optimization (robust, handles residual
-// vectors, applicable to least-squares problems).
+// Levenberg-Marquardt via the problem-structure API.
 //
 // Build with -DSOLVERS_ENABLE_BENCHMARKS=ON.
-
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <vector>
 
 #include "root_finding_test_problems.h"
 #include "solver_options/root_finding_options.h"
-#include "solver_options/solver_options_lm.h"
-#include "solver_wrapper.h"
-#include "solvers/levenberg_marquardt_solver.h"
+#include "solvers/api/solve.h"
 #include "solvers/root_finding_algorithms.h"
 
 namespace solverslib
@@ -40,60 +28,24 @@ struct timing_result
     double median_ms;
 };
 
-// Time a root-finding call (no state to reset, independent repeats).
 template <typename Attempt>
-timing_result time_root_finder(Attempt&& attempt, int warmup_runs = 3, int timed_runs = 9)
+timing_result time_call(Attempt&& attempt, int warmup = 3, int runs = 9)
 {
-    for (int i = 0; i < warmup_runs; ++i)
-    {
+    for (int i = 0; i < warmup; ++i)
         attempt();
-    }
 
-    std::vector<double> samples_ms;
-    samples_ms.reserve(static_cast<size_t>(timed_runs));
-    for (int i = 0; i < timed_runs; ++i)
+    std::vector<double> samples;
+    samples.reserve(static_cast<size_t>(runs));
+    for (int i = 0; i < runs; ++i)
     {
         const auto start = clock_type::now();
         attempt();
         const auto end = clock_type::now();
-        samples_ms.push_back(std::chrono::duration<double, std::milli>(end - start).count());
+        samples.push_back(std::chrono::duration<double, std::milli>(end - start).count());
     }
 
-    std::sort(samples_ms.begin(), samples_ms.end());
-    const double best_ms   = samples_ms.front();
-    const double median_ms = samples_ms[samples_ms.size() / 2];
-    return {best_ms, median_ms};
-}
-
-// Time a solver call (must reset parameters to initial guess between repeats).
-template <typename Attempt>
-timing_result time_solver(const root_finding_test_problem& problem,
-    std::vector<double>&                                  parameters,
-    Attempt&&                                             attempt,
-    int                                                   warmup_runs = 2,
-    int                                                   timed_runs  = 7)
-{
-    for (int i = 0; i < warmup_runs; ++i)
-    {
-        parameters = {problem.x2};  // Single-element vector for 1D problem
-        attempt(parameters);
-    }
-
-    std::vector<double> samples_ms;
-    samples_ms.reserve(static_cast<size_t>(timed_runs));
-    for (int i = 0; i < timed_runs; ++i)
-    {
-        parameters       = {problem.x2};
-        const auto start = clock_type::now();
-        attempt(parameters);
-        const auto end = clock_type::now();
-        samples_ms.push_back(std::chrono::duration<double, std::milli>(end - start).count());
-    }
-
-    std::sort(samples_ms.begin(), samples_ms.end());
-    const double best_ms   = samples_ms.front();
-    const double median_ms = samples_ms[samples_ms.size() / 2];
-    return {best_ms, median_ms};
+    std::sort(samples.begin(), samples.end());
+    return {samples.front(), samples[samples.size() / 2]};
 }
 
 void print_header()
@@ -124,63 +76,64 @@ void benchmark_problem(const root_finding_test_problem& problem)
                                                 .with_max_iterations(200)
                                                 .build();
 
-    // Direct root finders.
+    // Newton-Raphson.
     {
         double root      = 0.0;
         bool   converged = false;
-
-        const auto timing = time_root_finder([&]() {
-            converged =
-                root_finding_algorithms::newton_raphson(problem.residual_with_derivative, problem.x2, root, rf_options);
+        const auto timing = time_call([&]() {
+            converged = root_finding_algorithms::newton_raphson(
+                problem.residual_with_derivative, problem.x2, root, rf_options);
         });
-
-        print_row(problem.name, "RootFinder: Newton", converged, std::fabs(root - problem.expected_root), timing);
+        print_row(problem.name, "RootFinder: Newton", converged,
+            std::fabs(root - problem.expected_root), timing);
     }
 
+    // Brent.
     {
         double root      = 0.0;
         bool   converged = false;
-
-        const auto timing = time_root_finder([&]() {
-            converged = root_finding_algorithms::brent(problem.residual, problem.x1, problem.x2, root, rf_options);
+        const auto timing = time_call([&]() {
+            converged = root_finding_algorithms::brent(
+                problem.residual, problem.x1, problem.x2, root, rf_options);
         });
-
-        print_row(problem.name, "RootFinder: Brent", converged, std::fabs(root - problem.expected_root), timing);
+        print_row(problem.name, "RootFinder: Brent", converged,
+            std::fabs(root - problem.expected_root), timing);
     }
 
-    // Levenberg-Marquardt formulated as a least-squares problem.
-    // We minimize ||f(x)||^2 by formulating as a single residual r(x) = f(x).
+    // LM via the problem-structure API.
     {
-        std::vector<double> parameters = {problem.x2};
-        bool                converged   = false;
-
-        // Create residual/jacobian functors for the 1D problem.
-        auto residual_func = [&](const vector_type& x, vector_type& r) {
-            if (x.size() != 1)
-                throw std::invalid_argument("Expected 1 parameter");
-            if (r.size() != 1)
-                throw std::invalid_argument("Expected 1 residual");
+        api::least_squares_problem ls;
+        ls.num_parameters = 1;
+        ls.num_residuals  = 1;
+        ls.residuals = [&](const vector_type& x, vector_type& r) {
             r(0) = problem.residual(x(0));
         };
-
-        auto jacobian_func = [&](const vector_type& x, matrix_type& J) {
-            if (x.size() != 1)
-                throw std::invalid_argument("Expected 1 parameter");
-            if (J.rows() != 1 || J.cols() != 1)
-                throw std::invalid_argument("Expected 1x1 jacobian");
-            double df_dx;
-            problem.residual_with_derivative(x(0), df_dx);
-            J(0, 0) = df_dx;
+        ls.jacobian = [&](const vector_type& x, matrix_type& J) {
+            double df;
+            problem.residual_with_derivative(x(0), df);
+            J(0, 0) = df;
         };
 
-        solver_wrapper wrapper(1, 1, residual_func, jacobian_func);
-        auto            options = std::make_shared<solver_options_lm>(500, 1e-14, 1e-14, 1e-14);
+        api::solve_options opts;
+        opts.algorithm           = api::algorithm::levenberg_marquardt;
+        opts.backend             = api::backend::native;
+        opts.max_iterations      = 500;
+        opts.function_tolerance  = 1e-14;
+        opts.parameter_tolerance = 1e-14;
 
-        const auto timing =
-            time_solver(problem, parameters, [&](std::vector<double>& p) { converged = wrapper.solve(p, options); });
+        vector_type x0(1);
+        x0 << problem.x2;
 
-        double final_root = parameters.empty() ? 0.0 : parameters[0];
-        print_row(problem.name, "Solver: LM", converged, std::fabs(final_root - problem.expected_root), timing);
+        bool converged = false;
+        const auto timing = time_call([&]() {
+            auto result = api::solve(ls, x0, opts);
+            converged   = result.converged();
+        });
+
+        auto   result    = api::solve(ls, x0, opts);
+        double final_root = result.parameters[0];
+        print_row(problem.name, "Solver: LM (API)", result.converged(),
+            std::fabs(final_root - problem.expected_root), timing);
     }
 
     std::cout << "\n";
@@ -194,21 +147,12 @@ int main()
     using namespace solverslib;
 
     std::cout << "\n========== Root Finders vs Levenberg-Marquardt Benchmark ==========\n";
-    std::cout << "This benchmark compares specialized root finding methods against\n";
-    std::cout << "using LM solver to minimize ||f(x)||^2 on scalar root problems.\n\n";
+    std::cout << "Specialized root finders vs LM via the problem-structure API.\n\n";
 
     print_header();
 
     for (const auto& problem : testing::make_all_root_finding_test_problems())
-    {
         benchmark_problem(problem);
-    }
-
-    std::cout << "\nKey observations:\n";
-    std::cout << "- Root finders (Newton, Brent) are typically faster for scalar problems\n";
-    std::cout << "- LM solver adds overhead (Jacobian computation, matrix operations)\n";
-    std::cout << "- LM's strength emerges on overdetermined systems (more residuals than parameters)\n";
-    std::cout << "- For production code, LM is more robust and handles diverse problem structures\n";
 
     return 0;
 }

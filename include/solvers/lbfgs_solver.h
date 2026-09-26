@@ -7,7 +7,7 @@
 #include <stdexcept>
 
 #include "include/detail/support.h"
-#include "include/solver_output.h"
+#include "include/detail/native_result.h"
 
 namespace solverslib
 {
@@ -41,7 +41,7 @@ public:
     SOLVER_API lbfgs_solver(
         size_type num_parameters, objective_type objective, gradient_type gradient);
 
-    SOLVER_API solver_output solve(
+    SOLVER_API native_result solve(
         vector_type& parameters, const solver_options_bfgs& options) const;
 };
 }  // namespace solverslib

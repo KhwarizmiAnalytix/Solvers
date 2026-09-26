@@ -323,7 +323,7 @@ lbfgs_solver::lbfgs_solver(
     : num_parameters_(num_parameters), num_residuals_(0), objective_(std::move(objective)),
       gradient_(std::move(gradient)), scalar_mode_(true) {};
 
-solver_output lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
+native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
 
@@ -508,21 +508,22 @@ solver_output lbfgs_solver::solve(vector_type& parameters, const solver_options_
         }
     }
 
-    solver_output output(scalar_mode_ ? 1 : num_residuals_);
-
-    if (scalar_mode_)
+    native_result result;
+    result.iterations    = iter;
+    result.residual_norm = scalar_mode_ ? std::sqrt(std::fabs(fx)) : l2_norm(y_p);
+    if (x2_converged)
     {
-        // Store the final objective value as a single-element "residual" so
-        // that solver_output::x2_ reflects sqrt(|fx|).
-        vector_type fx_vec(1);
-        fx_vec[0] = std::sqrt(std::fabs(fx));
-        output.update(x2_converged, parameters_converged, gradient_converged, iter, fx_vec);
+        result.status = native_convergence::function_converged;
     }
-    else
+    else if (parameters_converged)
     {
-        output.update(x2_converged, parameters_converged, gradient_converged, iter, y_p);
+        result.status = native_convergence::parameter_converged;
+    }
+    else if (gradient_converged)
+    {
+        result.status = native_convergence::gradient_converged;
     }
 
-    return output;
+    return result;
 }
 }  // namespace solverslib

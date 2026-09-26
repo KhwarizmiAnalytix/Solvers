@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "solver_options/solver_options_lm.h"
-#include "solvers/levenberg_marquardt_solver.h"
+#include "solvers/api/solve.h"
 #include "solvers/root_finding_algorithms.h"
 
 namespace solverslib
@@ -11,20 +10,27 @@ namespace
 
 TEST(OptimizationAlgorithm, LevenbergMarquardtSolvesScalarResidual)
 {
-    levenberg_marquardt_solver solver(
-        1,
-        1,
-        [](const vector_type& parameters, vector_type& residuals)
-        { residuals[0] = parameters[0] - 3.0; },
-        [](const vector_type&, matrix_type& jacobian) { jacobian(0, 0) = 1.0; });
-    solver_options_lm options(100, 1e-12, 1e-12, 1e-12);
-    vector_type        parameters(1);
-    parameters[0] = 0.0;
+    api::least_squares_problem ls;
+    ls.num_parameters = 1;
+    ls.num_residuals  = 1;
+    ls.residuals = [](const vector_type& x, vector_type& r) { r(0) = x(0) - 3.0; };
+    ls.jacobian  = [](const vector_type&, matrix_type& J) { J(0, 0) = 1.0; };
 
-    const solver_output result = solver.solve(parameters, options);
+    api::solve_options opts;
+    opts.algorithm           = api::algorithm::levenberg_marquardt;
+    opts.backend             = api::backend::native;
+    opts.max_iterations      = 100;
+    opts.function_tolerance  = 1e-12;
+    opts.gradient_tolerance  = 1e-12;
+    opts.parameter_tolerance = 1e-12;
 
-    EXPECT_NEAR(parameters[0], 3.0, 1e-6);
-    EXPECT_NE(result.status_, solver_convergence_enum::NOT_CONVERGED);
+    vector_type x0(1);
+    x0(0) = 0.0;
+
+    auto result = api::solve(ls, x0, opts);
+
+    EXPECT_TRUE(result.converged());
+    EXPECT_NEAR(result.parameters(0), 3.0, 1e-6);
 }
 
 TEST(OptimizationAlgorithm, BrentFindsRoot)

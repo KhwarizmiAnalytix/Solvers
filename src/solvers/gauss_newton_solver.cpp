@@ -43,7 +43,7 @@ gauss_newton_solver::gauss_newton_solver(size_t num_parameters,
 {
 }
 
-solver_output gauss_newton_solver::solve(
+native_result gauss_newton_solver::solve(
     vector_type& parameters, const solver_options_gn& options) const
 {
     auto jacobian = jacobian_;
@@ -195,8 +195,22 @@ solver_output gauss_newton_solver::solve(
         (gradient_converged ? "GRADIENT_CONVERGED " : ""),
         (iteration >= max_iter ? "MAX_ITERATIONS_REACHED " : ""));
 
-    solver_output output(num_residuals_);
-    output.update(x2_converged, parameters_converged, gradient_converged, iteration, y_p);
-    return output;
+    native_result result;
+    result.iterations    = iteration;
+    result.residual_norm = l2_norm(y_p);
+    if (x2_converged)
+    {
+        result.status = native_convergence::function_converged;
+    }
+    else if (parameters_converged)
+    {
+        result.status = native_convergence::parameter_converged;
+    }
+    else if (gradient_converged)
+    {
+        result.status = native_convergence::gradient_converged;
+    }
+
+    return result;
 }
 }  // namespace solverslib

@@ -7,10 +7,19 @@
 #include <stdexcept>
 
 #include "include/detail/support.h"
-#include "include/solver_enum.h"
 
 namespace solverslib
 {
+enum class solver_enum : int
+{
+    LM           = 0,
+    LBFGS        = 1,
+    CERES        = 3,
+    GAUSS_NEWTON = 4,
+    IPOPT        = 5,
+    PETSC_TAO    = 6
+};
+
 class SOLVER_VISIBILITY solver_options
 {
 protected:

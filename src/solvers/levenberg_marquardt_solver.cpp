@@ -45,7 +45,7 @@ levenberg_marquardt_solver::levenberg_marquardt_solver(size_t num_parameters,
 {
 }
 
-solver_output levenberg_marquardt_solver::solve(
+native_result levenberg_marquardt_solver::solve(
     vector_type& parameters, const solver_options_lm& options) const
 {
     auto jacobian = jacobian_;
@@ -364,10 +364,22 @@ solver_output levenberg_marquardt_solver::solve(
         (gradient_converged ? "GRADIENT_CONVERGED " : ""),
         (iteration >= max_iter ? "MAX_ITERATIONS_REACHED " : ""));
 
-    solver_output output(num_residuals_);
+    native_result result;
+    result.iterations    = iteration;
+    result.residual_norm = l2_norm(y_p);
+    if (x2_converged)
+    {
+        result.status = native_convergence::function_converged;
+    }
+    else if (parameters_converged)
+    {
+        result.status = native_convergence::parameter_converged;
+    }
+    else if (gradient_converged)
+    {
+        result.status = native_convergence::gradient_converged;
+    }
 
-    output.update(x2_converged, parameters_converged, gradient_converged, iteration, y_p);
-
-    return output;
+    return result;
 }
 }  // namespace solverslib

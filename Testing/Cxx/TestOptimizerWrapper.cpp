@@ -1,39 +1,49 @@
-#include <memory>
-#include <vector>
-
 #include <gtest/gtest.h>
 
-#include "solver_options/solver_options_lm.h"
-#include "solver_wrapper.h"
+#include "solvers/api/solve.h"
 
-namespace solverslib
+namespace solverslib::api
 {
 namespace
 {
 
-TEST(OptimizerWrapper, SolvesVectorBackedObjective)
+TEST(SolveApi, SolvesSimpleLeastSquares)
 {
-    solver_wrapper optimizer(
-        1,
-        1,
-        [](const vector_type& parameters, vector_type& residuals) {
-            residuals[0] = parameters[0] - 2.0;
-        });
-    std::shared_ptr<const solver_options> options =
-        std::make_shared<solver_options_lm>(100, 1e-12, 1e-12, 1e-12);
-    std::vector<double> parameters{0.0};
+    least_squares_problem problem;
+    problem.num_parameters = 1;
+    problem.num_residuals  = 1;
+    problem.residuals      = [](const vector_type& x, vector_type& r) { r[0] = x[0] - 2.0; };
+    problem.jacobian       = [](const vector_type&, matrix_type& J) { J(0, 0) = 1.0; };
 
-    EXPECT_TRUE(optimizer.solve(parameters, options));
-    ASSERT_EQ(parameters.size(), 1U);
-    EXPECT_NEAR(parameters[0], 2.0, 1e-6);
+    vector_type x0(1);
+    x0 << 0.0;
+
+    auto result = solve(problem, x0);
+
+    EXPECT_TRUE(result.converged());
+    EXPECT_NEAR(result.parameters[0], 2.0, 1e-6);
+    EXPECT_EQ(result.backend, backend::native);
 }
 
-TEST(OptimizerWrapper, ReportsBuiltInSolverSupport)
+TEST(SolveApi, ReturnsBackendUnavailableForMissingBackend)
 {
-    EXPECT_TRUE(solver_wrapper::is_supported(solver_enum::LM));
-    EXPECT_TRUE(solver_wrapper::is_supported(solver_enum::LBFGS));
-    EXPECT_FALSE(solver_wrapper::is_supported(static_cast<solver_enum>(-1)));
+    least_squares_problem problem;
+    problem.num_parameters = 1;
+    problem.num_residuals  = 1;
+    problem.residuals      = [](const vector_type& x, vector_type& r) { r[0] = x[0] - 2.0; };
+
+    vector_type x0(1);
+    x0 << 0.0;
+
+    solve_options opts;
+    opts.algorithm = algorithm::pounders;
+    opts.backend   = backend::pounders;
+
+    auto result = solve(problem, x0, opts);
+
+    // Either converges (PETSc compiled in) or reports unavailable.
+    EXPECT_TRUE(result.converged() || result.status == solver_status::backend_unavailable);
 }
 
 }  // namespace
-}  // namespace solverslib
+}  // namespace solverslib::api

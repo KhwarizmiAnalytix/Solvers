@@ -10,7 +10,7 @@
 #include "solver_options/solver_options_ipopt.h"
 #include "solver_options/solver_options_lm.h"
 #include "solver_options/solver_options_petsc.h"
-#include "solver_output.h"
+#include "detail/native_result.h"
 #include "solvers/ceres_solver.h"
 #include "solvers/gauss_newton_solver.h"
 #include "solvers/ipopt_solver.h"
@@ -51,16 +51,15 @@ backend backend_for(algorithm value)
     return backend::automatic;
 }
 
-// Translate the native convergence code into the shared vocabulary.
-solver_status translate_native(solver_convergence_enum status)
+solver_status translate_native(native_convergence status)
 {
     switch (status)
     {
-    case solver_convergence_enum::GRADIENT_CONVERGED:
-    case solver_convergence_enum::PARAMETERS_CONVERGED:
-    case solver_convergence_enum::X2_CONVERGED:
+    case native_convergence::gradient_converged:
+    case native_convergence::parameter_converged:
+    case native_convergence::function_converged:
         return solver_status::converged;
-    case solver_convergence_enum::NOT_CONVERGED:
+    case native_convergence::not_converged:
         return solver_status::max_iterations;
     }
     return solver_status::numerical_failure;
@@ -75,19 +74,17 @@ solver_result failed(solver_status status, std::string message, const vector_typ
     return result;
 }
 
-// Fill the shared result fields from a native solver_output (whose x2_ holds
-// the residual L2 norm, per solver_output.cpp).
-solver_result from_native(const solver_output& out, const vector_type& x, api::algorithm alg)
+solver_result from_native(const native_result& out, const vector_type& x, api::algorithm alg)
 {
     solver_result result;
-    result.status         = translate_native(out.status_);
+    result.status         = translate_native(out.status);
     result.parameters     = x;
-    result.residual_norm  = out.x2_;
-    result.objective      = 0.5 * out.x2_ * out.x2_;
-    result.iterations     = out.iterations_;
+    result.residual_norm  = out.residual_norm;
+    result.objective      = 0.5 * out.residual_norm * out.residual_norm;
+    result.iterations     = out.iterations;
     result.backend        = backend::native;
     result.algorithm      = alg;
-    result.backend_status = static_cast<int>(out.status_);
+    result.backend_status = static_cast<int>(out.status);
     result.message        = (result.status == solver_status::converged) ? "native converged"
                                                                         : "native reached iteration limit";
     return result;
@@ -472,10 +469,10 @@ solver_result run_native_optimization(const optimization_problem& problem,
     auto         out = solver.solve(x, *native_opts);
 
     solver_result result;
-    result.status     = translate_native(out.status_);
+    result.status     = translate_native(out.status);
     result.parameters = x;
     result.objective  = problem.objective(x);
-    result.iterations = out.iterations_;
+    result.iterations = out.iterations;
     result.backend    = backend::native;
     result.algorithm  = algorithm::lbfgs;
     result.message    = (result.status == solver_status::converged)

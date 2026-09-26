@@ -1,15 +1,10 @@
-#include <memory>
+#include <cmath>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "optimization_test_problems.h"
-#include "solver_options/solver_options_bfgs.h"
-#include "solver_options/solver_options_ceres.h"
-#include "solver_options/solver_options_gn.h"
-#include "solver_options/solver_options_lm.h"
-#include "solver_wrapper.h"
-#include "solvers/ceres_solver.h"
+#include "solvers/api/solve.h"
 
 namespace solverslib
 {
@@ -18,22 +13,21 @@ namespace
 using testing::optimization_test_problem;
 
 double residual_norm(
-    const optimization_test_problem& problem, const std::vector<double>& parameters)
+    const optimization_test_problem& problem, const vector_type& parameters)
 {
-    vector_type x = to_vector_type(parameters);
     vector_type r = make_vector(problem.num_residuals);
-    problem.residuals(x, r);
+    problem.residuals(parameters, r);
     return r.norm();
 }
 
 void expect_solved(const optimization_test_problem& problem,
-    const std::vector<double>&                      parameters,
+    const api::solver_result&                       result,
     double                                          tolerance)
 {
-    EXPECT_LT(residual_norm(problem, parameters), tolerance) << "problem=" << problem.name;
+    EXPECT_LT(residual_norm(problem, result.parameters), tolerance) << "problem=" << problem.name;
     for (size_t i = 0; i < problem.expected_solution.size(); ++i)
     {
-        EXPECT_NEAR(parameters[i], problem.expected_solution[i], std::sqrt(tolerance))
+        EXPECT_NEAR(result.parameters[i], problem.expected_solution[i], std::sqrt(tolerance))
             << "problem=" << problem.name << " parameter=" << i;
     }
 }
@@ -43,68 +37,181 @@ std::string problem_name(const ::testing::TestParamInfo<optimization_test_proble
     return info.param.name;
 }
 
-// Every backend is exercised through solver_wrapper against the same shared
-// problem set (Testing/Cxx/optimization_test_problems.h), so a solver-specific
-// fixture only needs to supply the solver_options.
+api::least_squares_problem to_ls(const optimization_test_problem& tp)
+{
+    api::least_squares_problem p;
+    p.num_parameters = tp.num_parameters;
+    p.num_residuals  = tp.num_residuals;
+    p.residuals      = tp.residuals;
+    p.jacobian       = tp.jacobian;
+    return p;
+}
+
+api::optimization_problem to_obj(const optimization_test_problem& tp)
+{
+    api::optimization_problem p;
+    p.num_parameters = tp.num_parameters;
+    p.objective = [&tp](const vector_type& x) -> double {
+        vector_type r = make_vector(tp.num_residuals);
+        tp.residuals(x, r);
+        return 0.5 * r.squaredNorm();
+    };
+    p.gradient = [&tp](const vector_type& x, vector_type& g) {
+        vector_type r = make_vector(tp.num_residuals);
+        matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
+        tp.residuals(x, r);
+        tp.jacobian(x, J);
+        g = J.transpose() * r;
+    };
+    return p;
+}
+
 class SolverBackendTest : public ::testing::TestWithParam<optimization_test_problem>
 {
 };
 
 TEST_P(SolverBackendTest, LevenbergMarquardtSolvesProblem)
 {
-    const optimization_test_problem& problem = GetParam();
-    solver_wrapper                   wrapper(
-        problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
-    std::shared_ptr<const solver_options> options =
-        std::make_shared<solver_options_lm>(500, 1e-14, 1e-14, 1e-14);
-    std::vector<double> parameters = problem.initial_guess;
+    const auto& tp = GetParam();
+    auto        ls = to_ls(tp);
+    vector_type x0 = to_vector_type(tp.initial_guess);
 
-    EXPECT_TRUE(wrapper.solve(parameters, options));
-    expect_solved(problem, parameters, 1e-6);
+    api::solve_options opts;
+    opts.algorithm           = api::algorithm::levenberg_marquardt;
+    opts.backend             = api::backend::native;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-6);
 }
 
 TEST_P(SolverBackendTest, LbfgsSolvesProblem)
 {
-    const optimization_test_problem& problem = GetParam();
-    solver_wrapper                   wrapper(
-        problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
-    std::shared_ptr<const solver_options> options =
-        std::make_shared<solver_options_bfgs>(500, 1e-14, 1e-14, 1e-14);
-    std::vector<double> parameters = problem.initial_guess;
+    const auto& tp  = GetParam();
+    auto        obj = to_obj(tp);
+    vector_type x0  = to_vector_type(tp.initial_guess);
 
-    EXPECT_TRUE(wrapper.solve(parameters, options));
-    expect_solved(problem, parameters, 1e-4);
+    api::solve_options opts;
+    opts.algorithm           = api::algorithm::lbfgs;
+    opts.backend             = api::backend::native;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(obj, x0, opts);
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-4);
 }
 
 TEST_P(SolverBackendTest, GaussNewtonSolvesProblem)
 {
-    const optimization_test_problem& problem = GetParam();
-    solver_wrapper                   wrapper(
-        problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
-    std::shared_ptr<const solver_options> options =
-        std::make_shared<solver_options_gn>(500, 1e-14, 1e-14, 1e-14);
-    std::vector<double> parameters = problem.initial_guess;
+    const auto& tp = GetParam();
+    auto        ls = to_ls(tp);
+    vector_type x0 = to_vector_type(tp.initial_guess);
 
-    EXPECT_TRUE(wrapper.solve(parameters, options));
-    expect_solved(problem, parameters, 1e-6);
+    api::solve_options opts;
+    opts.algorithm           = api::algorithm::gauss_newton;
+    opts.backend             = api::backend::native;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-6);
 }
 
 TEST_P(SolverBackendTest, CeresSolvesProblem)
 {
-    if (!ceres_solver::is_supported())
+    const auto& tp = GetParam();
+    auto        ls = to_ls(tp);
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend             = api::backend::ceres;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
     {
         GTEST_SKIP() << "Ceres backend not compiled in (SOLVERS_ENABLE_CERES=OFF)";
     }
 
-    const optimization_test_problem& problem = GetParam();
-    solver_wrapper                   wrapper(
-        problem.num_parameters, problem.num_residuals, problem.residuals, problem.jacobian);
-    std::shared_ptr<const solver_options> options =
-        std::make_shared<solver_options_ceres>(500, 1e-14, 1e-14, 1e-14);
-    std::vector<double> parameters = problem.initial_guess;
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-4);
+}
 
-    EXPECT_TRUE(wrapper.solve(parameters, options));
-    expect_solved(problem, parameters, 1e-4);
+TEST_P(SolverBackendTest, IpoptSolvesProblem)
+{
+    const auto& tp  = GetParam();
+    auto        obj = to_obj(tp);
+    vector_type x0  = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend        = api::backend::ipopt;
+    opts.max_iterations = 500;
+    opts.ipopt          = api::ipopt_options{.tol = 1e-10};
+
+    auto result = api::solve(obj, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "Ipopt backend not compiled in (SOLVERS_ENABLE_IPOPT=OFF)";
+    }
+
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-4);
+}
+
+TEST_P(SolverBackendTest, PetscTaoSolvesProblem)
+{
+    const auto& tp  = GetParam();
+    auto        obj = to_obj(tp);
+    vector_type x0  = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend        = api::backend::petsc_tao;
+    opts.max_iterations = 500;
+    opts.petsc_tao      = api::petsc_tao_options{.gatol = 1e-8, .grtol = 1e-8};
+
+    auto result = api::solve(obj, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "PETSc/TAO backend not compiled in (SOLVERS_ENABLE_PETSC=OFF)";
+    }
+
+    EXPECT_TRUE(result.has_usable_iterate());
+}
+
+TEST_P(SolverBackendTest, PoundersSolvesProblem)
+{
+    const auto& tp = GetParam();
+
+    api::least_squares_problem ls;
+    ls.num_parameters = tp.num_parameters;
+    ls.num_residuals  = tp.num_residuals;
+    ls.residuals      = tp.residuals;
+    // No Jacobian — derivative-free path.
+
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.algorithm      = api::algorithm::pounders;
+    opts.backend        = api::backend::pounders;
+    opts.max_iterations = 500;
+    opts.petsc_tao      = api::petsc_tao_options{.gatol = 1e-6, .grtol = 1e-6};
+
+    auto result = api::solve(ls, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "PETSc/TAO backend not compiled in (SOLVERS_ENABLE_PETSC=OFF)";
+    }
+
+    EXPECT_TRUE(result.converged());
 }
 
 INSTANTIATE_TEST_SUITE_P(AllProblems,
@@ -114,14 +221,6 @@ INSTANTIATE_TEST_SUITE_P(AllProblems,
         testing::make_powell_singular_problem(),
         testing::make_exponential_fit_problem()),
     problem_name);
-
-TEST(SolverBackendSupport, ReportsAllFiveSolverTypes)
-{
-    EXPECT_TRUE(solver_wrapper::is_supported(solver_enum::LM));
-    EXPECT_TRUE(solver_wrapper::is_supported(solver_enum::LBFGS));
-    EXPECT_TRUE(solver_wrapper::is_supported(solver_enum::GAUSS_NEWTON));
-    EXPECT_EQ(solver_wrapper::is_supported(solver_enum::CERES), ceres_solver::is_supported());
-}
 
 }  // namespace
 }  // namespace solverslib
