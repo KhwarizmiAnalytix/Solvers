@@ -245,6 +245,138 @@ The common evaluator handles callback contracts, derivative estimation, scales, 
 
 For native least squares, define independent residual absolute tolerance, gradient tolerance in scaled coordinates, parameter absolute/relative tolerances, and cost-change tolerance. A small-step criterion should include an absolute floor, such as `||delta_x|| <= x_abs + x_rel*||x||`, evaluated in documented coordinates. Avoid requiring residuals to approach zero on noisy data. Tolerance equivalence across external backends must be documented as an adapter mapping, not assumed.
 
+## Problem-structure architecture (contributed proposal)
+
+The following architecture was contributed to this review. It organizes the
+public API around the **mathematical structure of the problem** rather than
+around backend names; an internal dispatcher then selects either the optimized
+native solver or a third-party library that adds a capability we do not want to
+reimplement. It refines the earlier tree in one respect: **ordinary
+least-squares problems are not routed to Ceres by default** when the native
+LM/GN are already optimized. Ceres stays optional, for special cases or
+benchmarking.
+
+```text
+                         Problem
+                            │
+                ┌───────────┴───────────┐
+                │                       │
+          Least Squares            General Objective
+                │                       │
+       ┌────────┴────────┐       ┌──────┴───────────┐
+       │                 │       │                  │
+ Jacobian available?     No   Constraints?      Unconstrained
+       │                 │       │                  │
+   ┌───┴───┐             │       │             ┌────┴─────┐
+   │       │             │       │             │          │
+ small/   large        POUNDERS  IPOPT       Native     Large-scale
+ normal  scale                                L-BFGS        │
+   │       │                                                │
+Native    TAO                                             TAO
+LM/GN
+```
+
+### 1. Three problem interfaces
+
+Users describe a problem, not a solver. The stable, user-facing types are
+`least_squares_problem`, `optimization_problem`, and (retained) scalar/
+polynomial root computation — never a direct `LM`/`Ipopt`/`TAO` instance.
+
+### 2. Explicit problem traits
+
+A `problem_traits` value (least-squares flag, derivative availability, bounds,
+nonlinear constraints, matrix-free products, sizes) is derived from the problem
+and drives backend selection. The backend is not the main abstraction.
+
+### 3. Native solvers stay the default fast path
+
+`solve(problem)` on a dense least-squares problem with a Jacobian and normal
+size runs Native LM/GN with no third-party dependency in the path.
+
+### 4. Small backend abstraction
+
+A `backend` enum (`Auto`, `Native`, `Ipopt`, `PetscTao`, `Pounders`, `Ceres`,
+`Nlopt`) with `Auto` as the norm. Backend-specific interfaces stay internal
+behind a `solver_backend` interface and a `backends/{native,ipopt,petsc,ceres}`
+layout.
+
+### 5–7. Dispatcher rules and "large scale"
+
+Least squares: no Jacobian → POUNDERS; large/matrix-free → TAO; otherwise
+Native LM/GN. General objective: nonlinear constraints → IPOPT; large-scale or
+Hessian-vector product → TAO; otherwise Native L-BFGS. "Large scale" is one
+explicit `dispatch_policy` (parameter/residual thresholds, `prefer_matrix_free`),
+and a supplied Hessian-vector or matrix-free Jacobian product selects TAO even
+below the size thresholds.
+
+### 8–10. Algorithm vs. backend, one result type, private third-party types
+
+`algorithm` (LevenbergMarquardt, GaussNewton, BFGS, LBFGS, Pounders,
+InteriorPoint, NewtonKrylov, Auto) is independent of `backend`; e.g.
+`InteriorPoint`→Ipopt, `NewtonKrylov`→PETSc TAO, with an optional user backend
+override. One `solver_result` (status, parameters, objective, evaluation
+counters, backend, algorithm, message) unifies every backend's semantics, and
+third-party types (`Ipopt::TNLP`, `Tao`, `ceres::Problem`) never appear in
+public headers.
+
+### 11–13. Optional backends, layout, routing
+
+Every external backend is CMake-optional; native is always available so a native
+LM user need not install PETSc or Ipopt. Public headers live under
+`include/solvers/…` and adapters under `src/backends/…`. Ceres remains an
+explicit optional backend rather than part of the automatic path.
+
+### Relationship to this review's incremental plan
+
+This contributed architecture is the **target public API**; the migration plan
+below remains the route to it. Two of this review's decisions constrain the
+first implementation slice:
+
+- **Bounds are rejected, not silently dropped, on backends that cannot enforce
+  them** (F01). The native LM/GN/L-BFGS path therefore rejects a bounded problem
+  with an explicit `unsupported_capability` status instead of solving the
+  unconstrained relaxation.
+- **General scalar objectives stay a separate contract** from residual least
+  squares. The `optimization_problem` type is served by the Ipopt and PETSc/TAO
+  backends (below); only its *native* path still reports `unsupported_capability`,
+  since no native scalar-objective kernel exists yet.
+
+### Implementation status (as delivered)
+
+The API layer lives under `include/solvers/api/` (`status.h`, `result.h`,
+`problem.h`, `options.h`, `backend_options.h`, `solve.h`) with the dispatcher in
+`src/api/dispatch.cpp`; tests are in `Testing/Cxx/TestSolverApiDispatch.cpp`.
+
+- **Native LM / Gauss-Newton / L-BFGS** run the existing kernels for dense
+  least squares; bounds are rejected there per F01.
+- **Ceres and NLopt** are wired through the dispatcher for `backend::ceres` /
+  `backend::nlopt`. They are reached by an explicit pin (never by the automatic
+  path, which prefers native — "Ceres = explicit optional backend"), honor box
+  bounds, and are tuned through API-level `ceres_options` / `nlopt_options`
+  mirrors so no third-party type appears in a public header. A gradient-based
+  NLopt algorithm without a Jacobian is rejected rather than crashing (F11/F12).
+  Both report `backend_unavailable` when not compiled in.
+- **Ipopt** (`backend::ipopt`) serves general, optionally bound-constrained
+  scalar-objective problems via `ipopt_solver` (an internal `Ipopt::TNLP`
+  subclass). It is the automatic choice for an `optimization_problem` carrying
+  nonlinear constraints, tuned through `ipopt_options` (hessian mode, `tol`,
+  linear solver, wall-time). It requires a gradient callback.
+- **PETSc/TAO** (`backend::petsc_tao`) serves both large-scale/matrix-free
+  objective problems (NLS/NTR/LMVM…) and, through the same `petsc_tao_solver`
+  adapter, least squares. **POUNDERS** is a TAO algorithm, so `backend::pounders`
+  (the automatic choice for a Jacobian-free least-squares problem) is realized
+  by this adapter with `-tao_type pounders`. Tuned through `petsc_tao_options`
+  (algorithm, `gatol`/`grtol`, matrix-free).
+- Ipopt and PETSc are discovered via **pkg-config** (`SOLVERS_ENABLE_IPOPT`,
+  `SOLVERS_ENABLE_PETSC`); enabling one without the library is a clean configure
+  error, and when OFF the adapters report `backend_unavailable`. Internal
+  third-party types stay inside the adapter `.cpp` files behind
+  `SOLVERS_HAS_IPOPT` / `SOLVERS_HAS_PETSC`.
+- Verified: 83/83 tests pass both with external backends OFF and with
+  Ceres+NLopt ON (Ipopt/PETSc adapter execution is covered by tests that run
+  when the library is present and assert the `backend_unavailable` contract
+  otherwise).
+
 ## Session decisions and alternatives
 
 | Decision | Rationale | Alternative considered |

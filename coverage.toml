@@ -1,28 +1,23 @@
-# Host config for coverage-tool
-# https://github.com/KhwarizmiAnalytix/coverage-tool
+# coverage-tool configuration for Solvers.
+#
+# Solvers is a single flat CMake target (not XSigma's Library/<Module> tree), so
+# the module list is given explicitly and the test-layout templates are pointed
+# at this repo's names: the suite is SolversTests under Testing/Cxx, and its
+# shared library libSolvers is emitted to <build>/lib when coverage is on.
 
 [coverage]
+modules = ["Solvers"]
+# Source lives at the repo root (src/ + include/), not under a Library/ folder.
 filter = "."
 source_folder = "."
-output_format = "html-and-json"
-coverage_report_dir = "coverage_report"
-# Without this, coverage-tool's discover_modules() treats every immediate
-# source subdirectory (logging/) as its own "module", each
-# expected to have its own lib<module>.* + <module>CxxTests binary (XSigma's
-# per-module Library/<Name> convention). Logging builds one flat
-# libLogging.* + LoggingCxxTests, so on the Clang/LLVM coverage path this
-# silently produced "Library not found for module X, skipping" for every
-# subdirectory and an empty report. The GCC/lcov backend ignores `modules`
-# entirely (whole-build-dir capture), which is why CI (gcc) never caught this.
-modules = ["Logging"]
 
 [coverage.exclude]
-patterns = [
-    "*ThirdParty*",
-    "*Testing*",
-    "/usr/*",
-]
-llvm_ignore_regex = [
-    ".*Testing[/\\\\].*",
-    ".*ThirdParty[/\\\\].*",
-]
+patterns = ["*ThirdParty*", "*Testing*", "/usr/*"]
+llvm_ignore_regex = [".*Testing[/\\\\].*", ".*ThirdParty[/\\\\].*"]
+
+[coverage.tests]
+# Executable is SolversTests (not the default {module}CxxTests); it runs from
+# Testing/Cxx. Discovery still prefers the CTest "Solvers" label when present.
+exe_pattern = "{module}Tests"
+profraw_pattern = "{module}Tests.profraw"
+test_dir_template = "Testing/Cxx"

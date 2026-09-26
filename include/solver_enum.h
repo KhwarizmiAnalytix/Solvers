@@ -16,6 +16,8 @@ enum class solver_enum : int
     LBFGS        = 1,
     NLOPT        = 2,
     CERES        = 3,
-    GAUSS_NEWTON = 4
+    GAUSS_NEWTON = 4,
+    IPOPT        = 5,
+    PETSC_TAO    = 6
 };
 }  // namespace solverslib

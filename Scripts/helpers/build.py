@@ -62,7 +62,8 @@ def build_project(builder: str, build_enum: str, system: str, shell_flag: bool) 
         Exit code (0 for success, non-zero for failure)
     """
     try:
-        if system == "Linux" or builder == "ninja":
+        is_ninja = system == "Linux" or builder == "ninja"
+        if is_ninja:
             n = get_logical_processor_count()
             cmake_cmd_build = [builder, "-j", str(n)]
         elif builder == "xcodebuild":
@@ -81,8 +82,28 @@ def build_project(builder: str, build_enum: str, system: str, shell_flag: bool) 
             return 1
 
         _raise_stack_limit()
-        subprocess.check_call(cmake_cmd_build, stderr=subprocess.STDOUT, shell=shell_flag)
-        return 0
+
+        # A fresh, highly-parallel Ninja build over the large vendored trees
+        # (ceres/abseil) intermittently fails to create an object's output
+        # directory before the compile writes to it ("No such file or
+        # directory" on the .o/.o.d), especially with the jobserver-pipe Ninja
+        # variant. Ninja is incremental, so simply re-running it resumes and
+        # finishes the build. Retry a few times; a genuine compile error still
+        # fails every attempt (and fails fast, since prior objects are cached).
+        attempts = 3 if is_ninja else 1
+        last_rc = 1
+        for attempt in range(1, attempts + 1):
+            rc = subprocess.call(cmake_cmd_build, stderr=subprocess.STDOUT, shell=shell_flag)
+            if rc == 0:
+                return 0
+            last_rc = rc
+            if attempt < attempts:
+                print(
+                    f"[build] ninja exited {rc}; retrying (attempt "
+                    f"{attempt + 1}/{attempts}) — resuming incremental build",
+                    flush=True,
+                )
+        return last_rc
 
     except subprocess.CalledProcessError:
         return 1
