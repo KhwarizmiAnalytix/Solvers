@@ -445,6 +445,8 @@ class SolversFlags:
             "coverage": "SOLVERS_ENABLE_COVERAGE",
             "cxxstd": "SOLVERS_CXX_STANDARD",
             "lto": "SOLVERS_LTO_MODE",
+            "nlopt": "SOLVERS_ENABLE_NLOPT",
+            "ceres": "SOLVERS_ENABLE_CERES",
             # "cppcheck" runs via Scripts/helpers/cppcheck.py after the build; no
             # CMakeLists.txt option consumes it (avoid an unused-var warning).
         }
