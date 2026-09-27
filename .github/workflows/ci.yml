@@ -132,29 +132,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS 13 (Intel)
-          - name: default (Intel, Debug)
-            os: macos-13
-            args: config.build.test
-
-          - name: static (Intel, Debug)
-            os: macos-13
-            args: config.build.test.static
-
-          - name: Ceres backend (Intel)
-            os: macos-13
-            args: config.build.test.ceres
-
-          # macOS 14+ (Apple Silicon compatible, but runs on Intel)
-          - name: default (x86_64, Debug)
+          # macOS 14 (Apple Silicon / ARM64)
+          - name: default (Debug)
             os: macos-14
             args: config.build.test
 
-          - name: shared (x86_64, Debug)
+          - name: static (Debug)
+            os: macos-14
+            args: config.build.test.static
+
+          - name: shared (Debug)
             os: macos-14
             args: config.build.test.shared
 
-          - name: Ceres backend (x86_64)
+          - name: Ceres backend
             os: macos-14
             args: config.build.test.ceres
 
