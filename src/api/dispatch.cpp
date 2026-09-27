@@ -65,12 +65,12 @@ solver_status translate_native(native_convergence status)
     return solver_status::numerical_failure;
 }
 
-solver_result failed(solver_status status, std::string message, const vector_type& x)
+solver_result failed(solver_status status, const std::string& message, const vector_type& x)
 {
     solver_result result;
     result.status     = status;
     result.parameters = x;
-    result.message    = std::move(message);
+    result.message    = message;
     return result;
 }
 
@@ -136,7 +136,11 @@ algorithm select_algorithm(const problem_traits& traits, const solve_options& op
 
     if (traits.is_least_squares)
     {
-        if (!traits.has_jacobian)
+        // Consider AD provider as equivalent to having Jacobian for algorithm selection
+        bool has_derivatives =
+            traits.has_jacobian || traits.has_autodiff_provider;
+
+        if (!has_derivatives)
         {
             return algorithm::pounders;  // derivative-free least squares
         }
