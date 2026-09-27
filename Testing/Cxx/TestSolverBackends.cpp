@@ -214,6 +214,116 @@ TEST_P(SolverBackendTest, PoundersSolvesProblem)
     EXPECT_TRUE(result.converged());
 }
 
+TEST_P(SolverBackendTest, CeresWithInternalJacobian)
+{
+    const auto& tp = GetParam();
+    auto        ls = to_ls(tp);
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    // Create a least squares problem WITHOUT providing jacobian
+    // Ceres will compute it via finite differences internally
+    api::least_squares_problem ls_no_jac;
+    ls_no_jac.num_parameters = tp.num_parameters;
+    ls_no_jac.num_residuals  = tp.num_residuals;
+    ls_no_jac.residuals      = tp.residuals;
+    ls_no_jac.jacobian       = nullptr;  // No user-provided jacobian
+
+    api::solve_options opts;
+    opts.backend             = api::backend::ceres;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls_no_jac, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "Ceres backend not compiled in (SOLVERS_ENABLE_CERES=OFF)";
+    }
+
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-3);  // Slightly relaxed due to finite differences
+}
+
+TEST(SolverBackendTest, CeresWithBoundedLeastSquares)
+{
+    // Rosenbrock problem: solution at (1, 1)
+    // Add bounds to constrain the solution
+    const auto& tp = testing::make_rosenbrock_problem();
+    api::least_squares_problem ls;
+    ls.num_parameters = tp.num_parameters;
+    ls.num_residuals  = tp.num_residuals;
+    ls.residuals      = tp.residuals;
+    ls.jacobian       = tp.jacobian;
+
+    // Constrain first parameter to [0.5, 1.5] and second to [0.5, 1.5]
+    ls.bounds.lower = {0.5, 0.5};
+    ls.bounds.upper = {1.5, 1.5};
+
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend             = api::backend::ceres;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "Ceres backend not compiled in (SOLVERS_ENABLE_CERES=OFF)";
+    }
+
+    EXPECT_TRUE(result.converged());
+    // Check that solution respects bounds
+    EXPECT_GE(result.parameters[0], 0.5 - 1e-6);
+    EXPECT_LE(result.parameters[0], 1.5 + 1e-6);
+    EXPECT_GE(result.parameters[1], 0.5 - 1e-6);
+    EXPECT_LE(result.parameters[1], 1.5 + 1e-6);
+    // And is close to the true solution
+    EXPECT_NEAR(result.parameters[0], 1.0, 1e-3);
+    EXPECT_NEAR(result.parameters[1], 1.0, 1e-3);
+}
+
+TEST(SolverBackendTest, CeresWithActiveBounds)
+{
+    // Rosenbrock problem constrained to force active bounds
+    // Solution (1, 1) but constrain to [0, 0.8] and [0, 0.8]
+    // Expected solution should hit the bounds
+    const auto& tp = testing::make_rosenbrock_problem();
+    api::least_squares_problem ls;
+    ls.num_parameters = tp.num_parameters;
+    ls.num_residuals  = tp.num_residuals;
+    ls.residuals      = tp.residuals;
+    ls.jacobian       = tp.jacobian;
+
+    // Tight bounds that force solution near boundary
+    ls.bounds.lower = {0.0, 0.0};
+    ls.bounds.upper = {0.8, 0.8};
+
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend             = api::backend::ceres;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "Ceres backend not compiled in (SOLVERS_ENABLE_CERES=OFF)";
+    }
+
+    EXPECT_TRUE(result.has_usable_iterate());
+    // Check bounds are respected
+    EXPECT_GE(result.parameters[0], 0.0 - 1e-6);
+    EXPECT_LE(result.parameters[0], 0.8 + 1e-6);
+    EXPECT_GE(result.parameters[1], 0.0 - 1e-6);
+    EXPECT_LE(result.parameters[1], 0.8 + 1e-6);
+}
+
 INSTANTIATE_TEST_SUITE_P(AllProblems,
     SolverBackendTest,
     ::testing::Values(testing::make_linear_scalar_problem(),
