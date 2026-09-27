@@ -213,17 +213,10 @@ derivative_resolution resolve_derivatives(
         {
             // Accept either an explicit jacobian callback or a generic provider
             // Crucially: a provider is only "supplied" if its source() says so
-            bool has_supplied_source = false;
-
-            if (problem.has_callable_jacobian())
-            {
-                has_supplied_source = true;
-            }
-            else if (problem.jacobian_provider &&
-                     problem.jacobian_provider->source() == derivative_mode::supplied)
-            {
-                has_supplied_source = true;
-            }
+            const bool has_supplied_source =
+                problem.has_callable_jacobian() ||
+                (problem.jacobian_provider &&
+                 problem.jacobian_provider->source() == derivative_mode::supplied);
 
             if (!has_supplied_source)
             {

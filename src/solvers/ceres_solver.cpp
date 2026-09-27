@@ -499,9 +499,13 @@ void ceres_solver::solve_with_summary(
                         for (size_t j = 0; j < number_of_targets; ++j)
                         {
                             if (step > 0)
+                            {
                                 dy_dx(j, i) = (y_base[j] - y_plus[j]) / step;
+                            }
                             else
+                            {
                                 dy_dx(j, i) = 0;  // Cannot compute derivative at exact bound
+                            }
                         }
                         x_tmp[i] = x[i];
                         continue;
@@ -521,9 +525,13 @@ void ceres_solver::solve_with_summary(
                         for (size_t j = 0; j < number_of_targets; ++j)
                         {
                             if (step > 0)
+                            {
                                 dy_dx(j, i) = (y_plus[j] - y_base[j]) / step;
+                            }
                             else
+                            {
                                 dy_dx(j, i) = 0;  // Cannot compute derivative at exact bound
+                            }
                         }
                         x_tmp[i] = x[i];
                         continue;
