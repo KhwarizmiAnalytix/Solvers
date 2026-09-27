@@ -590,6 +590,7 @@ class SolversFlags:
             "sanitizer_enum",
             "coverage",
             "clangtidy",
+            "benchmark",
             # Helper-driven analysis tokens (no CMake option behind them)
             "valgrind",
             "cppcheck",
@@ -604,6 +605,7 @@ class SolversFlags:
             "sanitizer type for the test runner: address, undefined, thread, memory, leak",
             "enable code coverage instrumentation (SOLVERS_ENABLE_COVERAGE)",
             "enable clang-tidy static analysis (SOLVERS_ENABLE_CLANGTIDY)",
+            "build and run benchmark executables (SOLVERS_ENABLE_BENCHMARKS)",
             "execute the test suite under Valgrind",
             "run cppcheck static analysis after the build",
         ]
@@ -623,6 +625,7 @@ class SolversFlags:
             "sanitizer": "SOLVERS_ENABLE_SANITIZER",
             "coverage": "SOLVERS_ENABLE_COVERAGE",
             "clangtidy": "SOLVERS_ENABLE_CLANGTIDY",
+            "benchmark": "SOLVERS_ENABLE_BENCHMARKS",
         }
 
     def __fill_option_flags(self, arg_list):
@@ -748,6 +751,9 @@ class SolversFlags:
     def is_cppcheck(self):
         return self.__value["cppcheck"] == self.ON
 
+    def is_benchmark(self):
+        return self.__value.get("benchmark") == self.ON
+
     def get_sanitizer_type(self):
         """Get the current sanitizer type if enabled, None otherwise."""
         if self.__value.get("sanitizer") == self.ON:
@@ -786,6 +792,7 @@ class SolversConfiguration:
             "config": "",
             "build": "",
             "test": "",
+            "benchmark": "",
             "build_enum": "Release",
             "cmake_generator": "Ninja",
             "cmake_cxx_compiler": f"-DCMAKE_CXX_COMPILER={default_cxx_compiler}",
@@ -817,7 +824,7 @@ class SolversConfiguration:
             self.__set_gcc_compiler(arg)
         elif self.__is_visual_studio(arg):
             self.__set_visual_studio(arg)
-        elif arg in ["config", "build", "test"]:
+        elif arg in ["config", "build", "test", "benchmark"]:
             self.__value[arg] = arg
         elif arg in ["release", "debug", "relwithdebinfo"]:
             self.__value["build_enum"] = arg.capitalize()
@@ -1077,6 +1084,31 @@ class SolversConfiguration:
             source_path=source_path,
         )
 
+    def benchmark(self, build_path):
+        if self.__value["benchmark"] != "benchmark" or not self.__solvers_flags.is_benchmark():
+            return 0
+
+        bench_dir = os.path.join(build_path, "Testing", "Cxx")
+        bench_names = [
+            "SolversBenchmark",
+            "RootFindersBenchmark",
+            "RootFindersVsLMBenchmark",
+            "BenchmarkCeresAutoDiff",
+        ]
+        ran = 0
+        for name in bench_names:
+            exe = os.path.join(bench_dir, name)
+            if not os.path.isfile(exe):
+                continue
+            print_status(f"Running benchmark: {name}", "INFO")
+            result = subprocess.run([exe], capture_output=False)
+            if result.returncode != 0:
+                print_status(f"Benchmark {name} exited with code {result.returncode}", "ERROR")
+            ran += 1
+        if ran == 0:
+            print_status("No benchmark executables found — enable SOLVERS_ENABLE_BENCHMARKS in CMake", "INFO")
+        return 0
+
     def coverage(self, source_path, build_path):
         """Run code coverage analysis.
 
@@ -1260,6 +1292,10 @@ def main():
             compilation_calc.test(source_path, build_path)
             test_end = time.perf_counter()
 
+            benchmark_start = time.perf_counter()
+            compilation_calc.benchmark(build_path)
+            benchmark_end = time.perf_counter()
+
             coverage_start = time.perf_counter()
             compilation_calc.coverage(source_path, build_path)
             end = time.perf_counter()
@@ -1268,6 +1304,7 @@ def main():
             print_status(f"Build time: {build_end - build_start:.4f} seconds", "INFO")
             print_status(f"Cppcheck time: {cppcheck_end - cppcheck_start:.4f} seconds", "INFO")
             print_status(f"Test time: {test_end - test_start:.4f} seconds", "INFO")
+            print_status(f"Benchmark time: {benchmark_end - benchmark_start:.4f} seconds", "INFO")
             print_status(f"Coverage time: {end - coverage_start:.4f} seconds", "INFO")
 
             print_status(f"Total time: {end - start:.4f} seconds", "INFO")

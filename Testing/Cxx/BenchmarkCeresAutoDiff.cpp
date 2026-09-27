@@ -72,7 +72,7 @@ void benchmark_rosenbrock()
     opts.backend = api::backend::ceres;
     opts.max_iterations = 100;
 
-    BenchmarkResult::BenchmarkResult().print_header();
+    BenchmarkResult{}.print_header();
 
     // Analytical Jacobian
     {
@@ -172,7 +172,7 @@ void benchmark_powell_singular()
     opts.backend = api::backend::ceres;
     opts.max_iterations = 200;
 
-    BenchmarkResult::BenchmarkResult().print_header();
+    BenchmarkResult{}.print_header();
 
     // Analytical Jacobian
     {
@@ -263,8 +263,22 @@ void benchmark_exponential_fit()
     analytical_problem.residuals = tp.residuals;
     analytical_problem.jacobian = tp.jacobian;
 
+    // Build sample data matching make_exponential_fit_problem()
+    constexpr double true_a = 2.0;
+    constexpr double true_b = -0.3;
+    constexpr size_t num_samples = 10;
+    std::vector<double> sample_times(num_samples);
+    std::vector<double> sample_values(num_samples);
+    for (size_t i = 0; i < num_samples; ++i)
+    {
+        sample_times[i]  = static_cast<double>(i);
+        sample_values[i] = true_a * std::exp(true_b * sample_times[i]);
+    }
+
     // Create AD problem
-    auto ad_problem = least_squares(testing::ExponentialFitResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto ad_problem = least_squares(
+        testing::ExponentialFitResiduals{sample_times, sample_values},
+        tp.num_parameters, tp.num_residuals);
     ad_problem.derivatives(auto_diff());
 
     vector_type x0 = to_vector_type(tp.initial_guess);
@@ -272,7 +286,7 @@ void benchmark_exponential_fit()
     opts.backend = api::backend::ceres;
     opts.max_iterations = 200;
 
-    BenchmarkResult::BenchmarkResult().print_header();
+    BenchmarkResult{}.print_header();
 
     // Analytical Jacobian
     {
