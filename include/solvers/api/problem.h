@@ -89,7 +89,7 @@ struct least_squares_problem
 
     // Attach a derivative provider. Replaces any previously set provider.
     // This is the recommended way to configure derivatives.
-    void set_jacobian_provider(std::shared_ptr<JacobianProvider> provider)
+    void set_jacobian_provider(const std::shared_ptr<JacobianProvider>& provider)
     {
         jacobian_provider = provider;
         if (provider)
@@ -103,9 +103,9 @@ struct least_squares_problem
     }
 
     // Fluent alias for set_jacobian_provider.
-    void derivatives(std::shared_ptr<JacobianProvider> provider)
+    void derivatives(const std::shared_ptr<JacobianProvider>& provider)
     {
-        set_jacobian_provider(std::move(provider));
+        set_jacobian_provider(provider);
     }
 
     // Overload for the no-arg auto_diff() sentinel.
@@ -126,14 +126,10 @@ struct least_squares_problem
 
     bool has_callable_jacobian() const noexcept
     {
-        return jacobian.has_value() && static_cast<bool>(jacobian.value());
+        return jacobian.has_value() && static_cast<bool>(*jacobian);
     }
 
-    bool has_jacobian_provider() const noexcept
-    {
-        return jacobian_provider != nullptr;
-    }
-
+    bool has_jacobian_provider() const noexcept { return jacobian_provider != nullptr; }
 };
 
 // General objective min f(x).

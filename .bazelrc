@@ -1,0 +1,13 @@
+# Bazel configuration for the Solvers project.
+
+# Default build settings
+build --cxxopt=-std=c++17
+build --host_cxxopt=-std=c++17
+
+# Include-What-You-Use analysis.
+# Usage: bazel build --config=iwyu //...
+# Requires include-what-you-use to be on PATH (brew install include-what-you-use).
+# The aspect reports IWYU suggestions but does not fail the build (--error=0).
+build:iwyu --aspects=//tools/iwyu:iwyu.bzl%iwyu_aspect
+build:iwyu --output_groups=+iwyu_report
+build:iwyu --@//tools/iwyu:iwyu_binary=include-what-you-use

@@ -591,6 +591,7 @@ class SolversFlags:
             "coverage",
             "clangtidy",
             "benchmark",
+            "iwyu",
             # Helper-driven analysis tokens (no CMake option behind them)
             "valgrind",
             "cppcheck",
@@ -606,6 +607,7 @@ class SolversFlags:
             "enable code coverage instrumentation (SOLVERS_ENABLE_COVERAGE)",
             "enable clang-tidy static analysis (SOLVERS_ENABLE_CLANGTIDY)",
             "build and run benchmark executables (SOLVERS_ENABLE_BENCHMARKS)",
+            "enable include-what-you-use analysis (SOLVERS_ENABLE_IWYU)",
             "execute the test suite under Valgrind",
             "run cppcheck static analysis after the build",
         ]
@@ -626,6 +628,7 @@ class SolversFlags:
             "coverage": "SOLVERS_ENABLE_COVERAGE",
             "clangtidy": "SOLVERS_ENABLE_CLANGTIDY",
             "benchmark": "SOLVERS_ENABLE_BENCHMARKS",
+            "iwyu": "SOLVERS_ENABLE_IWYU",
         }
 
     def __fill_option_flags(self, arg_list):

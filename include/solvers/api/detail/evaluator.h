@@ -12,20 +12,20 @@
 namespace solverslib::api::detail
 {
 // Evaluation result codes
-enum class evaluation_status
+enum class evaluation_status : std::uint8_t
 {
-    ok,            // successful evaluation
-    invalid_trial, // evaluation succeeded but returned false (e.g., out of domain)
-    fatal_error    // exception or NaN/Inf in output
+    ok,             // successful evaluation
+    invalid_trial,  // evaluation succeeded but returned false (e.g., out of domain)
+    fatal_error     // exception or NaN/Inf in output
 };
 
 // Immutable metadata about a provider
 struct provider_metadata
 {
-    std::size_t num_parameters;
-    std::size_t num_residuals;
+    std::size_t          num_parameters;
+    std::size_t          num_residuals;
     api::derivative_mode source;  // supplied, automatic_differentiation, or finite_difference
-    bool supports_ceres = false;
+    bool                 supports_ceres = false;
 };
 
 // Abstract evaluator: compute residuals and optionally Jacobians
@@ -40,9 +40,7 @@ public:
     // - jacobians: pointer to row-major Jacobian (m rows x n cols), or nullptr for residuals-only
     // Returns evaluation_status; stores fatal errors for later retrieval
     virtual evaluation_status evaluate(
-        const vector_type& x,
-        vector_type& residuals,
-        matrix_type* jacobians = nullptr) = 0;
+        const vector_type& x, vector_type& residuals, matrix_type* jacobians = nullptr) = 0;
 
     virtual const provider_metadata& metadata() const = 0;
 

@@ -1,0 +1,11 @@
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
+package(default_visibility = ["//visibility:public"])
+
+# Path to the include-what-you-use binary.
+# Override at the command line:
+#   bazel build --config=iwyu --@//tools/iwyu:iwyu_binary=/usr/local/bin/include-what-you-use //...
+string_flag(
+    name = "iwyu_binary",
+    build_setting_default = "include-what-you-use",
+)

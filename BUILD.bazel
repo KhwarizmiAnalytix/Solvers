@@ -14,6 +14,10 @@ cc_library(
         "SOLVERS_HAS_IPOPT=0",
         "SOLVERS_HAS_PETSC=0",
     ],
+    # layering_check enforces that each translation unit only uses headers from
+    # its direct deps (Clang's -fmodules-strict-decluse equivalent), complementing
+    # the IWYU analysis enabled via `bazel build --config=iwyu` in .bazelrc.
+    features = ["layering_check"],
     includes = ["include"],
     deps = [
         "//ThirdParty/Logging:Logging",
