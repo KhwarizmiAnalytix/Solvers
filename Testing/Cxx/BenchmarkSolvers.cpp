@@ -38,8 +38,7 @@ struct timing_result
     double median_us;
 };
 
-template <typename Fn>
-timing_result time_fn(Fn&& fn, int warmup = 3, int runs = 11)
+template <typename Fn> timing_result time_fn(Fn&& fn, int warmup = 3, int runs = 11)
 {
     for (int i = 0; i < warmup; ++i)
         fn();
@@ -60,39 +59,32 @@ timing_result time_fn(Fn&& fn, int warmup = 3, int runs = 11)
 
 struct benchmark_row
 {
-    std::string   problem_name;
-    std::string   solver_name;
-    std::string   impl;
-    std::string   dispatch_path;
-    bool          available;
-    bool          converged;
-    double        residual_norm;
-    size_t        iterations;
-    double        best_us;
-    double        median_us;
+    std::string problem_name;
+    std::string solver_name;
+    std::string impl;
+    std::string dispatch_path;
+    bool        available;
+    bool        converged;
+    double      residual_norm;
+    size_t      iterations;
+    double      best_us;
+    double      median_us;
 };
 
 void print_section(const std::string& title)
 {
     std::cout << "\n=== " << title << " ===\n\n";
-    std::cout << std::left
-              << std::setw(18) << "Problem"
-              << std::setw(14) << "Solver"
-              << std::setw(12) << "Backend"
-              << std::setw(10) << "Status"
-              << std::setw(14) << "||r||"
-              << std::setw(7)  << "Iters"
-              << std::setw(14) << "Best (us)"
-              << std::setw(14) << "Median (us)"
+    std::cout << std::left << std::setw(18) << "Problem" << std::setw(14) << "Solver"
+              << std::setw(12) << "Backend" << std::setw(10) << "Status" << std::setw(14) << "||r||"
+              << std::setw(7) << "Iters" << std::setw(14) << "Best (us)" << std::setw(14)
+              << "Median (us)"
               << "\n";
     std::cout << std::string(103, '-') << "\n";
 }
 
 void print_row(const benchmark_row& r)
 {
-    std::cout << std::left
-              << std::setw(18) << r.problem_name
-              << std::setw(14) << r.solver_name
+    std::cout << std::left << std::setw(18) << r.problem_name << std::setw(14) << r.solver_name
               << std::setw(12) << r.impl;
 
     if (!r.available)
@@ -102,16 +94,13 @@ void print_row(const benchmark_row& r)
         return;
     }
 
-    std::cout << std::setw(10) << (r.converged ? "OK" : "FAIL")
-              << std::setw(14) << std::scientific << std::setprecision(3) << r.residual_norm
-              << std::setw(7)  << std::fixed << r.iterations
-              << std::setw(14) << std::fixed << std::setprecision(2) << r.best_us
-              << std::setw(14) << r.median_us
-              << "\n";
+    std::cout << std::setw(10) << (r.converged ? "OK" : "FAIL") << std::setw(14) << std::scientific
+              << std::setprecision(3) << r.residual_norm << std::setw(7) << std::fixed
+              << r.iterations << std::setw(14) << std::fixed << std::setprecision(2) << r.best_us
+              << std::setw(14) << r.median_us << "\n";
 }
 
-double compute_residual_norm(
-    const testing::optimization_test_problem& tp, const vector_type& x)
+double compute_residual_norm(const testing::optimization_test_problem& tp, const vector_type& x)
 {
     vector_type r = make_vector(tp.num_residuals);
     tp.residuals(x, r);
@@ -133,12 +122,14 @@ optimization_problem make_obj(const testing::optimization_test_problem& tp)
 {
     optimization_problem p;
     p.num_parameters = tp.num_parameters;
-    p.objective = [&tp](const vector_type& x) -> double {
+    p.objective      = [&tp](const vector_type& x) -> double
+    {
         vector_type r = make_vector(tp.num_residuals);
         tp.residuals(x, r);
         return 0.5 * r.squaredNorm();
     };
-    p.gradient = [&tp](const vector_type& x, vector_type& g) {
+    p.gradient = [&tp](const vector_type& x, vector_type& g)
+    {
         vector_type r = make_vector(tp.num_residuals);
         matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
         tp.residuals(x, r);
@@ -149,13 +140,16 @@ optimization_problem make_obj(const testing::optimization_test_problem& tp)
 }
 
 benchmark_row run_ls_benchmark(const testing::optimization_test_problem& tp,
-    const std::string& solver_name, const std::string& impl_name,
-    const std::string& path, solve_options opts, bool with_jacobian = true)
+    const std::string&                                                   solver_name,
+    const std::string&                                                   impl_name,
+    const std::string&                                                   path,
+    solve_options                                                        opts,
+    bool                                                                 with_jacobian = true)
 {
     least_squares_problem ls = make_ls(tp, with_jacobian);
-    vector_type x0 = to_vector_type(tp.initial_guess);
+    vector_type           x0 = to_vector_type(tp.initial_guess);
 
-    auto result = solve(ls, x0, opts);
+    auto result    = solve(ls, x0, opts);
     bool available = result.status != solver_status::backend_unavailable;
 
     timing_result timing{0.0, 0.0};
@@ -165,23 +159,32 @@ benchmark_row run_ls_benchmark(const testing::optimization_test_problem& tp,
         result = solve(ls, x0, opts);
     }
 
-    return {tp.name, solver_name, impl_name, path, available,
-        result.converged(), result.residual_norm.value_or(0.0),
-        result.iterations, timing.best_us, timing.median_us};
+    return {tp.name,
+        solver_name,
+        impl_name,
+        path,
+        available,
+        result.converged(),
+        result.residual_norm.value_or(0.0),
+        result.iterations,
+        timing.best_us,
+        timing.median_us};
 }
 
 benchmark_row run_obj_benchmark(const testing::optimization_test_problem& tp,
-    const std::string& solver_name, const std::string& impl_name,
-    const std::string& path, solve_options opts)
+    const std::string&                                                    solver_name,
+    const std::string&                                                    impl_name,
+    const std::string&                                                    path,
+    solve_options                                                         opts)
 {
     optimization_problem obj = make_obj(tp);
-    vector_type x0 = to_vector_type(tp.initial_guess);
+    vector_type          x0  = to_vector_type(tp.initial_guess);
 
-    auto result = solve(obj, x0, opts);
+    auto result    = solve(obj, x0, opts);
     bool available = result.status != solver_status::backend_unavailable;
 
     timing_result timing{0.0, 0.0};
-    double res_norm = 0.0;
+    double        res_norm = 0.0;
     if (available)
     {
         timing = time_fn([&] { solve(obj, x0, opts); });
@@ -190,9 +193,16 @@ benchmark_row run_obj_benchmark(const testing::optimization_test_problem& tp,
             res_norm = compute_residual_norm(tp, result.parameters);
     }
 
-    return {tp.name, solver_name, impl_name, path, available,
-        result.converged(), res_norm,
-        result.iterations, timing.best_us, timing.median_us};
+    return {tp.name,
+        solver_name,
+        impl_name,
+        path,
+        available,
+        result.converged(),
+        res_norm,
+        result.iterations,
+        timing.best_us,
+        timing.median_us};
 }
 
 }  // namespace
@@ -212,10 +222,10 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.algorithm = algorithm::levenberg_marquardt;
-        opts.backend   = backend::native;
-        opts.max_iterations = 500;
-        opts.function_tolerance = 1e-14;
+        opts.algorithm           = algorithm::levenberg_marquardt;
+        opts.backend             = backend::native;
+        opts.max_iterations      = 500;
+        opts.function_tolerance  = 1e-14;
         opts.parameter_tolerance = 1e-14;
         print_row(run_ls_benchmark(tp, "LM", "Native", "LS+Jac->LM", opts));
     }
@@ -225,10 +235,10 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.algorithm = algorithm::gauss_newton;
-        opts.backend   = backend::native;
-        opts.max_iterations = 500;
-        opts.function_tolerance = 1e-14;
+        opts.algorithm           = algorithm::gauss_newton;
+        opts.backend             = backend::native;
+        opts.max_iterations      = 500;
+        opts.function_tolerance  = 1e-14;
         opts.parameter_tolerance = 1e-14;
         print_row(run_ls_benchmark(tp, "GN", "Native", "LS+Jac->GN", opts));
     }
@@ -238,10 +248,10 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.algorithm = algorithm::pounders;
-        opts.backend   = backend::pounders;
+        opts.algorithm      = algorithm::pounders;
+        opts.backend        = backend::pounders;
         opts.max_iterations = 500;
-        opts.petsc_tao = petsc_tao_options{.gatol = 1e-10, .grtol = 1e-10};
+        opts.petsc_tao      = petsc_tao_options{.gatol = 1e-10, .grtol = 1e-10};
         print_row(run_ls_benchmark(tp, "POUNDERS", "PETSc/TAO", "LS-noJac->POUNDERS", opts, false));
     }
 
@@ -250,10 +260,10 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.backend   = backend::petsc_tao;
+        opts.backend        = backend::petsc_tao;
         opts.max_iterations = 500;
-        opts.petsc_tao = petsc_tao_options{
-            .algorithm = tao_algorithm::brgn, .gatol = 1e-10, .grtol = 1e-10};
+        opts.petsc_tao =
+            petsc_tao_options{.algorithm = tao_algorithm::brgn, .gatol = 1e-10, .grtol = 1e-10};
         print_row(run_ls_benchmark(tp, "TAO-BRGN", "PETSc/TAO", "LS+Jac->TAO", opts));
     }
 
@@ -262,10 +272,10 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.algorithm = algorithm::lbfgs;
-        opts.backend   = backend::native;
-        opts.max_iterations = 500;
-        opts.function_tolerance = 1e-14;
+        opts.algorithm           = algorithm::lbfgs;
+        opts.backend             = backend::native;
+        opts.max_iterations      = 500;
+        opts.function_tolerance  = 1e-14;
         opts.parameter_tolerance = 1e-14;
         print_row(run_obj_benchmark(tp, "L-BFGS", "Native", "Obj->LBFGS", opts));
     }
@@ -275,9 +285,9 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.backend = backend::ipopt;
+        opts.backend        = backend::ipopt;
         opts.max_iterations = 500;
-        opts.ipopt = ipopt_options{.tol = 1e-14};
+        opts.ipopt          = ipopt_options{.tol = 1e-14};
         print_row(run_obj_benchmark(tp, "Ipopt", "Ipopt", "Obj+constr->Ipopt", opts));
     }
 
@@ -286,10 +296,10 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.backend   = backend::petsc_tao;
+        opts.backend        = backend::petsc_tao;
         opts.max_iterations = 500;
-        opts.petsc_tao = petsc_tao_options{
-            .algorithm = tao_algorithm::lmvm, .gatol = 1e-10, .grtol = 1e-10};
+        opts.petsc_tao =
+            petsc_tao_options{.algorithm = tao_algorithm::lmvm, .gatol = 1e-10, .grtol = 1e-10};
         print_row(run_obj_benchmark(tp, "TAO-LMVM", "PETSc/TAO", "Obj->TAO", opts));
     }
 
@@ -298,11 +308,33 @@ int main()
     for (const auto& tp : problems)
     {
         solve_options opts;
-        opts.backend = backend::ceres;
-        opts.max_iterations = 500;
-        opts.function_tolerance = 1e-14;
+        opts.backend             = backend::ceres;
+        opts.max_iterations      = 500;
+        opts.function_tolerance  = 1e-14;
         opts.parameter_tolerance = 1e-14;
         print_row(run_ls_benchmark(tp, "Ceres-LM", "Ceres", "LS->Ceres", opts));
+    }
+
+    // --- Ceres jacobian configurations comparison ---
+    print_section("Ceres Jacobian Strategies: Internal vs Provided vs None");
+    for (const auto& tp : problems)
+    {
+        solve_options opts;
+        opts.backend             = backend::ceres;
+        opts.max_iterations      = 500;
+        opts.function_tolerance  = 1e-14;
+        opts.parameter_tolerance = 1e-14;
+
+        // Configuration 1: With provided Jacobian (analytical)
+        print_row(run_ls_benchmark(tp, "Ceres-LM", "Ceres", "LS+Jac(analytical)", opts, true));
+
+        // Configuration 2: Without Jacobian (finite differences)
+        print_row(run_ls_benchmark(tp, "Ceres-LM", "Ceres", "LS+Jac(FD)", opts, false));
+
+        // Note: Configuration 3 (Automatic Differentiation via templated functors)
+        // would require extending the API to accept templated residuals.
+        // The templated functors are available in optimization_test_problems.h
+        // and validated in AutomaticDifferentiation tests.
     }
 
     std::cout << "\n";
