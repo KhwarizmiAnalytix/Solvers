@@ -18,20 +18,18 @@ jobs:
         include:
           - name: default
             args: config.build.test
-          - name: shared
-            args: config.build.test.shared
+          - name: static
+            args: config.build.test.static
           - name: sanitizer
             args: config.build.test.sanitizer
           - name: coverage
             args: config.build.test.coverage
           - name: ceres
             args: config.build.test.ceres
-          - name: nlopt
-            args: config.build.test.nlopt
-          - name: ceres-nlopt
-            args: config.build.test.ceres.nlopt
-          - name: ceres-nlopt-benchmark
-            args: config.build.test.ceres.nlopt.benchmark
+          - name: ipopt
+            args: config.build.test.ipopt
+          - name: petsc
+            args: config.build.test.petsc
           - name: gcc
             args: config.build.test.gcc
           - name: clangtidy
@@ -59,6 +57,14 @@ jobs:
       - name: Install coverage-tool
         if: matrix.name == 'coverage'
         run: pip install coverage-tool
+
+      - name: Install Ipopt
+        if: matrix.name == 'ipopt'
+        run: sudo apt-get update && sudo apt-get install --yes coinor-libipopt-dev
+
+      - name: Install PETSc
+        if: matrix.name == 'petsc'
+        run: sudo apt-get update && sudo apt-get install --yes petsc-dev libopenmpi-dev
 
       - name: Configure, build, and test
         working-directory: Scripts
