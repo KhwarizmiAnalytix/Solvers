@@ -6,6 +6,7 @@
 
 #include <ceres/ceres.h>
 
+#include "solvers/api/detail/evaluator.h"
 #include "solver_options/solver_options_ceres.h"
 
 #define DEBUG_AAD 0
@@ -97,6 +98,75 @@ private:
     ceres_solver::CostFunctionLambda_aad cost_function_aad_;
     size_t                               num_residuals_;
     size_t                               num_parameters_;
+};
+
+// Cost function adapter for evaluator-based providers (e.g., Ceres AD)
+class CeresProviderCostFunction : public ceres::CostFunction
+{
+public:
+    explicit CeresProviderCostFunction(
+        std::unique_ptr<api::detail::residual_evaluator> evaluator,
+        size_t                                            num_residuals)
+        : evaluator_(std::move(evaluator))
+    {
+        set_num_residuals(static_cast<int>(num_residuals));
+        mutable_parameter_block_sizes()->push_back(
+            static_cast<int>(evaluator_->metadata().num_parameters));
+    }
+
+    bool Evaluate(
+        double const* const* parameters, double* residuals, double** jacobians) const override
+    {
+        try
+        {
+            const auto& meta = evaluator_->metadata();
+            vector_type x = to_vector_type(parameters[0], meta.num_parameters);
+            vector_type r = make_vector(meta.num_residuals);
+            matrix_type* jac = nullptr;
+
+            // Prepare Jacobian buffer if requested
+            if (jacobians && jacobians[0])
+            {
+                jac = new matrix_type(make_matrix(meta.num_residuals, meta.num_parameters));
+            }
+
+            // Evaluate through provider
+            auto status = evaluator_->evaluate(x, r, jac);
+            if (status != api::detail::evaluation_status::ok)
+            {
+                delete jac;
+                return false;  // Signal Ceres to reject this trial point
+            }
+
+            // Copy residuals back
+            for (std::size_t i = 0; i < r.size(); ++i)
+            {
+                residuals[i] = r[i];
+            }
+
+            // Copy Jacobian if requested
+            if (jac)
+            {
+                copy_row_major(jacobians[0], *jac);
+                delete jac;
+            }
+
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            SOLVERS_LOG_ERROR("Evaluator exception: {}", e.what());
+            return false;
+        }
+        catch (...)
+        {
+            SOLVERS_LOG_ERROR("Evaluator unknown exception");
+            return false;
+        }
+    }
+
+private:
+    mutable std::unique_ptr<api::detail::residual_evaluator> evaluator_;
 };
 
 void update_options(
@@ -308,6 +378,25 @@ ceres_solver::ceres_solver(
     const std::vector<double>& upper_bounds)
     : cost_function_(std::move(cost_function)),
       cost_function_aad_(std::move(cost_function_aad)),
+      provider_(nullptr),
+      lower_bounds_(lower_bounds),
+      upper_bounds_(upper_bounds),
+      num_parameters_(num_parameters),
+      num_residuals_(num_residuals)
+{
+}
+
+// New constructor with provider support
+ceres_solver::ceres_solver(
+    size_t                                                    num_parameters,
+    size_t                                                    num_residuals,
+    CostFunctionLambda                                        cost_function,
+    std::shared_ptr<const api::detail::provider_factory>     provider,
+    const std::vector<double>&                                lower_bounds,
+    const std::vector<double>&                                upper_bounds)
+    : cost_function_(std::move(cost_function)),
+      cost_function_aad_(nullptr),
+      provider_(std::move(provider)),
       lower_bounds_(lower_bounds),
       upper_bounds_(upper_bounds),
       num_parameters_(num_parameters),
@@ -331,74 +420,101 @@ bool ceres_solver::solve(
 #if SOLVERS_HAS_CERES
     SOLVERS_CHECK(parameters.size() == num_parameters_);
 
-    if (cost_function_aad_ == nullptr)
-    {
-        double bump = 1e-8;
-
-        cost_function_aad_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
-        {
-            auto number_of_parameters = x.size();
-
-            SOLVERS_CHECK(dy_dx.cols() == number_of_parameters);
-
-            auto number_of_targets = dy_dx.rows();
-
-            vector_type y_plus  = make_vector(number_of_targets);
-            vector_type y_minus = make_vector(number_of_targets);
-
-            vector_type x_tmp = make_vector(number_of_parameters);
-            x_tmp             = x;
-
-            for (size_t i = 0; i < number_of_parameters; ++i)
-            {
-                x_tmp[i] += bump;
-
-                cost_function_(x_tmp, y_plus);
-
-                x_tmp[i] -= 2 * bump;
-                cost_function_(x_tmp, y_minus);
-
-                for (size_t j = 0; j < y_plus.size(); ++j)
-                {
-                    dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
-                }
-
-                x_tmp[i] = x[i];
-            }
-        };
-    }
-
     ceres::Problem problem;
+    ceres::CostFunction* cost_function = nullptr;
 
-    // Create the cost function using a lambda function
-    auto* cost_function = new LambdaCostFunctor(
-        cost_function_,
-        cost_function_aad_,
-        num_parameters_,
-        num_residuals_);  //new LambdaCostFunctor(cost_function_, num_parameters_, num_residuals_);
+    // ============================================================================
+    // Phase 1: Derivative selection - use provider if available, else fallback
+    // ============================================================================
+    std::unique_ptr<api::detail::residual_evaluator> evaluator;
+
+    if (provider_)
+    {
+        // Use evaluator-based provider (e.g., Ceres AD)
+        // Validate provider dimensions match problem dimensions
+        const auto& meta = provider_->metadata();
+        SOLVERS_CHECK(
+            meta.num_parameters == num_parameters_ && meta.num_residuals == num_residuals_,
+            "Provider dimensions do not match problem dimensions");
+
+        evaluator = provider_->create_evaluator();
+        cost_function =
+            new CeresProviderCostFunction(std::move(evaluator), num_residuals_);
+    }
+    else
+    {
+        // Fallback to legacy callback path
+        // Set up finite differences if no Jacobian callback provided
+        if (cost_function_aad_ == nullptr)
+        {
+            double bump = 1e-8;
+
+            cost_function_aad_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
+            {
+                auto number_of_parameters = x.size();
+
+                SOLVERS_CHECK(dy_dx.cols() == number_of_parameters);
+
+                auto number_of_targets = dy_dx.rows();
+
+                vector_type y_plus  = make_vector(number_of_targets);
+                vector_type y_minus = make_vector(number_of_targets);
+
+                vector_type x_tmp = make_vector(number_of_parameters);
+                x_tmp             = x;
+
+                for (size_t i = 0; i < number_of_parameters; ++i)
+                {
+                    x_tmp[i] += bump;
+
+                    cost_function_(x_tmp, y_plus);
+
+                    x_tmp[i] -= 2 * bump;
+                    cost_function_(x_tmp, y_minus);
+
+                    for (size_t j = 0; j < y_plus.size(); ++j)
+                    {
+                        dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
+                    }
+
+                    x_tmp[i] = x[i];
+                }
+            };
+        }
+
+        cost_function = new LambdaCostFunctor(
+            cost_function_,
+            cost_function_aad_,
+            num_parameters_,
+            num_residuals_);
+    }
 
     problem.AddResidualBlock(cost_function, nullptr, parameters.data());
 
-    // Set parameter bounds
-    if (!lower_bounds_.empty() && !upper_bounds_.empty())
+    // ============================================================================
+    // Phase 2: Apply bounds independently (lower and upper are optional)
+    // ============================================================================
+    if (lower_bounds_.size() > 0)
     {
         SOLVERS_CHECK(
-            lower_bounds_.size() >= num_parameters_ && upper_bounds_.size() >= num_parameters_,
-            "Bounds size must match number of parameters.");
+            lower_bounds_.size() >= num_parameters_,
+            "Lower bounds size must be at least num_parameters");
 
-        if (lower_bounds_.size() != num_parameters_ || upper_bounds_.size() != num_parameters_)
+        for (std::size_t i = 0; i < num_parameters_; ++i)
         {
-            SOLVERS_LOG_ERROR(
-                "Lower and upper bounds must match the number of parameters. "
-                "Using default bounds of [-1e16, 1e16].");
-            lower_bounds_.resize(num_parameters_, -1e16);
-            upper_bounds_.resize(num_parameters_, 1e16);
+            problem.SetParameterLowerBound(parameters.data(), static_cast<int>(i), lower_bounds_[i]);
         }
+    }
 
-        for (int i = 0; i < num_parameters_; ++i)
+    if (upper_bounds_.size() > 0)
+    {
+        SOLVERS_CHECK(
+            upper_bounds_.size() >= num_parameters_,
+            "Upper bounds size must be at least num_parameters");
+
+        for (std::size_t i = 0; i < num_parameters_; ++i)
         {
-            problem.SetParameterLowerBound(parameters.data(), i, lower_bounds_[i]);
-            problem.SetParameterUpperBound(parameters.data(), i, upper_bounds_[i]);
+            problem.SetParameterUpperBound(parameters.data(), static_cast<int>(i), upper_bounds_[i]);
         }
     }
 

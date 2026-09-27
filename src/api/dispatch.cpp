@@ -350,6 +350,17 @@ solver_result run_ceres(const least_squares_problem& problem,
         return result;
     }
 
+    // Resolve derivative policy
+    auto res = resolve_derivatives(problem, options, backend::ceres, initial_guess);
+    if (res.error)
+    {
+        // Error occurred during resolution
+        solver_result error_result = *res.error;
+        delete res.error;
+        return error_result;
+    }
+    auto resolved_derivatives = res.resolved;
+
     // Default to DENSE_QR: a native-parity dense least-squares path rather than
     // Ceres' sparse default, unless the caller asked otherwise.
     auto builder = solver_options_ceres_builder()
@@ -372,15 +383,26 @@ solver_result run_ceres(const least_squares_problem& problem,
     std::vector<double> parameters(
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
-    ceres_solver::CostFunctionLambda_aad jac =
-        problem.jacobian ? *problem.jacobian : ceres_solver::CostFunctionLambda_aad{};
-
+    // Create solver using appropriate path based on derivative resolution
     ceres_solver solver(problem.num_parameters,
         problem.num_residuals,
         problem.residuals,
-        jac,
+        problem.provider_factory,
         problem.bounds.lower,
         problem.bounds.upper);
+
+    // If no provider but we have a Jacobian callback, set it
+    if (!problem.provider_factory && problem.jacobian)
+    {
+        // Use legacy constructor signature
+        ceres_solver::CostFunctionLambda_aad jac = *problem.jacobian;
+        solver = ceres_solver(problem.num_parameters,
+            problem.num_residuals,
+            problem.residuals,
+            jac,
+            problem.bounds.lower,
+            problem.bounds.upper);
+    }
 
     bool usable = false;
     try
@@ -401,6 +423,7 @@ solver_result run_ceres(const least_squares_problem& problem,
     result.objective     = 0.5 * rnorm * rnorm;
     result.status        = usable ? solver_status::converged : solver_status::numerical_failure;
     result.message = usable ? "Ceres returned a usable solution" : "Ceres solution not usable";
+    result.effective_derivative_source = resolved_derivatives;
     return result;
 }
 
