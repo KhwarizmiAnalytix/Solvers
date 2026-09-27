@@ -485,44 +485,59 @@ void ceres_solver::solve_with_summary(
                     double step = bump;
                     bool use_central = true;
 
-                    // Check upper bound
-                    if (!upper_bounds_.empty() && x[i] + step >= upper_bounds_[i])
+                    // Check upper bound: use backward difference at upper bound
+                    if (!upper_bounds_.empty() && upper_bounds_[i] < x[i] + bump)
                     {
-                        step = std::min(bump, 0.1 * (upper_bounds_[i] - x[i]));
-                        use_central = false;
-                    }
-
-                    // Check lower bound
-                    if (!lower_bounds_.empty() && x[i] - step <= lower_bounds_[i])
-                    {
-                        step = std::min(bump, 0.1 * (x[i] - lower_bounds_[i]));
-                        use_central = false;
-                    }
-
-                    // Compute finite differences
-                    x_tmp[i] = x[i] + step;
-                    cost_function_(x_tmp, y_plus);
-
-                    if (use_central)
-                    {
+                        step = std::max(1e-12, 0.1 * (upper_bounds_[i] - x[i]));
+                        // Use backward difference from current point
                         x_tmp[i] = x[i] - step;
-                        cost_function_(x_tmp, y_minus);
+                        cost_function_(x_tmp, y_plus);  // Actually y_minus for backward
 
-                        for (size_t j = 0; j < y_plus.size(); ++j)
-                        {
-                            dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / step;
-                        }
-                    }
-                    else
-                    {
-                        // One-sided forward difference
                         vector_type y_base = make_vector(number_of_targets);
                         cost_function_(x, y_base);
 
-                        for (size_t j = 0; j < y_plus.size(); ++j)
+                        for (size_t j = 0; j < number_of_targets; ++j)
                         {
-                            dy_dx(j, i) = (y_plus[j] - y_base[j]) / step;
+                            if (step > 0)
+                                dy_dx(j, i) = (y_base[j] - y_plus[j]) / step;
+                            else
+                                dy_dx(j, i) = 0;  // Cannot compute derivative at exact bound
                         }
+                        x_tmp[i] = x[i];
+                        continue;
+                    }
+
+                    // Check lower bound: use forward difference at lower bound
+                    if (!lower_bounds_.empty() && lower_bounds_[i] > x[i] - bump)
+                    {
+                        step = std::max(1e-12, 0.1 * (x[i] - lower_bounds_[i]));
+                        // Use forward difference from current point
+                        x_tmp[i] = x[i] + step;
+                        cost_function_(x_tmp, y_plus);
+
+                        vector_type y_base = make_vector(number_of_targets);
+                        cost_function_(x, y_base);
+
+                        for (size_t j = 0; j < number_of_targets; ++j)
+                        {
+                            if (step > 0)
+                                dy_dx(j, i) = (y_plus[j] - y_base[j]) / step;
+                            else
+                                dy_dx(j, i) = 0;  // Cannot compute derivative at exact bound
+                        }
+                        x_tmp[i] = x[i];
+                        continue;
+                    }
+
+                    // Central difference for interior points
+                    x_tmp[i] = x[i] + step;
+                    cost_function_(x_tmp, y_plus);
+                    x_tmp[i] = x[i] - step;
+                    cost_function_(x_tmp, y_minus);
+
+                    for (size_t j = 0; j < y_plus.size(); ++j)
+                    {
+                        dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / step;
                     }
 
                     x_tmp[i] = x[i];

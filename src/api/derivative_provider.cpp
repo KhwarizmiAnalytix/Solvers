@@ -163,26 +163,60 @@ check_jacobian_result check_jacobian(
     check_jacobian_result result;
     result.passed = true;
 
+    // Check for invalid dimensions
+    if (J_a.rows() != static_cast<int>(m) || J_a.cols() != static_cast<int>(n) ||
+        J_b.rows() != static_cast<int>(m) || J_b.cols() != static_cast<int>(n))
+    {
+        result.passed = false;
+        result.summary = "FAIL invalid dimensions";
+        return result;
+    }
+
+    // Independently compute max absolute and max relative errors
+    double max_abs_error = 0.0;
+    double max_rel_error = 0.0;
+
     for (std::size_t i = 0; i < m; ++i)
     {
         for (std::size_t j = 0; j < n; ++j)
         {
-            const double a       = J_a(i, j);
-            const double b       = J_b(i, j);
+            const double a = J_a(i, j);
+            const double b = J_b(i, j);
+
+            // Check for NaN or Inf in either Jacobian
+            if (!std::isfinite(a) || !std::isfinite(b))
+            {
+                result.passed = false;
+                result.worst_row = static_cast<int>(i);
+                result.worst_col = static_cast<int>(j);
+                std::ostringstream oss;
+                oss << "FAIL nonfinite at J(" << i << "," << j << "): a=" << a << ", b=" << b;
+                result.summary = oss.str();
+                return result;
+            }
+
             const double abs_err = std::abs(a - b);
             const double denom   = std::max(std::abs(a), std::abs(b));
             const double rel_err = (denom > 1e-14) ? abs_err / denom : abs_err;
 
-            if (abs_err > result.max_abs_error)
+            // Track worst absolute error independently
+            if (abs_err > max_abs_error)
             {
-                result.max_abs_error = abs_err;
-                result.max_rel_error = rel_err;
-                result.worst_row     = static_cast<int>(i);
-                result.worst_col     = static_cast<int>(j);
+                max_abs_error = abs_err;
+                result.worst_row = static_cast<int>(i);
+                result.worst_col = static_cast<int>(j);
+            }
+
+            // Track worst relative error independently
+            if (rel_err > max_rel_error)
+            {
+                max_rel_error = rel_err;
             }
         }
     }
 
+    result.max_abs_error = max_abs_error;
+    result.max_rel_error = max_rel_error;
     result.passed = result.max_abs_error <= tol;
 
     std::ostringstream oss;
@@ -219,22 +253,54 @@ check_gradient_result check_gradient(
     check_gradient_result result;
     result.passed = true;
 
+    // Check for invalid dimensions
+    if (static_cast<std::size_t>(g_a.size()) != n || static_cast<std::size_t>(g_b.size()) != n)
+    {
+        result.passed = false;
+        result.summary = "FAIL invalid dimensions";
+        return result;
+    }
+
+    // Independently compute max absolute and max relative errors
+    double max_abs_error = 0.0;
+    double max_rel_error = 0.0;
+
     for (std::size_t i = 0; i < n; ++i)
     {
-        const double a       = g_a[i];
-        const double b       = g_b[i];
+        const double a = g_a[i];
+        const double b = g_b[i];
+
+        // Check for NaN or Inf in either gradient
+        if (!std::isfinite(a) || !std::isfinite(b))
+        {
+            result.passed = false;
+            result.worst_index = static_cast<int>(i);
+            std::ostringstream oss;
+            oss << "FAIL nonfinite at g[" << i << "]: a=" << a << ", b=" << b;
+            result.summary = oss.str();
+            return result;
+        }
+
         const double abs_err = std::abs(a - b);
         const double denom   = std::max(std::abs(a), std::abs(b));
         const double rel_err = (denom > 1e-14) ? abs_err / denom : abs_err;
 
-        if (abs_err > result.max_abs_error)
+        // Track worst absolute error independently
+        if (abs_err > max_abs_error)
         {
-            result.max_abs_error = abs_err;
-            result.max_rel_error = rel_err;
-            result.worst_index   = static_cast<int>(i);
+            max_abs_error = abs_err;
+            result.worst_index = static_cast<int>(i);
+        }
+
+        // Track worst relative error independently
+        if (rel_err > max_rel_error)
+        {
+            max_rel_error = rel_err;
         }
     }
 
+    result.max_abs_error = max_abs_error;
+    result.max_rel_error = max_rel_error;
     result.passed = result.max_abs_error <= tol;
 
     std::ostringstream oss;
