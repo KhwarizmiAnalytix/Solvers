@@ -12,17 +12,15 @@ namespace
 {
 using testing::optimization_test_problem;
 
-double residual_norm(
-    const optimization_test_problem& problem, const vector_type& parameters)
+double residual_norm(const optimization_test_problem& problem, const vector_type& parameters)
 {
     vector_type r = make_vector(problem.num_residuals);
     problem.residuals(parameters, r);
     return r.norm();
 }
 
-void expect_solved(const optimization_test_problem& problem,
-    const api::solver_result&                       result,
-    double                                          tolerance)
+void expect_solved(
+    const optimization_test_problem& problem, const api::solver_result& result, double tolerance)
 {
     EXPECT_LT(residual_norm(problem, result.parameters), tolerance) << "problem=" << problem.name;
     for (size_t i = 0; i < problem.expected_solution.size(); ++i)
@@ -51,12 +49,14 @@ api::optimization_problem to_obj(const optimization_test_problem& tp)
 {
     api::optimization_problem p;
     p.num_parameters = tp.num_parameters;
-    p.objective = [&tp](const vector_type& x) -> double {
+    p.objective      = [&tp](const vector_type& x) -> double
+    {
         vector_type r = make_vector(tp.num_residuals);
         tp.residuals(x, r);
         return 0.5 * r.squaredNorm();
     };
-    p.gradient = [&tp](const vector_type& x, vector_type& g) {
+    p.gradient = [&tp](const vector_type& x, vector_type& g)
+    {
         vector_type r = make_vector(tp.num_residuals);
         matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
         tp.residuals(x, r);
@@ -248,7 +248,7 @@ TEST(SolverBackendTest, CeresWithBoundedLeastSquares)
 {
     // Rosenbrock problem: solution at (1, 1)
     // Add bounds to constrain the solution
-    const auto& tp = testing::make_rosenbrock_problem();
+    const auto&                tp = testing::make_rosenbrock_problem();
     api::least_squares_problem ls;
     ls.num_parameters = tp.num_parameters;
     ls.num_residuals  = tp.num_residuals;
@@ -290,7 +290,7 @@ TEST(SolverBackendTest, CeresWithActiveBounds)
     // Rosenbrock problem constrained to force active bounds
     // Solution (1, 1) but constrain to [0, 0.8] and [0, 0.8]
     // Expected solution should hit the bounds
-    const auto& tp = testing::make_rosenbrock_problem();
+    const auto&                tp = testing::make_rosenbrock_problem();
     api::least_squares_problem ls;
     ls.num_parameters = tp.num_parameters;
     ls.num_residuals  = tp.num_residuals;
@@ -322,6 +322,97 @@ TEST(SolverBackendTest, CeresWithActiveBounds)
     EXPECT_LE(result.parameters[0], 0.8 + 1e-6);
     EXPECT_GE(result.parameters[1], 0.0 - 1e-6);
     EXPECT_LE(result.parameters[1], 0.8 + 1e-6);
+}
+
+TEST(AutomaticDifferentiation, TemplatedResidualsMatchNumeric)
+{
+    // Validate that templated residual functors produce identical results
+    // to numeric residuals when instantiated with double
+    const double x_vals[] = {1.5, 0.5};
+    double       r_templated[2];
+    double       r_numeric[2];
+
+    // Test Rosenbrock
+    testing::RosenbrocResiduals templated_func;
+    const auto&                 numeric_problem = testing::make_rosenbrock_problem();
+    vector_type                 x = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
+    vector_type                 r_numeric_vec = make_vector(2);
+
+    templated_func(x_vals, r_templated);
+    numeric_problem.residuals(x, r_numeric_vec);
+
+    EXPECT_NEAR(r_templated[0], r_numeric_vec[0], 1e-14);
+    EXPECT_NEAR(r_templated[1], r_numeric_vec[1], 1e-14);
+}
+
+TEST(AutomaticDifferentiation, TemplatedLinearScalarMatchesNumeric)
+{
+    // Test LinearScalar templated functor
+    const double x_val = 1.5;
+    double       r_templated;
+    double       r_numeric;
+
+    testing::LinearScalarResiduals templated_func;
+    const auto&                    numeric_problem = testing::make_linear_scalar_problem();
+    vector_type                    x               = to_vector_type(std::vector<double>{x_val});
+    vector_type                    r_numeric_vec   = make_vector(1);
+
+    templated_func(&x_val, &r_templated);
+    numeric_problem.residuals(x, r_numeric_vec);
+
+    EXPECT_NEAR(r_templated, r_numeric_vec[0], 1e-14);
+}
+
+TEST(AutomaticDifferentiation, TemplatedPowellSingularMatchesNumeric)
+{
+    // Test Powell Singular templated functor
+    const double x_vals[] = {3.0, -1.0, 0.0, 1.0};
+    double       r_templated[4];
+    double       r_numeric[4];
+
+    testing::PowellSingularResiduals templated_func;
+    const auto&                      numeric_problem = testing::make_powell_singular_problem();
+    vector_type                      x = to_vector_type(std::vector<double>(x_vals, x_vals + 4));
+    vector_type                      r_numeric_vec = make_vector(4);
+
+    templated_func(x_vals, r_templated);
+    numeric_problem.residuals(x, r_numeric_vec);
+
+    for (int i = 0; i < 4; ++i)
+    {
+        EXPECT_NEAR(r_templated[i], r_numeric_vec[i], 1e-12) << "Mismatch at residual " << i;
+    }
+}
+
+TEST(AutomaticDifferentiation, TemplatedExponentialFitMatchesNumeric)
+{
+    // Test Exponential Fit templated functor
+    const double x_vals[] = {1.5, -0.2};
+
+    const auto& numeric_problem = testing::make_exponential_fit_problem();
+    vector_type x               = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
+    vector_type r_numeric_vec   = make_vector(numeric_problem.num_residuals);
+
+    numeric_problem.residuals(x, r_numeric_vec);
+
+    // Manually create the exponential functor with the same data
+    std::vector<double> sample_times(10);
+    std::vector<double> sample_values(10);
+    for (size_t i = 0; i < 10; ++i)
+    {
+        sample_times[i]  = static_cast<double>(i);
+        sample_values[i] = 2.0 * std::exp(-0.3 * sample_times[i]);
+    }
+
+    testing::ExponentialFitResiduals templated_func(sample_times, sample_values);
+    std::vector<double>              r_templated(10);
+
+    templated_func(x_vals, r_templated.data());
+
+    for (size_t i = 0; i < 10; ++i)
+    {
+        EXPECT_NEAR(r_templated[i], r_numeric_vec[i], 1e-12) << "Mismatch at residual " << i;
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(AllProblems,

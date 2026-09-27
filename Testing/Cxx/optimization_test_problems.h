@@ -138,8 +138,8 @@ inline optimization_test_problem make_exponential_fit_problem()
         {
             for (size_t i = 0; i < sample_times.size(); ++i)
             {
-                const double t                     = sample_times[i];
-                const double exp_bt                = std::exp(x[1] * t);
+                const double t                   = sample_times[i];
+                const double exp_bt              = std::exp(x[1] * t);
                 j(static_cast<index_type>(i), 0) = exp_bt;
                 j(static_cast<index_type>(i), 1) = x[0] * t * exp_bt;
             }
@@ -153,5 +153,63 @@ inline std::vector<optimization_test_problem> make_all_test_problems()
         make_powell_singular_problem(),
         make_exponential_fit_problem()};
 }
+
+// ===========================================================================
+// TEMPLATED RESIDUAL FUNCTORS FOR AUTOMATIC DIFFERENTIATION
+// ===========================================================================
+// These templated functors allow Ceres to use automatic differentiation
+// by instantiating the residuals with Ceres' Jet types at compile time.
+
+struct LinearScalarResiduals
+{
+    template <typename T> bool operator()(const T* const x, T* residual) const
+    {
+        residual[0] = x[0] - T(2.0);
+        return true;
+    }
+};
+
+struct RosenbrocResiduals
+{
+    template <typename T> bool operator()(const T* const x, T* residual) const
+    {
+        residual[0] = T(10.0) * (x[1] - x[0] * x[0]);
+        residual[1] = T(1.0) - x[0];
+        return true;
+    }
+};
+
+struct PowellSingularResiduals
+{
+    template <typename T> bool operator()(const T* const x, T* residual) const
+    {
+        residual[0] = x[0] + T(10.0) * x[1];
+        residual[1] = sqrt(T(5.0)) * (x[2] - x[3]);
+        residual[2] = (x[1] - T(2.0) * x[2]) * (x[1] - T(2.0) * x[2]);
+        residual[3] = sqrt(T(10.0)) * (x[0] - x[3]) * (x[0] - x[3]);
+        return true;
+    }
+};
+
+struct ExponentialFitResiduals
+{
+    explicit ExponentialFitResiduals(
+        const std::vector<double>& times, const std::vector<double>& values)
+        : sample_times(times), sample_values(values)
+    {
+    }
+
+    template <typename T> bool operator()(const T* const x, T* residual) const
+    {
+        for (size_t i = 0; i < sample_times.size(); ++i)
+        {
+            residual[i] = x[0] * exp(x[1] * T(sample_times[i])) - T(sample_values[i]);
+        }
+        return true;
+    }
+
+    const std::vector<double>& sample_times;
+    const std::vector<double>& sample_values;
+};
 
 }  // namespace solverslib::testing
