@@ -72,11 +72,6 @@ solver_options_gn_builder& solver_options_gn_builder::with_log_file(const std::s
     options_->log_file_ = val;
     return *this;
 }
-solver_options_gn_builder& solver_options_gn_builder::with_aad_jacobian(bool val)
-{
-    options_->aad_jacobian_ = val;
-    return *this;
-}
 
 std::shared_ptr<const solver_options_gn> solver_options_gn_builder::build() const
 {

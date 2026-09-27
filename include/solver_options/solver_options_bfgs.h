@@ -74,9 +74,6 @@ public:
     SOLVER_API solver_options_bfgs_builder& with_linesearch_wolfe(double val);
     SOLVER_API solver_options_bfgs_builder& with_bump(double val);
     SOLVER_API solver_options_bfgs_builder& with_log_file(const std::string& val);
-    [[deprecated("Use problem.derivatives() to configure derivative computation")]]
-    SOLVER_API solver_options_bfgs_builder& with_aad_jacobian(bool val = true);
-
     SOLVER_API std::shared_ptr<const solver_options_bfgs> build() const;
 
 private:

@@ -6,7 +6,7 @@
 
 #if defined(SOLVERS_HAS_CERES)
 
-#include "solvers/integrations/ceres_autodiff.h"
+#include "solvers/integrations/autodiff_provider.h"
 
 namespace solverslib
 {
@@ -14,25 +14,25 @@ namespace
 {
 using testing::optimization_test_problem;
 
-// Test that make_ceres_autodiff_problem creates a valid problem with provider
+// Test that auto_diff() creates a valid problem with provider
 TEST(CeresAutoDiffIntegration, ProblemCreation)
 {
     const auto& tp = testing::make_rosenbrock_problem();
-    auto problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::RosenbrocResiduals{});
+    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
 
     EXPECT_EQ(problem.num_parameters, tp.num_parameters);
     EXPECT_EQ(problem.num_residuals, tp.num_residuals);
     EXPECT_TRUE(problem.provider_factory);
-    EXPECT_TRUE(problem.has_templated_residuals());
+    EXPECT_TRUE(problem.has_jacobian_provider());
 }
 
 // Test that the provider metadata is correct
 TEST(CeresAutoDiffIntegration, ProviderMetadata)
 {
     const auto& tp = testing::make_rosenbrock_problem();
-    auto problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::RosenbrocResiduals{});
+    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
 
     ASSERT_TRUE(problem.provider_factory);
     const auto& meta = problem.provider_factory->metadata();
@@ -47,8 +47,8 @@ TEST(CeresAutoDiffIntegration, ProviderMetadata)
 TEST(CeresAutoDiffIntegration, EvaluatorCreation)
 {
     const auto& tp = testing::make_rosenbrock_problem();
-    auto problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::RosenbrocResiduals{});
+    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
 
     ASSERT_TRUE(problem.provider_factory);
     auto evaluator = problem.provider_factory->create_evaluator();
@@ -64,8 +64,8 @@ TEST(CeresAutoDiffIntegration, ResidualEvaluation)
     const double x_vals[] = {1.5, 0.5};
     const auto& tp = testing::make_rosenbrock_problem();
 
-    auto problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::RosenbrocResiduals{});
+    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
 
     auto evaluator = problem.provider_factory->create_evaluator();
 
@@ -90,8 +90,8 @@ TEST(CeresAutoDiffIntegration, JacobianEvaluation)
     const double x_vals[] = {1.5, 0.5};
     const auto& tp = testing::make_rosenbrock_problem();
 
-    auto problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::RosenbrocResiduals{});
+    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
 
     auto evaluator = problem.provider_factory->create_evaluator();
 
@@ -124,8 +124,8 @@ TEST(CeresAutoDiffIntegration, JacobianEvaluation)
 TEST(CeresAutoDiffIntegration, StrideMultiplePassesFourParams)
 {
     const auto& tp = testing::make_powell_singular_problem();
-    auto problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::PowellSingularResiduals{});
+    auto problem = least_squares(testing::PowellSingularResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
 
     auto evaluator = problem.provider_factory->create_evaluator();
 
@@ -160,8 +160,8 @@ TEST(CeresAutoDiffIntegration, ResidualOnlyEvaluation)
     const double x_vals[] = {1.5, 0.5};
     const auto& tp = testing::make_rosenbrock_problem();
 
-    auto problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::RosenbrocResiduals{});
+    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
 
     auto evaluator = problem.provider_factory->create_evaluator();
 

@@ -331,9 +331,6 @@ public:
         const std::string& val);
     SOLVER_API solver_options_ceres_builder& with_trust_region_problem_dump_format_type(
         dump_format_enum val);
-    [[deprecated("Use problem.derivatives() to configure derivative computation")]]
-    SOLVER_API solver_options_ceres_builder& with_aad_jacobian(bool val = true);
-
     SOLVER_API std::shared_ptr<const solver_options_ceres> build() const;
 
 private:

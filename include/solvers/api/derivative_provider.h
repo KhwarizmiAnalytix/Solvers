@@ -25,6 +25,11 @@
 // Never:
 //   Solver → AD library
 
+namespace solverslib::api::detail
+{
+class provider_factory;
+}
+
 namespace solverslib::api
 {
 
@@ -56,7 +61,7 @@ public:
     // interface. Returns nullptr for all non-Ceres implementations.
     // This does not leak Ceres types into the public interface; provider_factory
     // is a backend-neutral abstract factory.
-    virtual std::shared_ptr<const detail::provider_factory> ceres_factory() const
+    virtual std::shared_ptr<const solverslib::api::detail::provider_factory> ceres_factory() const
     {
         return nullptr;
     }

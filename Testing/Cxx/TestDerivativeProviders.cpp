@@ -543,9 +543,9 @@ TEST(EndToEnd, AnalyticProviderLM)
     vector_type x0 = to_vector_type(tp.initial_guess);
     auto result = api::solve(p, x0);
 
-    ASSERT_TRUE(result.success) << result.message;
-    EXPECT_NEAR(result.x[0], tp.expected_solution[0], 1e-4);
-    EXPECT_NEAR(result.x[1], tp.expected_solution[1], 1e-4);
+    ASSERT_TRUE(result.converged()) << result.message;
+    EXPECT_NEAR(result.parameters[0], tp.expected_solution[0], 1e-4);
+    EXPECT_NEAR(result.parameters[1], tp.expected_solution[1], 1e-4);
 }
 
 TEST(EndToEnd, FiniteDifferenceProviderLM)
@@ -561,9 +561,9 @@ TEST(EndToEnd, FiniteDifferenceProviderLM)
     vector_type x0 = to_vector_type(tp.initial_guess);
     auto result = api::solve(p, x0);
 
-    ASSERT_TRUE(result.success) << result.message;
-    EXPECT_NEAR(result.x[0], tp.expected_solution[0], 1e-3);
-    EXPECT_NEAR(result.x[1], tp.expected_solution[1], 1e-3);
+    ASSERT_TRUE(result.converged()) << result.message;
+    EXPECT_NEAR(result.parameters[0], tp.expected_solution[0], 1e-3);
+    EXPECT_NEAR(result.parameters[1], tp.expected_solution[1], 1e-3);
 }
 
 TEST(EndToEnd, AutoDiffProviderLM)
@@ -576,9 +576,9 @@ TEST(EndToEnd, AutoDiffProviderLM)
     x0[1] = 1.0;
     auto result = api::solve(problem, x0);
 
-    ASSERT_TRUE(result.success) << result.message;
-    EXPECT_NEAR(result.x[0], 1.0, 1e-4);
-    EXPECT_NEAR(result.x[1], 1.0, 1e-4);
+    ASSERT_TRUE(result.converged()) << result.message;
+    EXPECT_NEAR(result.parameters[0], 1.0, 1e-4);
+    EXPECT_NEAR(result.parameters[1], 1.0, 1e-4);
 }
 
 TEST(EndToEnd, AllProvidersAgreeOnSolution)
@@ -609,14 +609,14 @@ TEST(EndToEnd, AllProvidersAgreeOnSolution)
     pad.derivatives(api::auto_diff());
     auto rad = api::solve(pad, to_vector_type(tp.initial_guess));
 
-    ASSERT_TRUE(ra.success);
-    ASSERT_TRUE(rfd.success);
-    ASSERT_TRUE(rad.success);
+    ASSERT_TRUE(ra.converged());
+    ASSERT_TRUE(rfd.converged());
+    ASSERT_TRUE(rad.converged());
 
-    EXPECT_NEAR(ra.x[0], rfd.x[0], 1e-3);
-    EXPECT_NEAR(ra.x[1], rfd.x[1], 1e-3);
-    EXPECT_NEAR(ra.x[0], rad.x[0], 1e-3);
-    EXPECT_NEAR(ra.x[1], rad.x[1], 1e-3);
+    EXPECT_NEAR(ra.parameters[0], rfd.parameters[0], 1e-3);
+    EXPECT_NEAR(ra.parameters[1], rfd.parameters[1], 1e-3);
+    EXPECT_NEAR(ra.parameters[0], rad.parameters[0], 1e-3);
+    EXPECT_NEAR(ra.parameters[1], rad.parameters[1], 1e-3);
 }
 
 #endif  // SOLVERS_HAS_CERES

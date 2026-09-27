@@ -422,8 +422,8 @@ solver_result run_ceres(const least_squares_problem& problem,
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
     // Select the derivative source for the Ceres backend.
-    std::shared_ptr<const api::detail::provider_factory> provider_to_use;
-    ceres_solver::CostFunctionLambda_aad                 jacobian_to_use;
+    std::shared_ptr<const api::detail::provider_factory>    provider_to_use;
+    std::function<void(const vector_type&, matrix_type&)>   jacobian_to_use;
 
     if (resolved_derivatives == api::derivative_mode::automatic_differentiation)
     {
@@ -467,6 +467,7 @@ solver_result run_ceres(const least_squares_problem& problem,
             problem.bounds.upper);
     }
 
+#if SOLVERS_HAS_CERES
     ceres::Solver::Summary summary;
     try
     {
@@ -515,6 +516,12 @@ solver_result run_ceres(const least_squares_problem& problem,
     result.iterations                 = static_cast<int>(summary.iterations.size());
     result.effective_derivative_source = resolved_derivatives;
     return result;
+#else
+    (void)solver;
+    result.status  = solver_status::backend_unavailable;
+    result.message = "Ceres backend was not compiled in (SOLVERS_ENABLE_CERES=OFF)";
+    return result;
+#endif
 }
 
 // -- PETSc/TAO option mapping ------------------------------------------------

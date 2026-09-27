@@ -1,13 +1,11 @@
 #ifndef SOLVERS_PROBLEM_H_
 #define SOLVERS_PROBLEM_H_
 
-#include <any>
 #include <cstddef>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
-#include <typeinfo>
 #include <vector>
 
 #include "detail/eigen_support.h"
@@ -136,47 +134,6 @@ struct least_squares_problem
         return jacobian_provider != nullptr;
     }
 
-    // -- Deprecated legacy AD interface -------------------------------------
-
-    // DEPRECATED: Use set_jacobian_provider() instead.
-    // Type-erased storage for the legacy Ceres AD path. Retained for
-    // backward compatibility only; cannot instantiate template member
-    // functions from a non-templated context.
-    std::any                             templated_residuals;
-    std::optional<const std::type_info*> templated_residuals_type;
-
-    template <typename Functor>
-    [[deprecated("Use set_jacobian_provider(auto_diff(functor, n, m)) instead")]]
-    void set_templated_residuals(const Functor& func)
-    {
-        templated_residuals      = func;
-        templated_residuals_type = &typeid(Functor);
-    }
-
-    template <typename Functor>
-    [[deprecated("Use jacobian_provider instead")]]
-    const Functor* get_templated_residuals() const
-    {
-        if (!templated_residuals_type.has_value())
-        {
-            return nullptr;
-        }
-        if (templated_residuals_type.value() != &typeid(Functor))
-        {
-            return nullptr;
-        }
-        try
-        {
-            return &std::any_cast<const Functor&>(templated_residuals);
-        }
-        catch (const std::bad_any_cast&)
-        {
-            return nullptr;
-        }
-    }
-
-    [[deprecated("Use has_jacobian_provider() instead")]]
-    bool has_templated_residuals() const { return templated_residuals_type.has_value(); }
 };
 
 // General objective min f(x).

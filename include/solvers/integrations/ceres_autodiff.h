@@ -13,7 +13,6 @@
 
 #include "detail/eigen_support.h"
 #include "solvers/api/detail/evaluator.h"
-#include "solvers/api/problem.h"
 
 namespace solverslib
 {
@@ -167,57 +166,7 @@ private:
 
 }  // namespace detail
 
-// DEPRECATED: Use solvers/integrations/autodiff_provider.h instead.
-//   auto problem = least_squares(MyModel{}, n, m);
-//   problem.derivatives(auto_diff());
-template <class Functor>
-[[deprecated("Use least_squares(functor, n, m) + problem.derivatives(auto_diff()) instead")]]
-api::least_squares_problem make_ceres_autodiff_problem(
-    std::size_t num_parameters,
-    std::size_t num_residuals,
-    const Functor& templated_residuals)
-{
-    api::least_squares_problem problem;
-    problem.num_parameters = num_parameters;
-    problem.num_residuals  = num_residuals;
-
-    // Store the functor for potential legacy access
-    problem.set_templated_residuals(templated_residuals);
-
-    // Set the residuals callback to invoke the templated functor with double
-    problem.residuals = [templated_residuals](const vector_type& x, vector_type& r) {
-        if (!templated_residuals(x.data(), r.data()))
-        {
-            throw std::runtime_error("Templated residuals functor returned false");
-        }
-    };
-
-    // Create and attach the provider factory
-    // The solver will use this to instantiate the AD evaluator
-    problem.provider_factory = std::make_shared<detail::CeresAutoDiffFactory<Functor>>(
-        templated_residuals, num_parameters, num_residuals);
-
-    return problem;
-}
-
 }  // namespace solverslib
-
-#else  // !SOLVERS_HAS_CERES
-
-// Stub when Ceres is not available
-namespace solverslib
-{
-template <class Functor>
-api::least_squares_problem make_ceres_autodiff_problem(
-    std::size_t,
-    std::size_t,
-    const Functor&)
-{
-    static_assert(false,
-        "Ceres backend not compiled in; using solvers/integrations/ceres_autodiff.h "
-        "requires SOLVERS_ENABLE_CERES=ON");
-}
-}
 
 #endif  // SOLVERS_HAS_CERES
 

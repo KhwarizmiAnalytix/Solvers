@@ -55,9 +55,6 @@ public:
     SOLVER_API solver_options_petsc_builder& with_grtol(double val);
     SOLVER_API solver_options_petsc_builder& with_matrix_free(bool val = true);
     SOLVER_API solver_options_petsc_builder& with_log_file(const std::string& val);
-    [[deprecated("Use problem.derivatives() to configure derivative computation")]]
-    SOLVER_API solver_options_petsc_builder& with_aad_jacobian(bool val = true);
-
     SOLVER_API std::shared_ptr<const solver_options_petsc> build() const;
 
 private:

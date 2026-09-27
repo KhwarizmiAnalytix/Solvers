@@ -28,8 +28,6 @@ public:
     SOLVER_API double             gradient_tolerance() const;
     SOLVER_API double             parameter_tolerance() const;
     SOLVER_API bool               verbose() const noexcept;
-    [[deprecated("Use problem.derivatives() to configure derivative computation")]]
-    SOLVER_API bool               aad_jacobian() const noexcept;
     SOLVER_API const std::string& log_file() const;
 
 protected:
@@ -38,11 +36,9 @@ protected:
         double                 function_tolerance,
         double                 gradient_tolerance,
         double                 parameter_tolerance,
-        bool                   verbose,
-        bool                   aad_jacobian = true);
+        bool                   verbose);
 
     solver_options(solver_enum solver);
-    solver_options(solver_enum solver, bool aad_jacobian);
 
     solver_enum solver_;
     int         max_num_iterations_ = 100;
@@ -50,7 +46,6 @@ protected:
     double      gradient_tolerance_  = 0.0;
     double      parameter_tolerance_ = 0.0;
     bool        verbose_             = false;
-    bool        aad_jacobian_        = true;
     std::string log_file_;
 };
 }  // namespace solverslib

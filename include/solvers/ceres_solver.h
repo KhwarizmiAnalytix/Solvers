@@ -21,20 +21,16 @@ class ceres_solver
 public:
     using CostFunctionLambda = std::function<void(const vector_type&, vector_type&)>;
 
-    // DEPRECATED: Use the provider-based constructor instead. The AAD path is
-    // now configured via problem.derivatives(auto_diff()) or set_jacobian_provider().
-    using CostFunctionLambda_aad = std::function<void(const vector_type&, matrix_type&)>;
-
-    // DEPRECATED: Use ceres_solver(n, m, cost_fn, provider_factory, ...) instead.
-    [[deprecated("Use ceres_solver(n, m, cost_fn, provider_factory, ...) instead")]]
+    // Constructor with explicit Jacobian callback.
+    // Prefer using the provider-based constructor with set_jacobian_provider().
     SOLVER_API ceres_solver(size_t num_parameters,
-        size_t                     num_residuals,
-        CostFunctionLambda         cost_function,
-        CostFunctionLambda_aad     cost_function_aad = nullptr,
-        const std::vector<double>& lower_bounds      = {},
-        const std::vector<double>& upper_bounds      = {});
+        size_t                                                      num_residuals,
+        CostFunctionLambda                                          cost_function,
+        std::function<void(const vector_type&, matrix_type&)>       jacobian_callback,
+        const std::vector<double>&                                  lower_bounds = {},
+        const std::vector<double>&                                  upper_bounds = {});
 
-    // New constructor with provider support
+    // Constructor with provider support
     SOLVER_API ceres_solver(size_t num_parameters,
         size_t                                                    num_residuals,
         CostFunctionLambda                                        cost_function,
@@ -53,8 +49,8 @@ public:
     SOLVER_API static bool is_supported();
 
 private:
-    CostFunctionLambda     cost_function_;
-    CostFunctionLambda_aad cost_function_aad_;
+    CostFunctionLambda                                    cost_function_;
+    std::function<void(const vector_type&, matrix_type&)> jacobian_callback_;
 
     std::shared_ptr<const api::detail::provider_factory> provider_;
 

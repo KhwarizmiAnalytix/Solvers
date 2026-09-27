@@ -324,27 +324,6 @@ TEST(SolverBackendTest, CeresWithActiveBounds)
     EXPECT_LE(result.parameters[1], 0.8 + 1e-6);
 }
 
-TEST(AutomaticDifferentiation, APISupportsTemplatedResiduals)
-{
-    // Test that the API can store and retrieve templated residuals
-    api::least_squares_problem ls;
-    ls.num_parameters = 2;
-    ls.num_residuals  = 2;
-
-    const auto& tp = testing::make_rosenbrock_problem();
-    ls.residuals   = tp.residuals;
-    ls.jacobian    = tp.jacobian;
-
-    // Set templated residuals
-    testing::RosenbrocResiduals templated_func;
-    ls.set_templated_residuals(templated_func);
-
-    EXPECT_TRUE(ls.has_templated_residuals());
-
-    // Retrieve and verify
-    const auto* retrieved = ls.get_templated_residuals<testing::RosenbrocResiduals>();
-    EXPECT_NE(retrieved, nullptr);
-}
 
 TEST(AutomaticDifferentiation, TemplatedResidualsMatchNumeric)
 {

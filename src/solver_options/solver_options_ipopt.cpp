@@ -75,11 +75,6 @@ solver_options_ipopt_builder& solver_options_ipopt_builder::with_log_file(const 
     options_->log_file_ = val;
     return *this;
 }
-solver_options_ipopt_builder& solver_options_ipopt_builder::with_aad_jacobian(bool val)
-{
-    options_->aad_jacobian_ = val;
-    return *this;
-}
 
 std::shared_ptr<const solver_options_ipopt> solver_options_ipopt_builder::build() const
 {

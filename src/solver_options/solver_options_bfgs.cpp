@@ -108,11 +108,6 @@ solver_options_bfgs_builder& solver_options_bfgs_builder::with_log_file(const st
     options_->log_file_ = val;
     return *this;
 }
-solver_options_bfgs_builder& solver_options_bfgs_builder::with_aad_jacobian(bool val)
-{
-    options_->aad_jacobian_ = val;
-    return *this;
-}
 
 std::shared_ptr<const solver_options_bfgs> solver_options_bfgs_builder::build() const
 {

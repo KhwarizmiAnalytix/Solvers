@@ -18,6 +18,7 @@
 #include "detail/eigen_support.h"
 #include "detail/support.h"
 #include "solvers/api/derivative_provider.h"
+#include "solvers/api/problem.h"
 #include "solvers/integrations/ceres_autodiff.h"
 
 namespace solverslib
@@ -109,6 +110,14 @@ std::shared_ptr<AutoDiffJacobianProvider<Functor>> auto_diff(
     return std::make_shared<AutoDiffJacobianProvider<Functor>>(functor, n, m);
 }
 
+// Zero-arg sentinel for use with least_squares(model, n, m):
+//   auto problem = least_squares(MyModel{}, n, m);
+//   problem.derivatives(auto_diff());
+inline api::auto_diff_tag auto_diff()
+{
+    return {};
+}
+
 // Convenience factory: create a least_squares_problem from a templated functor,
 // with the model stored for use with the no-arg auto_diff() sentinel.
 //
@@ -174,6 +183,11 @@ std::shared_ptr<AutoDiffJacobianProvider<Functor>> auto_diff(
         sizeof(Functor) == 0,
         "auto_diff() requires SOLVERS_ENABLE_CERES=ON");
     return nullptr;
+}
+
+inline api::auto_diff_tag auto_diff()
+{
+    return {};
 }
 
 template <class Functor>

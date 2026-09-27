@@ -16,13 +16,15 @@ namespace solverslib
 class LambdaCostFunctor : public ceres::CostFunction
 {
 public:
+    using jacobian_fn = std::function<void(const vector_type&, matrix_type&)>;
+
     LambdaCostFunctor(
-        ceres_solver::CostFunctionLambda     cost_function,
-        ceres_solver::CostFunctionLambda_aad cost_function_aad,
-        size_t                               num_parameters,
-        size_t                               num_residuals)
+        ceres_solver::CostFunctionLambda cost_function,
+        jacobian_fn                      jacobian_callback,
+        size_t                           num_parameters,
+        size_t                           num_residuals)
         : cost_function_(std::move(cost_function)),
-          cost_function_aad_(std::move(cost_function_aad)),
+          cost_function_aad_(std::move(jacobian_callback)),
           num_parameters_(num_parameters),
           num_residuals_(num_residuals)
     {
@@ -94,10 +96,10 @@ public:
     }
 
 private:
-    ceres_solver::CostFunctionLambda     cost_function_;
-    ceres_solver::CostFunctionLambda_aad cost_function_aad_;
-    size_t                               num_residuals_;
-    size_t                               num_parameters_;
+    ceres_solver::CostFunctionLambda cost_function_;
+    jacobian_fn                      cost_function_aad_;
+    size_t                           num_residuals_;
+    size_t                           num_parameters_;
 };
 
 // Cost function adapter for evaluator-based providers (e.g., Ceres AD)
@@ -370,14 +372,14 @@ void update_options(
 namespace solverslib
 {
 ceres_solver::ceres_solver(
-    size_t                     num_parameters,
-    size_t                     num_residuals,
-    CostFunctionLambda         cost_function,
-    CostFunctionLambda_aad     cost_function_aad,
-    const std::vector<double>& lower_bounds,
-    const std::vector<double>& upper_bounds)
+    size_t                                                num_parameters,
+    size_t                                                num_residuals,
+    CostFunctionLambda                                    cost_function,
+    std::function<void(const vector_type&, matrix_type&)> jacobian_callback,
+    const std::vector<double>&                            lower_bounds,
+    const std::vector<double>&                            upper_bounds)
     : cost_function_(std::move(cost_function)),
-      cost_function_aad_(std::move(cost_function_aad)),
+      jacobian_callback_(std::move(jacobian_callback)),
       provider_(nullptr),
       lower_bounds_(lower_bounds),
       upper_bounds_(upper_bounds),
@@ -386,7 +388,7 @@ ceres_solver::ceres_solver(
 {
 }
 
-// New constructor with provider support
+// Constructor with provider support
 ceres_solver::ceres_solver(
     size_t                                                    num_parameters,
     size_t                                                    num_residuals,
@@ -395,7 +397,7 @@ ceres_solver::ceres_solver(
     const std::vector<double>&                                lower_bounds,
     const std::vector<double>&                                upper_bounds)
     : cost_function_(std::move(cost_function)),
-      cost_function_aad_(nullptr),
+      jacobian_callback_(nullptr),
       provider_(std::move(provider)),
       lower_bounds_(lower_bounds),
       upper_bounds_(upper_bounds),
@@ -458,13 +460,12 @@ void ceres_solver::solve_with_summary(
     }
     else
     {
-        // Fallback to legacy callback path
-        // Set up finite differences if no Jacobian callback provided
-        if (cost_function_aad_ == nullptr)
+        // Fallback to callback path; auto-build FD if no Jacobian callback provided
+        if (jacobian_callback_ == nullptr)
         {
             double bump = 1e-8;
 
-            cost_function_aad_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
+            jacobian_callback_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
             {
                 auto number_of_parameters = x.size();
 
@@ -531,7 +532,7 @@ void ceres_solver::solve_with_summary(
 
         cost_function = new LambdaCostFunctor(
             cost_function_,
-            cost_function_aad_,
+            jacobian_callback_,
             num_parameters_,
             num_residuals_);
     }

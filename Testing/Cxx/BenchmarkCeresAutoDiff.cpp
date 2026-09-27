@@ -6,7 +6,7 @@
 #if defined(SOLVERS_HAS_CERES)
 
 #include "optimization_test_problems.h"
-#include "solvers/integrations/ceres_autodiff.h"
+#include "solvers/integrations/autodiff_provider.h"
 #include "solvers/api/solve.h"
 
 namespace solverslib
@@ -64,8 +64,8 @@ void benchmark_rosenbrock()
     analytical_problem.jacobian = tp.jacobian;
 
     // Create AD problem
-    auto ad_problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::RosenbrocResiduals{});
+    auto ad_problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    ad_problem.derivatives(auto_diff());
 
     vector_type x0 = to_vector_type(tp.initial_guess);
     api::solve_options opts;
@@ -164,8 +164,8 @@ void benchmark_powell_singular()
     analytical_problem.jacobian = tp.jacobian;
 
     // Create AD problem
-    auto ad_problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::PowellSingularResiduals{});
+    auto ad_problem = least_squares(testing::PowellSingularResiduals{}, tp.num_parameters, tp.num_residuals);
+    ad_problem.derivatives(auto_diff());
 
     vector_type x0 = to_vector_type(tp.initial_guess);
     api::solve_options opts;
@@ -264,8 +264,8 @@ void benchmark_exponential_fit()
     analytical_problem.jacobian = tp.jacobian;
 
     // Create AD problem
-    auto ad_problem = make_ceres_autodiff_problem(
-        tp.num_parameters, tp.num_residuals, testing::ExponentialFitResiduals{});
+    auto ad_problem = least_squares(testing::ExponentialFitResiduals{}, tp.num_parameters, tp.num_residuals);
+    ad_problem.derivatives(auto_diff());
 
     vector_type x0 = to_vector_type(tp.initial_guess);
     api::solve_options opts;

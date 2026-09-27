@@ -409,11 +409,6 @@ solver_options_ceres_builder::with_trust_region_problem_dump_format_type(dump_fo
     options_->trust_region_problem_dump_format_type_ = val;
     return *this;
 }
-solver_options_ceres_builder& solver_options_ceres_builder::with_aad_jacobian(bool val)
-{
-    options_->aad_jacobian_ = val;
-    return *this;
-}
 
 std::shared_ptr<const solver_options_ceres> solver_options_ceres_builder::build() const
 {
