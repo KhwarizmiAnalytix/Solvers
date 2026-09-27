@@ -92,6 +92,51 @@ if (result.converged()) {
 }
 ```
 
+### Automatic Differentiation with Ceres
+
+For problems where hand-coded Jacobians are expensive or error-prone, use Ceres' automatic differentiation:
+
+```cpp
+#include <solvers/integrations/ceres_autodiff.h>
+
+// Define residuals using a templated functor (works with double and Ceres Jets)
+struct MyResiduals {
+    template <typename T>
+    bool operator()(const T* const params, T* residuals) const {
+        residuals[0] = params[0] * params[0] - 4.0;  // (p - 2)(p + 2)
+        return true;
+    }
+};
+
+// Create problem with automatic differentiation
+auto problem = solverslib::make_ceres_autodiff_problem(
+    1,  // num_parameters
+    1,  // num_residuals
+    MyResiduals{}
+);
+
+vector_type x0 = {3.0};
+solverslib::api::solve_options opts;
+opts.backend = solverslib::api::backend::ceres;
+opts.derivatives = solverslib::api::derivative_mode::automatic_differentiation;
+
+auto result = solverslib::api::solve(problem, x0, opts);
+// Jacobians computed automatically using Ceres' dual-number (Jet) differentiation
+```
+
+**Derivative policy** controls how Jacobians are computed:
+- `automatic` (default): Prefers hand-coded Jacobian, falls back to AD, then numerical
+- `supplied`: Requires Jacobian callback; error if missing
+- `automatic_differentiation`: Requires AD provider (Ceres); error if unavailable
+- `finite_difference`: Forces numerical differentiation
+
+**Enable Ceres AD** with:
+```bash
+cmake -S . -B build -DSOLVERS_ENABLE_CERES=ON
+```
+
+This requires Ceres as a dependency; see [ceres-solver.org](http://ceres-solver.org).
+
 ---
 
 ## Why Solvers

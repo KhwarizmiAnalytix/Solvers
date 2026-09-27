@@ -68,15 +68,19 @@ struct least_squares_problem
     residual_function                residuals;
     std::optional<jacobian_function> jacobian;
 
-    // Type-erased templated residuals functor for automatic differentiation.
-    // Backends capable of AAD (e.g., Ceres) will extract and use this if available.
+    // DEPRECATED: Type-erased templated residuals functor for automatic differentiation.
+    // Use provider_factory and make_ceres_autodiff_problem() instead.
+    // This mechanism cannot instantiate template member functions from a non-templated
+    // context; it is retained for compatibility only.
+    // Backends capable of AD (e.g., Ceres) will extract and use this if available.
     // The functor should have a templated operator() that works with both double
     // and Ceres' Jet types: bool operator()(const T* const x, T* residual) const
     std::any                             templated_residuals;
     std::optional<const std::type_info*> templated_residuals_type;
 
     // Provider factory for computing derivatives (AD, supplied, numeric).
-    // Set by make_ceres_autodiff_problem or directly for other providers.
+    // Set by make_ceres_autodiff_problem() or directly for other providers.
+    // This is the recommended path for automatic differentiation.
     std::shared_ptr<const detail::provider_factory> provider_factory;
 
     api::bounds bounds;

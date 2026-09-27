@@ -39,6 +39,12 @@ if(BUILD_SHARED_LIBS)
 endif()
 if(SOLVERS_ENABLE_CERES)
   target_link_libraries(Solvers PRIVATE Ceres::ceres)
+
+  # Create Solvers::CeresAutodiff interface target for clients using the Ceres AD integration
+  add_library(Solvers_CeresAutodiff INTERFACE)
+  target_link_libraries(Solvers_CeresAutodiff INTERFACE Solvers::Solvers Ceres::ceres)
+  target_compile_definitions(Solvers_CeresAutodiff INTERFACE SOLVERS_HAS_CERES=1)
+  add_library(Solvers::CeresAutodiff ALIAS Solvers_CeresAutodiff)
 endif()
 if(SOLVERS_ENABLE_IPOPT OR SOLVERS_ENABLE_PETSC)
   find_package(PkgConfig REQUIRED)

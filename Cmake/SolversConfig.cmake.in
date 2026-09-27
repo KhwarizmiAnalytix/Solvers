@@ -58,6 +58,33 @@ if(NOT TARGET Logging::Logging)
   endif()
 endif()
 
+# Determine which optional backends are available
+set(SOLVERS_HAS_CERES @SOLVERS_ENABLE_CERES@)
+set(SOLVERS_HAS_IPOPT @SOLVERS_ENABLE_IPOPT@)
+set(SOLVERS_HAS_PETSC @SOLVERS_ENABLE_PETSC@)
+
+# Ceres (optional, but required for Solvers::CeresAutodiff)
+if(SOLVERS_HAS_CERES)
+  find_dependency(Ceres QUIET)
+endif()
+
+# Ipopt (optional, pkg-config based)
+if(SOLVERS_HAS_IPOPT)
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(IPOPT QUIET IMPORTED_TARGET ipopt)
+  endif()
+endif()
+
+# PETSc/TAO (optional, pkg-config based)
+if(SOLVERS_HAS_PETSC)
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(PETSC QUIET IMPORTED_TARGET PETSc)
+  endif()
+  find_package(MPI QUIET COMPONENTS C)
+endif()
+
 # Solvers
 if(NOT TARGET Solvers::Solvers)
   add_library(Solvers::Solvers STATIC IMPORTED)
@@ -66,8 +93,36 @@ if(NOT TARGET Solvers::Solvers)
     INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
     INTERFACE_COMPILE_FEATURES "cxx_std_17"
     INTERFACE_LINK_LIBRARIES "Eigen3::Eigen;Logging::Logging"
-    INTERFACE_COMPILE_DEFINITIONS "SOLVERS_HAS_CERES=0;SOLVERS_HAS_IPOPT=0;SOLVERS_HAS_PETSC=0"
+    INTERFACE_COMPILE_DEFINITIONS "SOLVERS_HAS_CERES=${SOLVERS_HAS_CERES};SOLVERS_HAS_IPOPT=${SOLVERS_HAS_IPOPT};SOLVERS_HAS_PETSC=${SOLVERS_HAS_PETSC}"
   )
+
+  # Link to Ceres if available
+  if(SOLVERS_HAS_CERES AND TARGET Ceres::ceres)
+    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES Ceres::ceres)
+  endif()
+
+  # Link to Ipopt if available
+  if(SOLVERS_HAS_IPOPT AND TARGET PkgConfig::IPOPT)
+    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES PkgConfig::IPOPT)
+  endif()
+
+  # Link to PETSc if available
+  if(SOLVERS_HAS_PETSC AND TARGET PkgConfig::PETSC)
+    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES PkgConfig::PETSC)
+  endif()
+  if(SOLVERS_HAS_PETSC AND TARGET MPI::MPI_C)
+    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES MPI::MPI_C)
+  endif()
+endif()
+
+# Solvers::CeresAutodiff (only available when Ceres is enabled)
+if(SOLVERS_HAS_CERES AND NOT TARGET Solvers::CeresAutodiff)
+  if(TARGET Ceres::ceres)
+    add_library(Solvers_CeresAutodiff INTERFACE IMPORTED)
+    target_link_libraries(Solvers_CeresAutodiff INTERFACE Solvers::Solvers Ceres::ceres)
+    target_compile_definitions(Solvers_CeresAutodiff INTERFACE SOLVERS_HAS_CERES=1)
+    add_library(Solvers::CeresAutodiff ALIAS Solvers_CeresAutodiff)
+  endif()
 endif()
 
 check_required_components(Solvers)

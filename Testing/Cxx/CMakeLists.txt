@@ -34,4 +34,10 @@ if(SOLVERS_ENABLE_BENCHMARKS)
 
     add_executable(RootFindersVsLMBenchmark BenchmarkRootFindersVsLM.cpp)
     target_link_libraries(RootFindersVsLMBenchmark PRIVATE Solvers::Solvers)
+
+    # Ceres AD benchmark (only when Ceres is available)
+    if(SOLVERS_ENABLE_CERES)
+        add_executable(BenchmarkCeresAutoDiff BenchmarkCeresAutoDiff.cpp)
+        target_link_libraries(BenchmarkCeresAutoDiff PRIVATE Solvers::Solvers)
+    endif()
 endif()
