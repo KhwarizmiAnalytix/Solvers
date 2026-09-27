@@ -12,7 +12,7 @@
 #include "solvers/api/problem.h"
 #include "solvers/api/solve.h"
 
-#if defined(SOLVERS_HAS_CERES)
+#if SOLVERS_HAS_CERES
 #include "solvers/integrations/autodiff_provider.h"
 #endif
 
@@ -432,7 +432,7 @@ TEST(LeastSquaresProblemIntegration, AutoDiffTagWithoutFactoryThrows)
 // AutoDiffJacobianProvider (Ceres-guarded)
 // ---------------------------------------------------------------------------
 
-#if defined(SOLVERS_HAS_CERES)
+#if SOLVERS_HAS_CERES
 
 TEST(AutoDiffJacobianProvider, Metadata)
 {

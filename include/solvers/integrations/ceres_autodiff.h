@@ -1,7 +1,7 @@
 #ifndef SOLVERS_CERES_AUTODIFF_H_
 #define SOLVERS_CERES_AUTODIFF_H_
 
-#if defined(SOLVERS_HAS_CERES)
+#if SOLVERS_HAS_CERES
 
 #include <ceres/ceres.h>
 #include <ceres/dynamic_autodiff_cost_function.h>

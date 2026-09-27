@@ -24,7 +24,7 @@
 namespace solverslib
 {
 
-#if defined(SOLVERS_HAS_CERES)
+#if SOLVERS_HAS_CERES
 
 // AutoDiffJacobianProvider<Functor>
 //

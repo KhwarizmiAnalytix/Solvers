@@ -4,7 +4,7 @@
 #include "detail/support.h"
 #include "optimization_test_problems.h"
 
-#if defined(SOLVERS_HAS_CERES)
+#if SOLVERS_HAS_CERES
 
 #include "solvers/integrations/autodiff_provider.h"
 

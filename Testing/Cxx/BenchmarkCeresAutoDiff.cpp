@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <cmath>
 
-#if defined(SOLVERS_HAS_CERES)
+#if SOLVERS_HAS_CERES
 
 #include "optimization_test_problems.h"
 #include "solvers/integrations/autodiff_provider.h"
