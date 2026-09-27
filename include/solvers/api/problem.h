@@ -1,9 +1,11 @@
 #ifndef SOLVERS_PROBLEM_H_
 #define SOLVERS_PROBLEM_H_
 
+#include <any>
 #include <cstddef>
 #include <functional>
 #include <optional>
+#include <typeinfo>
 #include <vector>
 
 #include "detail/eigen_support.h"
@@ -60,7 +62,45 @@ struct least_squares_problem
     residual_function                residuals;
     std::optional<jacobian_function> jacobian;
 
+    // Type-erased templated residuals functor for automatic differentiation.
+    // Backends capable of AAD (e.g., Ceres) will extract and use this if available.
+    // The functor should have a templated operator() that works with both double
+    // and Ceres' Jet types: bool operator()(const T* const x, T* residual) const
+    std::any                             templated_residuals;
+    std::optional<const std::type_info*> templated_residuals_type;
+
     api::bounds bounds;
+
+    // Helper to store a templated residuals functor
+    template <typename Functor> void set_templated_residuals(const Functor& func)
+    {
+        templated_residuals      = func;
+        templated_residuals_type = &typeid(Functor);
+    }
+
+    // Helper to retrieve a templated residuals functor if it matches the expected type
+    template <typename Functor> const Functor* get_templated_residuals() const
+    {
+        if (!templated_residuals_type.has_value())
+        {
+            return nullptr;
+        }
+        if (templated_residuals_type.value() != &typeid(Functor))
+        {
+            return nullptr;
+        }
+        try
+        {
+            return &std::any_cast<const Functor&>(templated_residuals);
+        }
+        catch (const std::bad_any_cast&)
+        {
+            return nullptr;
+        }
+    }
+
+    // Check if templated residuals are available
+    bool has_templated_residuals() const { return templated_residuals_type.has_value(); }
 };
 
 // General objective min f(x).
