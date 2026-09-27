@@ -86,7 +86,8 @@ solver_result failed(solver_status status, const std::string& message, const vec
     return result;
 }
 
-solver_result from_native(const native_result& out, const vector_type& x, api::algorithm alg)
+solver_result from_native(const native_result& out, const vector_type& x, api::algorithm alg,
+    api::derivative_mode deriv_mode = api::derivative_mode::automatic)
 {
     solver_result result;
     result.status         = translate_native(out.status);
@@ -97,6 +98,7 @@ solver_result from_native(const native_result& out, const vector_type& x, api::a
     result.backend        = backend::native;
     result.algorithm      = alg;
     result.backend_status = static_cast<int>(out.status);
+    result.effective_derivative_source = deriv_mode;
     result.message        = (result.status == solver_status::converged) ? "native converged"
                                                                         : "native reached iteration limit";
     return result;
@@ -194,22 +196,36 @@ struct derivative_resolution
     solver_result*  error;  // nullptr if OK; otherwise result explaining incompatibility
 };
 
-// Resolve derivative policy to a concrete implementation
+// Resolve derivative policy to a concrete implementation.
+// Uses provider source() instead of conflating all providers as "supplied".
+// Applied to all backends for consistency.
 derivative_resolution resolve_derivatives(
     const least_squares_problem& problem,
     const solve_options& options,
-    backend chosen_backend,
     const vector_type& x)
 {
     auto policy = options.derivatives;
 
-    // Rule 1: explicit request takes precedence
+    // Rule 1: explicit request takes precedence, with strict validation
     if (policy != derivative_mode::automatic)
     {
         if (policy == derivative_mode::supplied)
         {
             // Accept either an explicit jacobian callback or a generic provider
-            if (!problem.has_callable_jacobian() && !problem.jacobian_provider)
+            // Crucially: a provider is only "supplied" if its source() says so
+            bool has_supplied_source = false;
+
+            if (problem.has_callable_jacobian())
+            {
+                has_supplied_source = true;
+            }
+            else if (problem.jacobian_provider &&
+                     problem.jacobian_provider->source() == derivative_mode::supplied)
+            {
+                has_supplied_source = true;
+            }
+
+            if (!has_supplied_source)
             {
                 auto err = new solver_result();
                 *err = failed(solver_status::invalid_problem,
@@ -217,40 +233,46 @@ derivative_resolution resolve_derivatives(
                 return {policy, err};
             }
         }
-        if (policy == derivative_mode::automatic_differentiation)
+        else if (policy == derivative_mode::automatic_differentiation)
         {
-            if (!problem.provider_factory)
+            // Require an executable AD provider
+            if (!problem.provider_factory &&
+                (!problem.jacobian_provider ||
+                 problem.jacobian_provider->source() != derivative_mode::automatic_differentiation))
             {
                 auto err = new solver_result();
                 *err = failed(solver_status::unsupported_capability,
-                    "automatic differentiation required but no AD provider available", x);
+                    "automatic differentiation required but no compatible AD provider available", x);
                 return {policy, err};
             }
-            if (chosen_backend != backend::ceres)
-            {
-                auto err = new solver_result();
-                *err = failed(solver_status::unsupported_capability,
-                    "AD required but selected backend is not Ceres", x);
-                return {policy, err};
-            }
+        }
+        else if (policy == derivative_mode::finite_difference)
+        {
+            // Explicit finite differences: use them even if other sources exist
+            // Validation happens at solver boundary (e.g., reject if no residuals callable)
         }
         return {policy, nullptr};
     }
 
-    // Rule 2: automatic cascade
-    // Supplied callback > generic provider > Ceres-native AD > none (backend FD)
+    // Rule 2: automatic cascade with truthful source reporting
+    // Supplied (explicit Jacobian) > Provider with its actual source > Fallback
     if (problem.has_callable_jacobian())
     {
         return {derivative_mode::supplied, nullptr};
     }
+
     if (problem.jacobian_provider)
     {
-        return {derivative_mode::supplied, nullptr};
+        // Use the provider's actual reported source, not "supplied"
+        return {problem.jacobian_provider->source(), nullptr};
     }
-    if (problem.provider_factory && chosen_backend == backend::ceres)
+
+    if (problem.provider_factory)
     {
+        // Ceres-native AD factory present; will use Ceres if that backend is selected
         return {derivative_mode::automatic_differentiation, nullptr};
     }
+
     // Otherwise fall through to backend's default (Ceres numeric, native finite-diff, etc.)
     return {derivative_mode::automatic, nullptr};
 }
@@ -263,9 +285,20 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
 {
     vector_type x = initial_guess;
 
+    // Resolve derivative policy for native backend
+    auto res = resolve_derivatives(problem, options, initial_guess);
+    if (res.error)
+    {
+        solver_result error_result = *res.error;
+        delete res.error;
+        return error_result;
+    }
+    auto resolved_derivatives = res.resolved;
+
     // Build the Jacobian callback for native kernels.
-    // Priority: jacobian_provider > jacobian callback > null (native FD fallback).
+    // Use the resolved derivative source to guide construction.
     jacobian_function jac;
+
     if (problem.jacobian_provider)
     {
         // Wrap the provider so native solvers see a standard jacobian_function.
@@ -295,7 +328,7 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
                                .build();
         gauss_newton_solver solver(
             problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(solver.solve(x, *native_opts), x, alg);
+        return from_native(solver.solve(x, *native_opts), x, alg, resolved_derivatives);
     }
     case algorithm::bfgs:
     case algorithm::lbfgs:
@@ -308,7 +341,7 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
                                .with_verbose(options.verbose)
                                .build();
         lbfgs_solver solver(problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(solver.solve(x, *native_opts), x, algorithm::lbfgs);
+        return from_native(solver.solve(x, *native_opts), x, algorithm::lbfgs, resolved_derivatives);
     }
     case algorithm::levenberg_marquardt:
     default:
@@ -322,7 +355,7 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
                                .build();
         levenberg_marquardt_solver solver(
             problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(solver.solve(x, *native_opts), x, algorithm::levenberg_marquardt);
+        return from_native(solver.solve(x, *native_opts), x, algorithm::levenberg_marquardt, resolved_derivatives);
     }
     }
 }
@@ -389,7 +422,7 @@ solver_result run_ceres(const least_squares_problem& problem,
     }
 
     // Resolve derivative policy
-    auto res = resolve_derivatives(problem, options, backend::ceres, initial_guess);
+    auto res = resolve_derivatives(problem, options, initial_guess);
     if (res.error)
     {
         // Error occurred during resolution
@@ -572,6 +605,16 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
         return result;
     }
 
+    // Resolve derivative policy for TAO backend
+    auto res = resolve_derivatives(problem, options, initial_guess);
+    if (res.error)
+    {
+        solver_result error_result = *res.error;
+        delete res.error;
+        return error_result;
+    }
+    auto resolved_derivatives = res.resolved;
+
     // POUNDERS by default on the pounders route; BRGN default on the general
     // TAO route (Gauss-Newton for large residuals with a Jacobian).
     tao_algorithm requested = cfg.algorithm;
@@ -591,8 +634,20 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
     std::vector<double> parameters(
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
-    petsc_tao_solver::jacobian_type jac =
-        problem.jacobian ? *problem.jacobian : petsc_tao_solver::jacobian_type{};
+    // Build Jacobian callback, preferring provider over callback
+    petsc_tao_solver::jacobian_type jac;
+    if (problem.jacobian_provider)
+    {
+        auto provider_ptr = problem.jacobian_provider;
+        jac = [provider_ptr](const vector_type& x_, matrix_type& J_) {
+            vector_type r_tmp = make_vector(provider_ptr->num_residuals());
+            provider_ptr->compute(x_, r_tmp, J_);
+        };
+    }
+    else
+    {
+        jac = problem.jacobian ? *problem.jacobian : petsc_tao_solver::jacobian_type{};
+    }
 
     petsc_tao_solver solver(problem.num_parameters,
         problem.num_residuals,
@@ -619,6 +674,7 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
     result.residual_norm = rnorm;
     result.objective     = 0.5 * rnorm * rnorm;
     result.status        = converged ? solver_status::converged : solver_status::max_iterations;
+    result.effective_derivative_source = resolved_derivatives;
     result.message = converged ? "PETSc/TAO converged" : "PETSc/TAO stopped without convergence";
     return result;
 }
