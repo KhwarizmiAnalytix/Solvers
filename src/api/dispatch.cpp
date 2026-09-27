@@ -42,8 +42,11 @@ backend backend_for(algorithm value, const problem_traits& traits)
     case algorithm::gauss_newton:
     case algorithm::bfgs:
     case algorithm::lbfgs:
-        // If AD provider is available but no callable Jacobian, must use Ceres
-        if (traits.has_autodiff_provider && !traits.has_callable_jacobian)
+        // Route to Ceres only when the provider is Ceres-native AD and no
+        // other Jacobian (callable or generic provider) is available.
+        if (traits.has_autodiff_provider
+            && !traits.has_callable_jacobian
+            && !traits.has_jacobian_provider)
         {
             return backend::ceres;
         }
@@ -104,12 +107,16 @@ problem_traits inspect(const least_squares_problem& problem)
 {
     problem_traits traits;
     traits.is_least_squares      = true;
-    traits.has_jacobian          = problem.jacobian.has_value();
     traits.has_callable_jacobian = problem.has_callable_jacobian();
+    traits.has_jacobian_provider = !!problem.jacobian_provider;
     traits.has_autodiff_provider = !!problem.provider_factory;
-    traits.has_bounds            = !problem.bounds.empty();
-    traits.num_parameters        = problem.num_parameters;
-    traits.num_residuals         = problem.num_residuals;
+    // has_jacobian is true when any derivative source is available
+    traits.has_jacobian = traits.has_callable_jacobian
+                       || traits.has_jacobian_provider
+                       || problem.jacobian.has_value();
+    traits.has_bounds     = !problem.bounds.empty();
+    traits.num_parameters = problem.num_parameters;
+    traits.num_residuals  = problem.num_residuals;
     return traits;
 }
 
@@ -117,7 +124,8 @@ problem_traits inspect(const optimization_problem& problem)
 {
     problem_traits traits;
     traits.is_least_squares           = false;
-    traits.has_gradient               = problem.gradient.has_value();
+    traits.has_gradient_provider      = !!problem.gradient_provider;
+    traits.has_gradient               = problem.gradient.has_value() || !!problem.gradient_provider;
     traits.has_hessian                = problem.hessian.has_value();
     traits.has_hessian_vector_product = problem.hessian_vector.has_value();
     traits.has_bounds                 = !problem.bounds.empty();
@@ -145,11 +153,7 @@ algorithm select_algorithm(const problem_traits& traits, const solve_options& op
 
     if (traits.is_least_squares)
     {
-        // Consider AD provider as equivalent to having Jacobian for algorithm selection
-        bool has_derivatives =
-            traits.has_jacobian || traits.has_autodiff_provider;
-
-        if (!has_derivatives)
+        if (!traits.has_jacobian)
         {
             return algorithm::pounders;  // derivative-free least squares
         }
@@ -202,17 +206,19 @@ derivative_resolution resolve_derivatives(
     // Rule 1: explicit request takes precedence
     if (policy != derivative_mode::automatic)
     {
-        // Validate that the backend can execute the requested policy
-        if (policy == derivative_mode::supplied && !problem.has_callable_jacobian())
+        if (policy == derivative_mode::supplied)
         {
-            auto err = new solver_result();
-            *err = failed(solver_status::invalid_problem,
-                "supplied Jacobian required but not provided", x);
-            return {policy, err};
+            // Accept either an explicit jacobian callback or a generic provider
+            if (!problem.has_callable_jacobian() && !problem.jacobian_provider)
+            {
+                auto err = new solver_result();
+                *err = failed(solver_status::invalid_problem,
+                    "supplied Jacobian required but not provided", x);
+                return {policy, err};
+            }
         }
         if (policy == derivative_mode::automatic_differentiation)
         {
-            // Check that a provider exists and backend is compatible
             if (!problem.provider_factory)
             {
                 auto err = new solver_result();
@@ -231,9 +237,13 @@ derivative_resolution resolve_derivatives(
         return {policy, nullptr};
     }
 
-    // Rule 2: automatic mode cascades
-    // Supplied > AD > numeric/derivative-free
+    // Rule 2: automatic cascade
+    // Supplied callback > generic provider > Ceres-native AD > none (backend FD)
     if (problem.has_callable_jacobian())
+    {
+        return {derivative_mode::supplied, nullptr};
+    }
+    if (problem.jacobian_provider)
     {
         return {derivative_mode::supplied, nullptr};
     }
@@ -253,9 +263,24 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
 {
     vector_type x = initial_guess;
 
-    // Native kernels take a null jacobian to mean "estimate by finite
-    // differences", matching problem.jacobian == std::nullopt.
-    jacobian_function jac = problem.jacobian.value_or(jacobian_function{});
+    // Build the Jacobian callback for native kernels.
+    // Priority: jacobian_provider > jacobian callback > null (native FD fallback).
+    jacobian_function jac;
+    if (problem.jacobian_provider)
+    {
+        // Wrap the provider so native solvers see a standard jacobian_function.
+        // The provider may be analytic, finite-difference, or autodiff.
+        auto provider_ptr = problem.jacobian_provider;
+        jac = [provider_ptr](const vector_type& x_, matrix_type& J_) {
+            vector_type r_tmp = make_vector(provider_ptr->num_residuals());
+            provider_ptr->compute(x_, r_tmp, J_);
+        };
+    }
+    else
+    {
+        // Fall back to the explicit jacobian callback or null (native FD).
+        jac = problem.jacobian.value_or(jacobian_function{});
+    }
 
     switch (alg)
     {
@@ -396,21 +421,34 @@ solver_result run_ceres(const least_squares_problem& problem,
     std::vector<double> parameters(
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
-    // Create solver using appropriate path based on resolved derivative policy
+    // Select the derivative source for the Ceres backend.
     std::shared_ptr<const api::detail::provider_factory> provider_to_use;
-    ceres_solver::CostFunctionLambda_aad jacobian_to_use;
+    ceres_solver::CostFunctionLambda_aad                 jacobian_to_use;
 
-    // Only use provider if AD was resolved to be the derivative source
     if (resolved_derivatives == api::derivative_mode::automatic_differentiation)
     {
+        // Ceres-native AD: use the provider_factory directly.
+        // This comes from either problem.provider_factory (legacy path) or from
+        // an AutoDiffJacobianProvider attached via set_jacobian_provider().
         provider_to_use = problem.provider_factory;
     }
-    // If supplied derivatives were resolved, use the Jacobian callback
-    else if (resolved_derivatives == api::derivative_mode::supplied && problem.jacobian)
+    else if (resolved_derivatives == api::derivative_mode::supplied)
     {
-        jacobian_to_use = *problem.jacobian;
+        // Prefer the generic JacobianProvider (wraps as a Jacobian callback).
+        if (problem.jacobian_provider)
+        {
+            auto jp = problem.jacobian_provider;
+            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_) {
+                vector_type r_tmp = make_vector(jp->num_residuals());
+                jp->compute(x_, r_tmp, J_);
+            };
+        }
+        else if (problem.jacobian)
+        {
+            jacobian_to_use = *problem.jacobian;
+        }
     }
-    // Otherwise use default path (automatic/numeric finite differences)
+    // Otherwise: no explicit derivative source; Ceres falls back to finite differences.
 
     ceres_solver solver(problem.num_parameters,
         problem.num_residuals,
@@ -419,7 +457,6 @@ solver_result run_ceres(const least_squares_problem& problem,
         problem.bounds.lower,
         problem.bounds.upper);
 
-    // If using supplied Jacobian, set it now
     if (jacobian_to_use && !provider_to_use)
     {
         solver = ceres_solver(problem.num_parameters,
@@ -585,10 +622,21 @@ solver_result run_native_optimization(const optimization_problem& problem,
     const solve_options&                                          options,
     algorithm                                                     alg)
 {
-    if (!problem.gradient)
+    // Build gradient callback: gradient_provider > gradient callback > error.
+    gradient_function grad;
+    if (problem.gradient_provider)
+    {
+        auto gp = problem.gradient_provider;
+        grad = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+    }
+    else if (problem.gradient)
+    {
+        grad = *problem.gradient;
+    }
+    else
     {
         solver_result result = failed(solver_status::unsupported_capability,
-            "native L-BFGS requires a gradient callback on the optimization_problem",
+            "native L-BFGS requires a gradient callback or gradient provider",
             initial_guess);
         result.backend       = backend::native;
         result.algorithm     = alg;
@@ -605,7 +653,7 @@ solver_result run_native_optimization(const optimization_problem& problem,
                            .with_verbose(options.verbose)
                            .build();
 
-    lbfgs_solver solver(problem.num_parameters, problem.objective, *problem.gradient);
+    lbfgs_solver solver(problem.num_parameters, problem.objective, grad);
     auto         out = solver.solve(x, *native_opts);
 
     solver_result result;
@@ -654,12 +702,21 @@ solver_result run_ipopt(const optimization_problem& problem,
                           .with_verbose(options.verbose)
                           .build();
 
-    // Ipopt needs a gradient; fall back to nothing only if the caller omitted
-    // it (a future evaluator service would supply finite differences here).
-    if (!problem.gradient)
+    // Build gradient for Ipopt: gradient_provider > gradient callback > error.
+    gradient_function grad_for_ipopt;
+    if (problem.gradient_provider)
+    {
+        auto gp = problem.gradient_provider;
+        grad_for_ipopt = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+    }
+    else if (problem.gradient)
+    {
+        grad_for_ipopt = *problem.gradient;
+    }
+    else
     {
         result.status  = solver_status::unsupported_capability;
-        result.message = "Ipopt path requires a gradient callback on the optimization_problem";
+        result.message = "Ipopt path requires a gradient callback or gradient provider";
         return result;
     }
 
@@ -671,7 +728,7 @@ solver_result run_ipopt(const optimization_problem& problem,
 
     ipopt_solver solver(problem.num_parameters,
         problem.objective,
-        *problem.gradient,
+        grad_for_ipopt,
         hess,
         problem.bounds.lower,
         problem.bounds.upper);
@@ -714,10 +771,22 @@ solver_result run_petsc_tao_objective(const optimization_problem& problem,
         result.message = "PETSc/TAO backend was not compiled in (SOLVERS_ENABLE_PETSC=OFF)";
         return result;
     }
-    if (!problem.gradient)
+
+    // Build gradient for TAO: gradient_provider > gradient callback > error.
+    gradient_function grad_for_tao;
+    if (problem.gradient_provider)
+    {
+        auto gp = problem.gradient_provider;
+        grad_for_tao = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+    }
+    else if (problem.gradient)
+    {
+        grad_for_tao = *problem.gradient;
+    }
+    else
     {
         result.status  = solver_status::unsupported_capability;
-        result.message = "PETSc/TAO path requires a gradient callback on the optimization_problem";
+        result.message = "PETSc/TAO path requires a gradient callback or gradient provider";
         return result;
     }
 
@@ -738,7 +807,7 @@ solver_result run_petsc_tao_objective(const optimization_problem& problem,
 
     petsc_tao_solver solver(problem.num_parameters,
         problem.objective,
-        *problem.gradient,
+        grad_for_tao,
         hess,
         problem.bounds.lower,
         problem.bounds.upper);

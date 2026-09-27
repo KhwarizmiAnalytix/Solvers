@@ -19,10 +19,14 @@ class solver_options_ceres;
 class ceres_solver
 {
 public:
-    using CostFunctionLambda     = std::function<void(const vector_type&, vector_type&)>;
+    using CostFunctionLambda = std::function<void(const vector_type&, vector_type&)>;
+
+    // DEPRECATED: Use the provider-based constructor instead. The AAD path is
+    // now configured via problem.derivatives(auto_diff()) or set_jacobian_provider().
     using CostFunctionLambda_aad = std::function<void(const vector_type&, matrix_type&)>;
 
-    // Legacy constructor (retained for compatibility)
+    // DEPRECATED: Use ceres_solver(n, m, cost_fn, provider_factory, ...) instead.
+    [[deprecated("Use ceres_solver(n, m, cost_fn, provider_factory, ...) instead")]]
     SOLVER_API ceres_solver(size_t num_parameters,
         size_t                     num_residuals,
         CostFunctionLambda         cost_function,

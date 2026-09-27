@@ -28,6 +28,7 @@ public:
     SOLVER_API double             gradient_tolerance() const;
     SOLVER_API double             parameter_tolerance() const;
     SOLVER_API bool               verbose() const noexcept;
+    [[deprecated("Use problem.derivatives() to configure derivative computation")]]
     SOLVER_API bool               aad_jacobian() const noexcept;
     SOLVER_API const std::string& log_file() const;
 

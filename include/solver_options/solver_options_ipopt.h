@@ -54,6 +54,7 @@ public:
     SOLVER_API solver_options_ipopt_builder& with_linear_solver(const std::string& val);
     SOLVER_API solver_options_ipopt_builder& with_max_wall_time_seconds(double val);
     SOLVER_API solver_options_ipopt_builder& with_log_file(const std::string& val);
+    [[deprecated("Use problem.derivatives() to configure derivative computation")]]
     SOLVER_API solver_options_ipopt_builder& with_aad_jacobian(bool val = true);
 
     SOLVER_API std::shared_ptr<const solver_options_ipopt> build() const;

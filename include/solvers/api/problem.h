@@ -6,11 +6,13 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <typeinfo>
 #include <vector>
 
 #include "detail/eigen_support.h"
 #include "detail/support.h"
+#include "solvers/api/derivative_provider.h"
 
 namespace solverslib::api::detail
 {
@@ -68,38 +70,92 @@ struct least_squares_problem
     residual_function                residuals;
     std::optional<jacobian_function> jacobian;
 
-    // DEPRECATED: Type-erased templated residuals functor for automatic differentiation.
-    // Use provider_factory and make_ceres_autodiff_problem() instead.
-    // This mechanism cannot instantiate template member functions from a non-templated
-    // context; it is retained for compatibility only.
-    // Backends capable of AD (e.g., Ceres) will extract and use this if available.
-    // The functor should have a templated operator() that works with both double
-    // and Ceres' Jet types: bool operator()(const T* const x, T* residual) const
-    std::any                             templated_residuals;
-    std::optional<const std::type_info*> templated_residuals_type;
+    // Derivative provider (preferred path). Set via set_jacobian_provider() or
+    // derivatives(). Accepted by all backends; Ceres uses its native AD path
+    // when the provider wraps an AutoDiffJacobianProvider.
+    std::shared_ptr<JacobianProvider> jacobian_provider;
 
-    // Provider factory for computing derivatives (AD, supplied, numeric).
-    // Set by make_ceres_autodiff_problem() or directly for other providers.
-    // This is the recommended path for automatic differentiation.
+    // Stored model factory for use with the no-arg auto_diff() sentinel.
+    // Populated by the least_squares(model, n, m) convenience factory.
+    // Calling derivatives(auto_diff()) invokes this factory.
+    std::function<std::shared_ptr<JacobianProvider>()> model_provider_factory;
+
+    // Ceres-capable backend factory (set alongside jacobian_provider when
+    // the provider supports native Ceres AD). Used by the Ceres backend to
+    // bypass the generic JacobianProvider interface for better efficiency.
     std::shared_ptr<const detail::provider_factory> provider_factory;
 
     api::bounds bounds;
 
-    // Helper to check if jacobian callback is both present and callable
+    // -- Setters -------------------------------------------------------------
+
+    // Attach a derivative provider. Replaces any previously set provider.
+    // This is the recommended way to configure derivatives.
+    void set_jacobian_provider(std::shared_ptr<JacobianProvider> provider)
+    {
+        jacobian_provider = provider;
+        if (provider)
+        {
+            provider_factory = provider->ceres_factory();
+        }
+        else
+        {
+            provider_factory = nullptr;
+        }
+    }
+
+    // Fluent alias for set_jacobian_provider.
+    void derivatives(std::shared_ptr<JacobianProvider> provider)
+    {
+        set_jacobian_provider(std::move(provider));
+    }
+
+    // Overload for the no-arg auto_diff() sentinel.
+    // Requires model_provider_factory to be set (e.g. via least_squares()).
+    void derivatives(api::auto_diff_tag)
+    {
+        if (!model_provider_factory)
+        {
+            throw std::invalid_argument(
+                "derivatives(auto_diff()) requires a templated model. "
+                "Create the problem with least_squares(model, n, m), "
+                "or call set_jacobian_provider(auto_diff(model, n, m)) explicitly.");
+        }
+        set_jacobian_provider(model_provider_factory());
+    }
+
+    // -- Queries -------------------------------------------------------------
+
     bool has_callable_jacobian() const noexcept
     {
         return jacobian.has_value() && static_cast<bool>(jacobian.value());
     }
 
-    // Helper to store a templated residuals functor
-    template <typename Functor> void set_templated_residuals(const Functor& func)
+    bool has_jacobian_provider() const noexcept
+    {
+        return jacobian_provider != nullptr;
+    }
+
+    // -- Deprecated legacy AD interface -------------------------------------
+
+    // DEPRECATED: Use set_jacobian_provider() instead.
+    // Type-erased storage for the legacy Ceres AD path. Retained for
+    // backward compatibility only; cannot instantiate template member
+    // functions from a non-templated context.
+    std::any                             templated_residuals;
+    std::optional<const std::type_info*> templated_residuals_type;
+
+    template <typename Functor>
+    [[deprecated("Use set_jacobian_provider(auto_diff(functor, n, m)) instead")]]
+    void set_templated_residuals(const Functor& func)
     {
         templated_residuals      = func;
         templated_residuals_type = &typeid(Functor);
     }
 
-    // Helper to retrieve a templated residuals functor if it matches the expected type
-    template <typename Functor> const Functor* get_templated_residuals() const
+    template <typename Functor>
+    [[deprecated("Use jacobian_provider instead")]]
+    const Functor* get_templated_residuals() const
     {
         if (!templated_residuals_type.has_value())
         {
@@ -119,7 +175,7 @@ struct least_squares_problem
         }
     }
 
-    // Check if templated residuals are available
+    [[deprecated("Use has_jacobian_provider() instead")]]
     bool has_templated_residuals() const { return templated_residuals_type.has_value(); }
 };
 
@@ -133,8 +189,24 @@ struct optimization_problem
     std::optional<hessian_function>        hessian;
     std::optional<hessian_vector_function> hessian_vector;
 
+    // Gradient provider (preferred path). Solvers use this when set.
+    // Overrides the gradient callback if both are present.
+    std::shared_ptr<GradientProvider> gradient_provider;
+
     api::bounds      bounds;
     api::constraints constraints;
+
+    // Attach a gradient provider.
+    void set_gradient_provider(std::shared_ptr<GradientProvider> provider)
+    {
+        gradient_provider = std::move(provider);
+    }
+
+    // Fluent alias for set_gradient_provider.
+    void derivatives(std::shared_ptr<GradientProvider> provider)
+    {
+        set_gradient_provider(std::move(provider));
+    }
 };
 
 // Structural summary derived from a problem. Drives backend selection so the
@@ -142,10 +214,12 @@ struct optimization_problem
 struct problem_traits
 {
     bool is_least_squares           = false;
-    bool has_jacobian               = false;
-    bool has_callable_jacobian      = false;
-    bool has_autodiff_provider      = false;
-    bool has_gradient               = false;
+    bool has_jacobian               = false;  // any Jacobian source (callback, provider)
+    bool has_callable_jacobian      = false;  // explicit analytic jacobian callback
+    bool has_jacobian_provider      = false;  // JacobianProvider set
+    bool has_autodiff_provider      = false;  // Ceres-native AD factory present
+    bool has_gradient               = false;  // any gradient source (callback, provider)
+    bool has_gradient_provider      = false;  // GradientProvider set
     bool has_hessian                = false;
     bool has_hessian_vector_product = false;
     bool has_bounds                 = false;

@@ -9,7 +9,7 @@ endif()
 add_executable(
     SolversTests TestOptimizationAlgorithm.cpp TestOptimizerWrapper.cpp TestSolverBackends.cpp
                  TestRootFindingAndPolynomialSolvers.cpp TestSolverApiDispatch.cpp
-                 TestVerboseAndCornerCases.cpp ${CERES_TEST_FILES}
+                 TestVerboseAndCornerCases.cpp TestDerivativeProviders.cpp ${CERES_TEST_FILES}
 )
 target_link_libraries(SolversTests PRIVATE Solvers::Solvers GTest::gtest_main)
 
