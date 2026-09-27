@@ -9,30 +9,65 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
-    name: ${{ matrix.name }}
+  # ===========================================================================
+  # UBUNTU TESTS
+  # ===========================================================================
+  ubuntu-tests:
+    name: Ubuntu - ${{ matrix.name }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: default
+          # Core builds
+          - name: default (Debug)
             args: config.build.test
-          - name: static
+
+          - name: static (Debug)
             args: config.build.test.static
-          - name: sanitizer
-            args: config.build.test.sanitizer
-          - name: coverage
-            args: config.build.test.coverage
-          - name: ceres
-            args: config.build.test.ceres
-          - name: ipopt
-            args: config.build.test.ipopt
-          - name: petsc
-            args: config.build.test.petsc
-          - name: gcc
+
+          - name: default (Release)
+            args: config.build.test.release
+
+          - name: shared (Debug)
+            args: config.build.test.shared
+
+          # Compiler variants
+          - name: GCC (Debug)
             args: config.build.test.gcc
-          - name: clangtidy
+            env_cc: gcc
+            env_cxx: g++
+
+          - name: Clang (Debug)
+            args: config.build.test.clang
+            env_cc: clang
+            env_cxx: clang++
+
+          # Backend variants
+          - name: Ceres backend
+            args: config.build.test.ceres
+
+          - name: Ipopt backend
+            args: config.build.test.ipopt
+
+          - name: PETSc backend
+            args: config.build.test.petsc
+
+          # Multi-backend
+          - name: Ceres + Ipopt
+            args: config.build.test.ceres.ipopt
+
+          - name: Ceres + PETSc
+            args: config.build.test.ceres.petsc
+
+          # Analysis
+          - name: Sanitizer (UBSan + ASan)
+            args: config.build.test.sanitizer
+
+          - name: Coverage
+            args: config.build.test.coverage
+
+          - name: Clang-Tidy
             args: config.build.clangtidy
 
     steps:
@@ -50,22 +85,150 @@ jobs:
       - name: Install CMake
         uses: lukka/get-cmake@latest
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            pkg-config \
+            gfortran \
+            liblapack-dev \
+            libblas-dev
+
+      - name: Install Clang (for Clang variant)
+        if: matrix.env_cc == 'clang'
+        run: sudo apt-get install --yes clang
+
       - name: Install clang-tidy
-        if: matrix.name == 'clangtidy'
-        run: sudo apt-get update && sudo apt-get install --yes clang-tidy
+        if: matrix.name == 'Clang-Tidy'
+        run: sudo apt-get install --yes clang-tidy
 
       - name: Install coverage-tool
-        if: matrix.name == 'coverage'
+        if: matrix.name == 'Coverage'
         run: pip install coverage-tool
 
       - name: Install Ipopt
-        if: matrix.name == 'ipopt'
-        run: sudo apt-get update && sudo apt-get install --yes coinor-libipopt-dev
+        if: contains(matrix.args, 'ipopt')
+        run: sudo apt-get install --yes coinor-libipopt-dev
 
       - name: Install PETSc
-        if: matrix.name == 'petsc'
-        run: sudo apt-get update && sudo apt-get install --yes petsc-dev libopenmpi-dev
+        if: contains(matrix.args, 'petsc')
+        run: sudo apt-get install --yes petsc-dev libopenmpi-dev
 
       - name: Configure, build, and test
         working-directory: Scripts
+        env:
+          CC: ${{ matrix.env_cc || '' }}
+          CXX: ${{ matrix.env_cxx || '' }}
+        run: python3 setup.py ${{ matrix.args }}
+
+  # ===========================================================================
+  # macOS TESTS
+  # ===========================================================================
+  macos-tests:
+    name: macOS - ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS 13 (Intel)
+          - name: default (Intel, Debug)
+            os: macos-13
+            args: config.build.test
+
+          - name: static (Intel, Debug)
+            os: macos-13
+            args: config.build.test.static
+
+          - name: Ceres backend (Intel)
+            os: macos-13
+            args: config.build.test.ceres
+
+          # macOS 14+ (Apple Silicon compatible, but runs on Intel)
+          - name: default (x86_64, Debug)
+            os: macos-14
+            args: config.build.test
+
+          - name: shared (x86_64, Debug)
+            os: macos-14
+            args: config.build.test.shared
+
+          - name: Ceres backend (x86_64)
+            os: macos-14
+            args: config.build.test.ceres
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Install system dependencies
+        run: |
+          brew update
+          brew install pkg-config openblas lapack
+
+      - name: Install Ceres dependencies
+        if: contains(matrix.args, 'ceres')
+        run: |
+          brew install google-glog gflags
+
+      - name: Configure, build, and test
+        working-directory: Scripts
+        run: python3 setup.py ${{ matrix.args }}
+
+  # ===========================================================================
+  # WINDOWS TESTS
+  # ===========================================================================
+  windows-tests:
+    name: Windows - ${{ matrix.name }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Core builds
+          - name: default (Debug)
+            args: config.build.test
+
+          - name: static (Debug)
+            args: config.build.test.static
+
+          - name: default (Release)
+            args: config.build.test.release
+
+          - name: shared (Debug)
+            args: config.build.test.shared
+
+          # Backend variant
+          - name: Ceres backend
+            args: config.build.test.ceres
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure, build, and test
+        working-directory: Scripts
+        shell: bash
         run: python3 setup.py ${{ matrix.args }}
