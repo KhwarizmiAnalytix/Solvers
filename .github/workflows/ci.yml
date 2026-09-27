@@ -92,7 +92,8 @@ jobs:
             pkg-config \
             gfortran \
             liblapack-dev \
-            libblas-dev
+            libblas-dev \
+            mold
 
       - name: Install Clang (for Clang variant)
         if: matrix.env_cc == 'clang'
