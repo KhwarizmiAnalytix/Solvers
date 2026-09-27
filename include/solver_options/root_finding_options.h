@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_ROOT_FINDING_OPTIONS_H_
+#define SOLVERS_ROOT_FINDING_OPTIONS_H_
 
 #include <cstddef>
 #include <limits>
@@ -20,7 +21,7 @@ public:
     SOLVER_API double function_offset() const;
 
 private:
-    size_t max_iterations_     = 50;
+    size_t max_iterations_      = 50;
     double tolerance_function_  = std::numeric_limits<double>::epsilon();
     double tolerance_parameter_ = std::numeric_limits<double>::epsilon();
     double function_offset_     = 0.0;
@@ -43,3 +44,5 @@ private:
 };
 
 }  // namespace solverslib
+
+#endif  // SOLVERS_ROOT_FINDING_OPTIONS_H_

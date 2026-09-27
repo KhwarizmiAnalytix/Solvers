@@ -1,4 +1,7 @@
-#pragma once
+#ifndef SOLVERS_STATUS_H_
+#define SOLVERS_STATUS_H_
+
+#include <cstdint>
 
 #include "detail/support.h"
 
@@ -8,7 +11,7 @@ namespace solverslib::api
 // their native codes (Ceres, PETSc/TAO, Ipopt, or the native
 // solver_convergence_enum) into exactly one of these. See the redesign review,
 // "Return a structured result", for the rationale on keeping this closed set.
-enum class solver_status : int
+enum class solver_status : std::uint8_t
 {
     converged,               // a named stopping criterion was met
     max_iterations,          // iteration/evaluation budget exhausted with a usable iterate
@@ -23,7 +26,7 @@ enum class solver_status : int
 // Which algorithm was actually run. Kept independent of the backend that ran
 // it (PyTorch/Eigen style: the mathematical method is named separately from the
 // storage/execution backend that realizes it).
-enum class algorithm : int
+enum class algorithm : std::uint8_t
 {
     automatic = 0,
     levenberg_marquardt,
@@ -36,7 +39,7 @@ enum class algorithm : int
 };
 
 // Which library/executor realized the algorithm.
-enum class backend : int
+enum class backend : std::uint8_t
 {
     automatic = 0,
     native,
@@ -114,3 +117,5 @@ inline const char* to_string(backend value)
     return "unknown";
 }
 }  // namespace solverslib::api
+
+#endif  // SOLVERS_STATUS_H_

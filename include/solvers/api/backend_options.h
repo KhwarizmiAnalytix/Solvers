@@ -1,5 +1,7 @@
-#pragma once
+#ifndef SOLVERS_BACKEND_OPTIONS_H_
+#define SOLVERS_BACKEND_OPTIONS_H_
 
+#include <cstdint>
 #include <string>
 
 #include "detail/support.h"
@@ -11,7 +13,7 @@
 namespace solverslib::api
 {
 // -- Ceres -------------------------------------------------------------------
-enum class ceres_linear_solver
+enum class ceres_linear_solver : std::uint8_t
 {
     dense_qr,
     dense_normal_cholesky,
@@ -22,7 +24,7 @@ enum class ceres_linear_solver
     cgnr
 };
 
-enum class ceres_trust_region_strategy
+enum class ceres_trust_region_strategy : std::uint8_t
 {
     levenberg_marquardt,
     dogleg
@@ -38,7 +40,7 @@ struct ceres_options
 };
 
 // -- Ipopt -------------------------------------------------------------------
-enum class ipopt_hessian_mode
+enum class ipopt_hessian_mode : std::uint8_t
 {
     limited_memory,  // Ipopt's own L-BFGS quasi-Newton approximation
     exact            // use the problem's Hessian callback when present
@@ -55,7 +57,7 @@ struct ipopt_options
 };
 
 // -- PETSc / TAO (also realizes the POUNDERS backend) ------------------------
-enum class tao_algorithm
+enum class tao_algorithm : std::uint8_t
 {
     automatic,  // dispatcher picks pounders (LS) / lmvm (objective)
     pounders,   // derivative-free least squares
@@ -77,3 +79,5 @@ struct petsc_tao_options
 };
 
 }  // namespace solverslib::api
+
+#endif  // SOLVERS_BACKEND_OPTIONS_H_

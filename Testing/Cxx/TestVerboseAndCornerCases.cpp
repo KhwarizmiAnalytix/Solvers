@@ -29,7 +29,9 @@ TEST(VerboseLogs, LMSolverVerboseOutput)
     ls.residuals = [&](const vector_type& p, vector_type& r)
     {
         for (size_t i = 0; i < 3; ++i)
+        {
             r(static_cast<Eigen::Index>(i)) = p(0) * data_x[i] + p(1) - data_y[i];
+        }
     };
 
     ls.jacobian = [&](const vector_type& /*p*/, matrix_type& J)

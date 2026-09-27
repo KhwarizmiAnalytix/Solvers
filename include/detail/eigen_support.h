@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_EIGEN_SUPPORT_H_
+#define SOLVERS_EIGEN_SUPPORT_H_
 // Every third-party linear-algebra dependency for this library is confined
 // to this single header. Solver headers and implementation files only ever
 // see solverslib::vector_type / solverslib::matrix_type and the free
@@ -87,3 +88,5 @@ private:
 };
 
 }  // namespace solverslib
+
+#endif  // SOLVERS_EIGEN_SUPPORT_H_

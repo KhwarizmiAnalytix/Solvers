@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_RESULT_H_
+#define SOLVERS_RESULT_H_
 
 #include <cstddef>
 #include <optional>
@@ -56,3 +57,5 @@ struct solver_result
     }
 };
 }  // namespace solverslib::api
+
+#endif  // SOLVERS_RESULT_H_

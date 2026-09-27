@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_PROBLEM_H_
+#define SOLVERS_PROBLEM_H_
 
 #include <cstddef>
 #include <functional>
@@ -101,3 +102,5 @@ struct dispatch_policy
     bool        prefer_matrix_free        = true;
 };
 }  // namespace solverslib::api
+
+#endif  // SOLVERS_PROBLEM_H_

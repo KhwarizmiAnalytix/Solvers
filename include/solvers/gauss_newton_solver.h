@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_GAUSS_NEWTON_SOLVER_H_
+#define SOLVERS_GAUSS_NEWTON_SOLVER_H_
 
 #include <cassert>
 #include <cmath>
@@ -6,8 +7,8 @@
 #include <limits>
 #include <stdexcept>
 
-#include "detail/support.h"
 #include "detail/native_result.h"
+#include "detail/support.h"
 
 namespace solverslib
 {
@@ -47,7 +48,8 @@ public:
         function_type                     function,
         jacobian_type                     jacobian = nullptr);
 
-    SOLVER_API native_result solve(
-        vector_type& parameters, const solver_options_gn& options) const;
+    SOLVER_API native_result solve(vector_type& parameters, const solver_options_gn& options) const;
 };
 }  // namespace solverslib
+
+#endif  // SOLVERS_GAUSS_NEWTON_SOLVER_H_

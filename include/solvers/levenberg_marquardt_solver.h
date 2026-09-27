@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_LEVENBERG_MARQUARDT_SOLVER_H_
+#define SOLVERS_LEVENBERG_MARQUARDT_SOLVER_H_
 
 #include <stdio.h>
 
@@ -8,8 +9,8 @@
 #include <limits>
 #include <vector>
 
-#include "detail/support.h"
 #include "detail/native_result.h"
+#include "detail/support.h"
 
 namespace solverslib
 {
@@ -36,3 +37,5 @@ public:
     SOLVER_API native_result solve(vector_type& parameters, const solver_options_lm& options) const;
 };
 }  // namespace solverslib
+
+#endif  // SOLVERS_LEVENBERG_MARQUARDT_SOLVER_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_ROOT_FINDING_ALGORITHMS_H_
+#define SOLVERS_ROOT_FINDING_ALGORITHMS_H_
 
 #include <cstddef>
 #include <functional>
@@ -46,10 +47,10 @@ public:
      * of plain false position.
      */
     SOLVER_API static bool false_position(function_type const& func,
-        double                                                x1,
-        double                                                x2,
-        double&                                               root,
-        const root_finding_options&                           options = root_finding_options());
+        double                                                 x1,
+        double                                                 x2,
+        double&                                                root,
+        const root_finding_options&                            options = root_finding_options());
 
     /**
      * @brief Ridders' method: combines a bisection step with exponential
@@ -81,8 +82,8 @@ public:
     SOLVER_API static bool brent(function_type const& func,
         double                                        x1,
         double                                        x2,
-        double&                                        root,
-        const root_finding_options&                    options = root_finding_options());
+        double&                                       root,
+        const root_finding_options&                   options = root_finding_options());
 
     // -- Open (non-bracketing) methods ---------------------------------------
 
@@ -92,10 +93,9 @@ public:
      * (can diverge or cycle if the derivative is small or the guess poor).
      */
     SOLVER_API static bool newton_raphson(function_gradient_type const& func,
-        double                                                         x0,
-        double&                                                       root,
-        const root_finding_options&                                   options =
-            root_finding_options());
+        double                                                          x0,
+        double&                                                         root,
+        const root_finding_options& options = root_finding_options());
 
     /**
      * @brief Secant method: Newton-Raphson's derivative-free counterpart,
@@ -111,3 +111,5 @@ private:
     SOLVERS_DELETE_CLASS(root_finding_algorithms);
 };
 }  // namespace solverslib
+
+#endif  // SOLVERS_ROOT_FINDING_ALGORITHMS_H_

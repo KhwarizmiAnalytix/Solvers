@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_SOLVE_H_
+#define SOLVERS_SOLVE_H_
 
 #include "detail/support.h"
 #include "solvers/api/options.h"
@@ -36,3 +37,5 @@ solver_result solve(const optimization_problem& problem,
     const vector_type&                          initial_guess,
     const solve_options&                        options = {});
 }  // namespace solverslib::api
+
+#endif  // SOLVERS_SOLVE_H_

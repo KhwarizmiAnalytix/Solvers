@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_OPTIONS_H_
+#define SOLVERS_OPTIONS_H_
 
 #include <limits>
 #include <optional>
@@ -39,3 +40,5 @@ struct solve_options
     std::optional<api::petsc_tao_options> petsc_tao;
 };
 }  // namespace solverslib::api
+
+#endif  // SOLVERS_OPTIONS_H_

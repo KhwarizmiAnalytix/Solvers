@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SOLVERS_SUPPORT_H_
+#define SOLVERS_SUPPORT_H_
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -45,3 +46,5 @@ inline bool is_almost_zero(T value, T tolerance = std::numeric_limits<T>::epsilo
     return std::abs(value) < tolerance;
 }
 }  // namespace solverslib
+
+#endif  // SOLVERS_SUPPORT_H_
