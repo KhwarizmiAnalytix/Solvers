@@ -56,6 +56,10 @@ jobs:
         if: matrix.name == 'clangtidy'
         run: sudo apt-get update && sudo apt-get install --yes clang-tidy
 
+      - name: Install coverage-tool
+        if: matrix.name == 'coverage'
+        run: pip install coverage-tool
+
       - name: Configure, build, and test
         working-directory: Scripts
-        run: python3 setup.py ${{ matrix.args }} --build-dir build-${{ matrix.name }}
+        run: python3 setup.py ${{ matrix.args }}
