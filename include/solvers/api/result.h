@@ -4,8 +4,8 @@
 #include <optional>
 #include <string>
 
-#include "include/detail/eigen_support.h"
-#include "include/detail/support.h"
+#include "detail/eigen_support.h"
+#include "detail/support.h"
 #include "solvers/api/status.h"
 
 namespace solverslib::api

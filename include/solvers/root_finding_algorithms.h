@@ -4,7 +4,7 @@
 #include <functional>
 #include <limits>
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 #include "solver_options/root_finding_options.h"
 
 namespace solverslib

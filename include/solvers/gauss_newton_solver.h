@@ -6,8 +6,8 @@
 #include <limits>
 #include <stdexcept>
 
-#include "include/detail/support.h"
-#include "include/detail/native_result.h"
+#include "detail/support.h"
+#include "detail/native_result.h"
 
 namespace solverslib
 {

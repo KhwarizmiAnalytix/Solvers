@@ -1,6 +1,6 @@
 #pragma once
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 #include "solvers/api/options.h"
 #include "solvers/api/problem.h"
 #include "solvers/api/result.h"

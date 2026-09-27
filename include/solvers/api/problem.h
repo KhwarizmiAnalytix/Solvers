@@ -5,8 +5,8 @@
 #include <optional>
 #include <vector>
 
-#include "include/detail/eigen_support.h"
-#include "include/detail/support.h"
+#include "detail/eigen_support.h"
+#include "detail/support.h"
 
 namespace solverslib::api
 {

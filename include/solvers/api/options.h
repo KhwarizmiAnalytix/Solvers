@@ -3,7 +3,7 @@
 #include <limits>
 #include <optional>
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 #include "solvers/api/backend_options.h"
 #include "solvers/api/problem.h"
 #include "solvers/api/status.h"

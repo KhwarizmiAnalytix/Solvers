@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <limits>
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 
 namespace solverslib
 {

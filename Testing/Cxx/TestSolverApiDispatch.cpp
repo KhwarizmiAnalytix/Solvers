@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "include/detail/eigen_support.h"
+#include "detail/eigen_support.h"
 #include "solvers/api/solve.h"
 #include "solvers/ceres_solver.h"
 #include "solvers/ipopt_solver.h"

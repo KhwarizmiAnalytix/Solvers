@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 #include "solver_options/solver_options.h"
 
 namespace solverslib

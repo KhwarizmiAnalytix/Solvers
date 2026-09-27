@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 
 // Backend-specific tuning for the problem-structure API. These mirror the knobs
 // that the internal Ceres option builders expose, but as API-level enums

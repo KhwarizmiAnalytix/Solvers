@@ -1,0 +1,73 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Threads)
+
+# fmt — use system package (header-only mode)
+if(NOT TARGET Fmt::fmt)
+  find_package(fmt QUIET)
+  if(TARGET fmt::fmt-header-only)
+    add_library(Fmt::fmt INTERFACE IMPORTED)
+    set_target_properties(Fmt::fmt PROPERTIES INTERFACE_LINK_LIBRARIES fmt::fmt-header-only)
+  elseif(TARGET fmt::fmt)
+    add_library(Fmt::fmt INTERFACE IMPORTED)
+    set_target_properties(Fmt::fmt PROPERTIES INTERFACE_LINK_LIBRARIES fmt::fmt)
+  endif()
+endif()
+
+# Eigen3
+if(NOT TARGET Eigen3::Eigen)
+  find_package(Eigen3 QUIET)
+  if(NOT TARGET Eigen3::Eigen)
+    add_library(Eigen3::Eigen INTERFACE IMPORTED)
+    set_target_properties(Eigen3::Eigen PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
+    )
+  endif()
+endif()
+
+# magic_enum
+if(NOT TARGET MagicEnum::magic_enum)
+  add_library(MagicEnum::magic_enum INTERFACE IMPORTED)
+  set_target_properties(MagicEnum::magic_enum PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
+  )
+endif()
+
+# loguru
+if(NOT TARGET Loguru::loguru)
+  add_library(Loguru::loguru STATIC IMPORTED)
+  set_target_properties(Loguru::loguru PROPERTIES
+    IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/${CMAKE_STATIC_LIBRARY_PREFIX}loguru${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/loguru"
+    INTERFACE_LINK_LIBRARIES "Threads::Threads"
+  )
+endif()
+
+# Logging
+if(NOT TARGET Logging::Logging)
+  add_library(Logging::Logging STATIC IMPORTED)
+  set_target_properties(Logging::Logging PROPERTIES
+    IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/${CMAKE_STATIC_LIBRARY_PREFIX}Logging${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/Logging;${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/Logging/include/logger"
+    INTERFACE_LINK_LIBRARIES "Loguru::loguru;MagicEnum::magic_enum"
+  )
+  if(TARGET Fmt::fmt)
+    set_property(TARGET Logging::Logging APPEND PROPERTY INTERFACE_LINK_LIBRARIES Fmt::fmt)
+  endif()
+endif()
+
+# Solvers
+if(NOT TARGET Solvers::Solvers)
+  add_library(Solvers::Solvers STATIC IMPORTED)
+  set_target_properties(Solvers::Solvers PROPERTIES
+    IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/${CMAKE_STATIC_LIBRARY_PREFIX}Solvers${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
+    INTERFACE_COMPILE_FEATURES "cxx_std_17"
+    INTERFACE_LINK_LIBRARIES "Eigen3::Eigen;Logging::Logging"
+    INTERFACE_COMPILE_DEFINITIONS "SOLVERS_HAS_CERES=0;SOLVERS_HAS_IPOPT=0;SOLVERS_HAS_PETSC=0"
+  )
+endif()
+
+check_required_components(Solvers)

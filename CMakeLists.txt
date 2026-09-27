@@ -24,8 +24,8 @@ add_library(Solvers ${solvers_sources})
 add_library(Solvers::Solvers ALIAS Solvers)
 target_include_directories(Solvers
   PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:include>"
 )
 target_compile_features(Solvers PUBLIC cxx_std_17)
 target_link_libraries(Solvers PUBLIC Eigen3::Eigen Logging::Logging)
@@ -84,3 +84,73 @@ if(SOLVERS_ENABLE_TESTING)
   enable_testing()
   add_subdirectory(Testing/Cxx)
 endif()
+
+# ---------------------------------------------------------------------------
+# Install & export
+# ---------------------------------------------------------------------------
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set(_solvers_install_cmakedir "${CMAKE_INSTALL_LIBDIR}/cmake/Solvers")
+
+# Eigen3 headers (bundled submodule)
+install(DIRECTORY "${_solvers_tp}/eigen/Eigen"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+install(DIRECTORY "${_solvers_tp}/eigen/unsupported"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+
+# Logging and its bundled dependencies
+set(_logging_tp "${_solvers_tp}/Logging/ThirdParty")
+
+install(TARGETS loguru
+  ARCHIVE  DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY  DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+)
+install(FILES "${_logging_tp}/loguru/loguru.hpp"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/loguru"
+)
+install(DIRECTORY "${_logging_tp}/magic_enum/include/magic_enum"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+
+install(TARGETS Logging
+  ARCHIVE  DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY  DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  RUNTIME  DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+install(DIRECTORY "${_solvers_tp}/Logging/include/"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Logging/include"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+# Solvers library and headers
+install(TARGETS Solvers
+  ARCHIVE  DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  LIBRARY  DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+  RUNTIME  DESTINATION "${CMAKE_INSTALL_BINDIR}"
+)
+install(DIRECTORY include/
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+# CMake package files
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/SolversConfigVersion.cmake"
+  VERSION       ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/Cmake/SolversConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/SolversConfig.cmake"
+  INSTALL_DESTINATION "${_solvers_install_cmakedir}"
+)
+
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/SolversConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/SolversConfigVersion.cmake"
+  DESTINATION "${_solvers_install_cmakedir}"
+)

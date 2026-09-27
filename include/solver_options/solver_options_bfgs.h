@@ -6,7 +6,7 @@
 #include <limits>
 #include <stdexcept>
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 #include "solver_options/solver_options.h"
 
 namespace solverslib

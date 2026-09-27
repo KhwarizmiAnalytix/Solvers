@@ -1,0 +1,22 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "Solvers",
+    srcs = glob(["src/**/*.cpp"]),
+    hdrs = glob([
+        "include/**/*.h",
+        "include/**/*.hpp",
+    ]),
+    defines = [
+        "SOLVERS_HAS_CERES=0",
+        "SOLVERS_HAS_IPOPT=0",
+        "SOLVERS_HAS_PETSC=0",
+    ],
+    includes = ["include"],
+    deps = [
+        "//ThirdParty/Logging:Logging",
+        "@eigen//:eigen",
+    ],
+)

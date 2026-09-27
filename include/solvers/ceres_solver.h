@@ -3,7 +3,7 @@
 #include <iostream>
 #include <vector>
 
-#include "include/detail/support.h"
+#include "detail/support.h"
 
 namespace solverslib
 {
