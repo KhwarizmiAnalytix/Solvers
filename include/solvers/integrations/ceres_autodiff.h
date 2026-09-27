@@ -167,13 +167,11 @@ private:
 
 }  // namespace detail
 
-// Public API: Create a least-squares problem with Ceres AD provider.
-// The templated functor must have:
-//   template <typename T>
-//   bool operator()(const T* const x, T* residuals) const
-// It will be instantiated with both double (residual computation) and
-// Ceres Jet types (automatic differentiation).
+// DEPRECATED: Use solvers/integrations/autodiff_provider.h instead.
+//   auto problem = least_squares(MyModel{}, n, m);
+//   problem.derivatives(auto_diff());
 template <class Functor>
+[[deprecated("Use least_squares(functor, n, m) + problem.derivatives(auto_diff()) instead")]]
 api::least_squares_problem make_ceres_autodiff_problem(
     std::size_t num_parameters,
     std::size_t num_residuals,
