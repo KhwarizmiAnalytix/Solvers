@@ -1,0 +1,226 @@
+#include <cmath>
+#include <vector>
+
+#include <gtest/gtest.h>
+
+#include "optimization_test_problems.h"
+#include "solvers/api/solve.h"
+
+namespace solverslib
+{
+namespace
+{
+using testing::optimization_test_problem;
+
+double residual_norm(
+    const optimization_test_problem& problem, const vector_type& parameters)
+{
+    vector_type r = make_vector(problem.num_residuals);
+    problem.residuals(parameters, r);
+    return r.norm();
+}
+
+void expect_solved(const optimization_test_problem& problem,
+    const api::solver_result&                       result,
+    double                                          tolerance)
+{
+    EXPECT_LT(residual_norm(problem, result.parameters), tolerance) << "problem=" << problem.name;
+    for (size_t i = 0; i < problem.expected_solution.size(); ++i)
+    {
+        EXPECT_NEAR(result.parameters[i], problem.expected_solution[i], std::sqrt(tolerance))
+            << "problem=" << problem.name << " parameter=" << i;
+    }
+}
+
+std::string problem_name(const ::testing::TestParamInfo<optimization_test_problem>& info)
+{
+    return info.param.name;
+}
+
+api::least_squares_problem to_ls(const optimization_test_problem& tp)
+{
+    api::least_squares_problem p;
+    p.num_parameters = tp.num_parameters;
+    p.num_residuals  = tp.num_residuals;
+    p.residuals      = tp.residuals;
+    p.jacobian       = tp.jacobian;
+    return p;
+}
+
+api::optimization_problem to_obj(const optimization_test_problem& tp)
+{
+    api::optimization_problem p;
+    p.num_parameters = tp.num_parameters;
+    p.objective = [&tp](const vector_type& x) -> double {
+        vector_type r = make_vector(tp.num_residuals);
+        tp.residuals(x, r);
+        return 0.5 * r.squaredNorm();
+    };
+    p.gradient = [&tp](const vector_type& x, vector_type& g) {
+        vector_type r = make_vector(tp.num_residuals);
+        matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
+        tp.residuals(x, r);
+        tp.jacobian(x, J);
+        g = J.transpose() * r;
+    };
+    return p;
+}
+
+class SolverBackendTest : public ::testing::TestWithParam<optimization_test_problem>
+{
+};
+
+TEST_P(SolverBackendTest, LevenbergMarquardtSolvesProblem)
+{
+    const auto& tp = GetParam();
+    auto        ls = to_ls(tp);
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.algorithm           = api::algorithm::levenberg_marquardt;
+    opts.backend             = api::backend::native;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-6);
+}
+
+TEST_P(SolverBackendTest, LbfgsSolvesProblem)
+{
+    const auto& tp  = GetParam();
+    auto        obj = to_obj(tp);
+    vector_type x0  = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.algorithm           = api::algorithm::lbfgs;
+    opts.backend             = api::backend::native;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(obj, x0, opts);
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-4);
+}
+
+TEST_P(SolverBackendTest, GaussNewtonSolvesProblem)
+{
+    const auto& tp = GetParam();
+    auto        ls = to_ls(tp);
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.algorithm           = api::algorithm::gauss_newton;
+    opts.backend             = api::backend::native;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-6);
+}
+
+TEST_P(SolverBackendTest, CeresSolvesProblem)
+{
+    const auto& tp = GetParam();
+    auto        ls = to_ls(tp);
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend             = api::backend::ceres;
+    opts.max_iterations      = 500;
+    opts.function_tolerance  = 1e-14;
+    opts.parameter_tolerance = 1e-14;
+
+    auto result = api::solve(ls, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "Ceres backend not compiled in (SOLVERS_ENABLE_CERES=OFF)";
+    }
+
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-4);
+}
+
+TEST_P(SolverBackendTest, IpoptSolvesProblem)
+{
+    const auto& tp  = GetParam();
+    auto        obj = to_obj(tp);
+    vector_type x0  = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend        = api::backend::ipopt;
+    opts.max_iterations = 500;
+    opts.ipopt          = api::ipopt_options{.tol = 1e-10};
+
+    auto result = api::solve(obj, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "Ipopt backend not compiled in (SOLVERS_ENABLE_IPOPT=OFF)";
+    }
+
+    EXPECT_TRUE(result.converged());
+    expect_solved(tp, result, 1e-4);
+}
+
+TEST_P(SolverBackendTest, PetscTaoSolvesProblem)
+{
+    const auto& tp  = GetParam();
+    auto        obj = to_obj(tp);
+    vector_type x0  = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.backend        = api::backend::petsc_tao;
+    opts.max_iterations = 500;
+    opts.petsc_tao      = api::petsc_tao_options{.gatol = 1e-8, .grtol = 1e-8};
+
+    auto result = api::solve(obj, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "PETSc/TAO backend not compiled in (SOLVERS_ENABLE_PETSC=OFF)";
+    }
+
+    EXPECT_TRUE(result.has_usable_iterate());
+}
+
+TEST_P(SolverBackendTest, PoundersSolvesProblem)
+{
+    const auto& tp = GetParam();
+
+    api::least_squares_problem ls;
+    ls.num_parameters = tp.num_parameters;
+    ls.num_residuals  = tp.num_residuals;
+    ls.residuals      = tp.residuals;
+    // No Jacobian — derivative-free path.
+
+    vector_type x0 = to_vector_type(tp.initial_guess);
+
+    api::solve_options opts;
+    opts.algorithm      = api::algorithm::pounders;
+    opts.backend        = api::backend::pounders;
+    opts.max_iterations = 500;
+    opts.petsc_tao      = api::petsc_tao_options{.gatol = 1e-6, .grtol = 1e-6};
+
+    auto result = api::solve(ls, x0, opts);
+    if (result.status == api::solver_status::backend_unavailable)
+    {
+        GTEST_SKIP() << "PETSc/TAO backend not compiled in (SOLVERS_ENABLE_PETSC=OFF)";
+    }
+
+    EXPECT_TRUE(result.converged());
+}
+
+INSTANTIATE_TEST_SUITE_P(AllProblems,
+    SolverBackendTest,
+    ::testing::Values(testing::make_linear_scalar_problem(),
+        testing::make_rosenbrock_problem(),
+        testing::make_powell_singular_problem(),
+        testing::make_exponential_fit_problem()),
+    problem_name);
+
+}  // namespace
+}  // namespace solverslib

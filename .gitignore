@@ -1,0 +1,8 @@
+/build/
+/build-*/
+/build_*/
+*.log
+__pycache__/
+*.py[cod]
+.DS_Store
+/.lintbin/default.profraw
