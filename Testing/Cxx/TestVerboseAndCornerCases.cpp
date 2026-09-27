@@ -4,8 +4,8 @@
 #include <gtest/gtest.h>
 
 #include "solvers/api/solve.h"
-#include "solvers/levenberg_marquardt_solver.h"
 #include "solvers/gauss_newton_solver.h"
+#include "solvers/levenberg_marquardt_solver.h"
 #include "solvers/root_finding_algorithms.h"
 
 namespace solverslib
@@ -26,12 +26,14 @@ TEST(VerboseLogs, LMSolverVerboseOutput)
     double data_x[] = {1.0, 2.0, 3.0};
     double data_y[] = {2.1, 3.9, 6.2};
 
-    ls.residuals = [&](const vector_type& p, vector_type& r) {
+    ls.residuals = [&](const vector_type& p, vector_type& r)
+    {
         for (size_t i = 0; i < 3; ++i)
             r(static_cast<Eigen::Index>(i)) = p(0) * data_x[i] + p(1) - data_y[i];
     };
 
-    ls.jacobian = [&](const vector_type& /*p*/, matrix_type& J) {
+    ls.jacobian = [&](const vector_type& /*p*/, matrix_type& J)
+    {
         for (size_t i = 0; i < 3; ++i)
         {
             J(static_cast<Eigen::Index>(i), 0) = data_x[i];
@@ -63,12 +65,14 @@ TEST(VerboseLogs, GaussNewtonVerboseOutput)
     ls.num_parameters = 1;
     ls.num_residuals  = 2;
 
-    ls.residuals = [](const vector_type& p, vector_type& r) {
+    ls.residuals = [](const vector_type& p, vector_type& r)
+    {
         r(0) = p(0) - 1.0;
         r(1) = p(0) - 1.0;
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J) {
+    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
+    {
         J(0, 0) = 1.0;
         J(1, 0) = 1.0;
     };
@@ -95,9 +99,8 @@ TEST(VerboseLogs, RootFindingVerbose)
 {
     // Note: root_finding_options doesn't have verbose flag in current API,
     // but this documents the intent for future verbose improvements
-    double root = 0.0;
-    const bool converged = root_finding_algorithms::brent(
-        [](double x) { return x * x - 9.0; },
+    double     root      = 0.0;
+    const bool converged = root_finding_algorithms::brent([](double x) { return x * x - 9.0; },
         0.0,
         4.0,
         root,
@@ -119,8 +122,8 @@ TEST(CornerCases, ZeroInitialGuess)
     api::least_squares_problem ls;
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
-    ls.residuals = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
-    ls.jacobian  = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
+    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -142,8 +145,8 @@ TEST(CornerCases, NegativeInitialGuess)
     api::least_squares_problem ls;
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
-    ls.residuals = [](const vector_type& p, vector_type& r) { r(0) = p(0) + 3.0; };
-    ls.jacobian  = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) + 3.0; };
+    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -167,7 +170,8 @@ TEST(CornerCases, MultipleEquationsUnderdetermined)
     ls.num_parameters = 2;
     ls.num_residuals  = 5;
 
-    ls.residuals = [](const vector_type& p, vector_type& r) {
+    ls.residuals = [](const vector_type& p, vector_type& r)
+    {
         r(0) = p(0) + p(1) - 5.0;
         r(1) = p(0) - p(1) - 1.0;
         r(2) = 2.0 * p(0) + p(1) - 8.0;
@@ -175,7 +179,8 @@ TEST(CornerCases, MultipleEquationsUnderdetermined)
         r(4) = p(0) * p(0) + p(1) * p(1) - 13.0;
     };
 
-    ls.jacobian = [](const vector_type& p, matrix_type& J) {
+    ls.jacobian = [](const vector_type& p, matrix_type& J)
+    {
         J(0, 0) = 1.0;
         J(0, 1) = 1.0;
         J(1, 0) = 1.0;
@@ -210,12 +215,14 @@ TEST(CornerCases, NearSingularJacobian)
     ls.num_residuals  = 2;
 
     // Nearly singular system (near-zero determinant)
-    ls.residuals = [](const vector_type& p, vector_type& r) {
+    ls.residuals = [](const vector_type& p, vector_type& r)
+    {
         r(0) = p(0) + 1.001 * p(1) - 5.0;
         r(1) = p(0) + p(1) - 5.0;  // Almost linearly dependent
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J) {
+    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
+    {
         J(0, 0) = 1.0;
         J(0, 1) = 1.001;
         J(1, 0) = 1.0;
@@ -244,13 +251,9 @@ TEST(CornerCases, LargeScaleResiduals)
     ls.num_residuals  = 1;
 
     // Residual with very large scale
-    ls.residuals = [](const vector_type& p, vector_type& r) {
-        r(0) = 1e8 * (p(0) - 0.5);
-    };
+    ls.residuals = [](const vector_type& p, vector_type& r) { r(0) = 1e8 * (p(0) - 0.5); };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J) {
-        J(0, 0) = 1e8;
-    };
+    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1e8; };
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -274,12 +277,14 @@ TEST(CornerCases, IdenticalEquations)
     ls.num_parameters = 1;
     ls.num_residuals  = 2;
 
-    ls.residuals = [](const vector_type& p, vector_type& r) {
+    ls.residuals = [](const vector_type& p, vector_type& r)
+    {
         r(0) = p(0) - 3.0;
         r(1) = p(0) - 3.0;  // Identical to r(0)
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J) {
+    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
+    {
         J(0, 0) = 1.0;
         J(1, 0) = 1.0;  // Identical to J(0, 0)
     };
@@ -309,14 +314,16 @@ TEST(CornerCases, SingleParameterMultipleResiduals)
 
     const double target = 2.5;
 
-    ls.residuals = [target](const vector_type& p, vector_type& r) {
+    ls.residuals = [target](const vector_type& p, vector_type& r)
+    {
         for (int i = 0; i < 10; ++i)
         {
             r(i) = p(0) - target;
         }
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J) {
+    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
+    {
         for (int i = 0; i < 10; ++i)
         {
             J(i, 0) = 1.0;
@@ -385,8 +392,8 @@ TEST(ErrorHandling, ZeroIterationLimit)
     api::least_squares_problem ls;
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
-    ls.residuals = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
-    ls.jacobian  = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
+    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
 
     api::solve_options opts;
     opts.max_iterations = 0;  // No iterations allowed
@@ -406,8 +413,8 @@ TEST(ErrorHandling, NegativeTolerance)
     api::least_squares_problem ls;
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
-    ls.residuals = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
-    ls.jacobian  = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
+    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -430,15 +437,28 @@ TEST(ErrorHandling, RootFindingInvalidInterval)
     // Interval where function doesn't change sign
     double root = 0.0;
 
-    // brent throws when interval doesn't bracket a root
-    EXPECT_THROW({
-        root_finding_algorithms::brent(
-            [](double x) { return x * x + 1.0; },  // Always positive (no sign change)
+    // brent throws when interval doesn't bracket a root (throws logging::exception, not
+    // std::exception)
+    bool threw_exception = false;
+    try
+    {
+        root_finding_algorithms::brent([](double x)
+            { return x * x + 1.0; },  // Always positive (no sign change)
             0.0,
             10.0,
             root,
             root_finding_options_builder().with_tolerance_function(1e-12).build());
-    }, std::exception);
+    }
+    catch (const std::exception& /*e*/)
+    {
+        threw_exception = true;
+    }
+    catch (...)
+    {
+        threw_exception = true;
+    }
+
+    EXPECT_TRUE(threw_exception);
 }
 
 TEST(ErrorHandling, RootFindingZeroInterval)
@@ -446,8 +466,7 @@ TEST(ErrorHandling, RootFindingZeroInterval)
     double root = 0.0;
 
     // Zero-width interval: implementation may return root = start value, but shouldn't crash
-    const bool converged = root_finding_algorithms::brent(
-        [](double x) { return x - 2.0; },
+    const bool converged = root_finding_algorithms::brent([](double x) { return x - 2.0; },
         2.0,
         2.0,  // Zero-width interval
         root,
