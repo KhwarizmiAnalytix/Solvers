@@ -21,7 +21,10 @@ if(NOT TARGET Logging::Logging)
   set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "Disable Logging's own examples" FORCE)
   set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "Disable Logging's own benchmarks" FORCE)
   set(LOGGING_ENABLE_GTEST OFF CACHE BOOL "Logging testing is disabled; skip its GTest wiring" FORCE)
+  set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Logging as static library" FORCE)
   add_subdirectory("${_solvers_tp}/Logging" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging" EXCLUDE_FROM_ALL)
+  set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
 endif()
 # Keep dependency-wide options scoped to this directory, away from the host project.
 function(solvers_add_optional_dependencies)
@@ -42,10 +45,13 @@ function(solvers_add_optional_dependencies)
     write_basic_package_version_file("${Eigen3_DIR}/Eigen3ConfigVersion.cmake" VERSION 3.4.0 COMPATIBILITY SameMajorVersion)
     # Force Ceres and abseil-cpp as static libraries: abseil shared DLLs on
     # Windows fail to link (undefined AbslInternalSpinLockDelay/Wake symbols).
-    set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
+    # Note: BUILD_SHARED_LIBS is intentionally left OFF after adding Ceres.
+    # Abseil (a Ceres dependency) builds with default symbol visibility and would
+    # be exported from any shared Solvers library, causing duplicate-symbol crashes
+    # if the test executable also links libceres.a. Keeping everything static avoids
+    # the collision: all Ceres/abseil symbols end up in exactly one place.
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Ceres and abseil as static libraries" FORCE)
     add_subdirectory("${_solvers_tp}/ceres" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/ceres" EXCLUDE_FROM_ALL)
-    set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
   endif()
 endfunction()
 solvers_add_optional_dependencies()
