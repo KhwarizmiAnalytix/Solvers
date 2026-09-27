@@ -2,6 +2,7 @@ include(GoogleTest)
 add_executable(
     SolversTests TestOptimizationAlgorithm.cpp TestOptimizerWrapper.cpp TestSolverBackends.cpp
                  TestRootFindingAndPolynomialSolvers.cpp TestSolverApiDispatch.cpp
+                 TestVerboseAndCornerCases.cpp
 )
 target_link_libraries(SolversTests PRIVATE Solvers::Solvers GTest::gtest_main)
 # PRE_TEST defers gtest enumeration to ctest time instead of running the (here
