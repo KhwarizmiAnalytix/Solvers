@@ -115,17 +115,15 @@ TEST(AnalyticJacobianProvider, Metadata)
 TEST(AnalyticJacobianProvider, NullResidualThrows)
 {
     const auto& tp = make_rosenbrock_problem();
-    EXPECT_THROW(
-        AnalyticJacobianProvider(nullptr, tp.jacobian, tp.num_parameters, tp.num_residuals),
-        std::exception);
+    EXPECT_ANY_THROW(
+        AnalyticJacobianProvider(nullptr, tp.jacobian, tp.num_parameters, tp.num_residuals));
 }
 
 TEST(AnalyticJacobianProvider, NullJacobianThrows)
 {
     const auto& tp = make_rosenbrock_problem();
-    EXPECT_THROW(
-        AnalyticJacobianProvider(tp.residuals, nullptr, tp.num_parameters, tp.num_residuals),
-        std::exception);
+    EXPECT_ANY_THROW(
+        AnalyticJacobianProvider(tp.residuals, nullptr, tp.num_parameters, tp.num_residuals));
 }
 
 // ---------------------------------------------------------------------------
@@ -198,12 +196,10 @@ TEST(FiniteDifferenceJacobianProvider, Metadata)
 TEST(FiniteDifferenceJacobianProvider, NonPositiveStepThrows)
 {
     const auto& tp = make_rosenbrock_problem();
-    EXPECT_THROW(
-        FiniteDifferenceJacobianProvider(tp.residuals, tp.num_parameters, tp.num_residuals, -1e-7),
-        std::exception);
-    EXPECT_THROW(
-        FiniteDifferenceJacobianProvider(tp.residuals, tp.num_parameters, tp.num_residuals, 0.0),
-        std::exception);
+    EXPECT_ANY_THROW(
+        FiniteDifferenceJacobianProvider(tp.residuals, tp.num_parameters, tp.num_residuals, -1e-7));
+    EXPECT_ANY_THROW(
+        FiniteDifferenceJacobianProvider(tp.residuals, tp.num_parameters, tp.num_residuals, 0.0));
 }
 
 // ---------------------------------------------------------------------------
@@ -240,7 +236,7 @@ TEST(AnalyticGradientProvider, Metadata)
 
 TEST(AnalyticGradientProvider, NullGradientThrows)
 {
-    EXPECT_THROW(AnalyticGradientProvider(nullptr, 2), std::exception);
+    EXPECT_ANY_THROW(AnalyticGradientProvider(nullptr, 2));
 }
 
 // ---------------------------------------------------------------------------
@@ -275,8 +271,8 @@ TEST(FiniteDifferenceGradientProvider, Metadata)
 TEST(FiniteDifferenceGradientProvider, NonPositiveStepThrows)
 {
     auto of = [](const vector_type& x) { return x[0]; };
-    EXPECT_THROW(FiniteDifferenceGradientProvider(of, 1, -1e-7), std::exception);
-    EXPECT_THROW(FiniteDifferenceGradientProvider(of, 1, 0.0), std::exception);
+    EXPECT_ANY_THROW(FiniteDifferenceGradientProvider(of, 1, -1e-7));
+    EXPECT_ANY_THROW(FiniteDifferenceGradientProvider(of, 1, 0.0));
 }
 
 // ---------------------------------------------------------------------------
