@@ -94,11 +94,13 @@ solver_result from_native(const native_result& out, const vector_type& x, api::a
 problem_traits inspect(const least_squares_problem& problem)
 {
     problem_traits traits;
-    traits.is_least_squares = true;
-    traits.has_jacobian     = problem.jacobian.has_value();
-    traits.has_bounds       = !problem.bounds.empty();
-    traits.num_parameters   = problem.num_parameters;
-    traits.num_residuals    = problem.num_residuals;
+    traits.is_least_squares      = true;
+    traits.has_jacobian          = problem.jacobian.has_value();
+    traits.has_callable_jacobian = problem.has_callable_jacobian();
+    traits.has_autodiff_provider = !!problem.provider_factory;
+    traits.has_bounds            = !problem.bounds.empty();
+    traits.num_parameters        = problem.num_parameters;
+    traits.num_residuals         = problem.num_residuals;
     return traits;
 }
 
@@ -168,6 +170,68 @@ backend select_backend(const problem_traits& traits, const solve_options& option
 
 namespace
 {
+// Result of derivative policy resolution
+struct derivative_resolution
+{
+    derivative_mode resolved;
+    solver_result*  error;  // nullptr if OK; otherwise result explaining incompatibility
+};
+
+// Resolve derivative policy to a concrete implementation
+derivative_resolution resolve_derivatives(
+    const least_squares_problem& problem,
+    const solve_options& options,
+    backend chosen_backend,
+    const vector_type& x)
+{
+    auto policy = options.derivatives;
+
+    // Rule 1: explicit request takes precedence
+    if (policy != derivative_mode::automatic)
+    {
+        // Validate that the backend can execute the requested policy
+        if (policy == derivative_mode::supplied && !problem.has_callable_jacobian())
+        {
+            auto err = new solver_result();
+            *err = failed(solver_status::invalid_problem,
+                "supplied Jacobian required but not provided", x);
+            return {policy, err};
+        }
+        if (policy == derivative_mode::automatic_differentiation)
+        {
+            // Check that a provider exists and backend is compatible
+            if (!problem.provider_factory)
+            {
+                auto err = new solver_result();
+                *err = failed(solver_status::unsupported_capability,
+                    "automatic differentiation required but no AD provider available", x);
+                return {policy, err};
+            }
+            if (chosen_backend != backend::ceres)
+            {
+                auto err = new solver_result();
+                *err = failed(solver_status::unsupported_capability,
+                    "AD required but selected backend is not Ceres", x);
+                return {policy, err};
+            }
+        }
+        return {policy, nullptr};
+    }
+
+    // Rule 2: automatic mode cascades
+    // Supplied > AD > numeric/derivative-free
+    if (problem.has_callable_jacobian())
+    {
+        return {derivative_mode::supplied, nullptr};
+    }
+    if (problem.provider_factory && chosen_backend == backend::ceres)
+    {
+        return {derivative_mode::automatic_differentiation, nullptr};
+    }
+    // Otherwise fall through to backend's default (Ceres numeric, native finite-diff, etc.)
+    return {derivative_mode::automatic, nullptr};
+}
+
 // Shared native least-squares execution once validation has passed.
 solver_result run_native_least_squares(const least_squares_problem& problem,
     const vector_type&                                              initial_guess,

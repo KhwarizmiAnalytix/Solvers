@@ -20,6 +20,9 @@ struct solve_options
     api::algorithm algorithm = api::algorithm::automatic;
     api::backend   backend   = api::backend::automatic;
 
+    // How to compute or select derivatives.
+    api::derivative_mode derivatives = api::derivative_mode::automatic;
+
     // Separate budgets rather than one overloaded "iterations" count.
     int max_iterations           = 100;
     int max_function_evaluations = 0;  // 0 == unlimited

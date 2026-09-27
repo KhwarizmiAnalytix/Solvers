@@ -4,12 +4,18 @@
 #include <any>
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <typeinfo>
 #include <vector>
 
 #include "detail/eigen_support.h"
 #include "detail/support.h"
+
+namespace solverslib::api::detail
+{
+class provider_factory;
+}
 
 namespace solverslib::api
 {
@@ -69,7 +75,17 @@ struct least_squares_problem
     std::any                             templated_residuals;
     std::optional<const std::type_info*> templated_residuals_type;
 
+    // Provider factory for computing derivatives (AD, supplied, numeric).
+    // Set by make_ceres_autodiff_problem or directly for other providers.
+    std::shared_ptr<const detail::provider_factory> provider_factory;
+
     api::bounds bounds;
+
+    // Helper to check if jacobian callback is both present and callable
+    bool has_callable_jacobian() const noexcept
+    {
+        return jacobian.has_value() && static_cast<bool>(jacobian.value());
+    }
 
     // Helper to store a templated residuals functor
     template <typename Functor> void set_templated_residuals(const Functor& func)
@@ -123,6 +139,8 @@ struct problem_traits
 {
     bool is_least_squares           = false;
     bool has_jacobian               = false;
+    bool has_callable_jacobian      = false;
+    bool has_autodiff_provider      = false;
     bool has_gradient               = false;
     bool has_hessian                = false;
     bool has_hessian_vector_product = false;

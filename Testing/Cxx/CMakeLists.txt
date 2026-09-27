@@ -1,8 +1,15 @@
 include(GoogleTest)
+
+# Ceres AD integration tests (only when Ceres is available)
+set(CERES_TEST_FILES)
+if(SOLVERS_ENABLE_CERES)
+    list(APPEND CERES_TEST_FILES TestCeresAutoDiff.cpp)
+endif()
+
 add_executable(
     SolversTests TestOptimizationAlgorithm.cpp TestOptimizerWrapper.cpp TestSolverBackends.cpp
                  TestRootFindingAndPolynomialSolvers.cpp TestSolverApiDispatch.cpp
-                 TestVerboseAndCornerCases.cpp
+                 TestVerboseAndCornerCases.cpp ${CERES_TEST_FILES}
 )
 target_link_libraries(SolversTests PRIVATE Solvers::Solvers GTest::gtest_main)
 # PRE_TEST defers gtest enumeration to ctest time instead of running the (here

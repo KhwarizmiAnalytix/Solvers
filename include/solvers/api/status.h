@@ -49,6 +49,15 @@ enum class backend : std::uint8_t
     ceres
 };
 
+// How derivatives are computed or selected.
+enum class derivative_mode : std::uint8_t
+{
+    automatic,                  // Prefer supplied Jacobian; fallback to AD; fallback to numeric/derivative-free
+    supplied,                   // Require an engaged, callable Jacobian; error if missing
+    automatic_differentiation,  // Require a compatible AD provider; error if missing or unsupported
+    finite_difference           // Use explicit numerical differentiation even if AD/supplied exist
+};
+
 inline const char* to_string(solver_status status)
 {
     switch (status)
@@ -113,6 +122,22 @@ inline const char* to_string(backend value)
         return "pounders";
     case backend::ceres:
         return "ceres";
+    }
+    return "unknown";
+}
+
+inline const char* to_string(derivative_mode value)
+{
+    switch (value)
+    {
+    case derivative_mode::automatic:
+        return "automatic";
+    case derivative_mode::supplied:
+        return "supplied";
+    case derivative_mode::automatic_differentiation:
+        return "automatic_differentiation";
+    case derivative_mode::finite_difference:
+        return "finite_difference";
     }
     return "unknown";
 }

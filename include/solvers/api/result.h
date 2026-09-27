@@ -39,6 +39,9 @@ struct solver_result
     std::size_t accepted_steps       = 0;
     std::size_t rejected_steps       = 0;
 
+    // Effective derivative source that was actually used
+    std::optional<api::derivative_mode> effective_derivative_source;
+
     // What actually ran, after Auto resolution.
     api::backend   backend   = api::backend::automatic;
     api::algorithm algorithm = api::algorithm::automatic;
