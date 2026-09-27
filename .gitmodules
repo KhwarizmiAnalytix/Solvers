@@ -1,0 +1,12 @@
+[submodule "ThirdParty/eigen"]
+	path = ThirdParty/eigen
+	url = https://gitlab.com/libeigen/eigen.git
+[submodule "ThirdParty/ceres"]
+	path = ThirdParty/ceres
+	url = https://github.com/ceres-solver/ceres-solver.git
+[submodule "ThirdParty/googletest"]
+	path = ThirdParty/googletest
+	url = https://github.com/google/googletest.git
+[submodule "ThirdParty/Logging"]
+	path = ThirdParty/Logging
+	url = https://github.com/KhwarizmiAnalytix/Logging.git
