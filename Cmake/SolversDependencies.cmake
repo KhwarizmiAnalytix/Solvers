@@ -40,7 +40,12 @@ function(solvers_add_optional_dependencies)
     file(WRITE "${Eigen3_DIR}/Eigen3Config.cmake" "set(Eigen3_FOUND TRUE)\nset(EIGEN3_VERSION_STRING 3.4.0)\n")
     include(CMakePackageConfigHelpers)
     write_basic_package_version_file("${Eigen3_DIR}/Eigen3ConfigVersion.cmake" VERSION 3.4.0 COMPATIBILITY SameMajorVersion)
+    # Force Ceres and abseil-cpp as static libraries: abseil shared DLLs on
+    # Windows fail to link (undefined AbslInternalSpinLockDelay/Wake symbols).
+    set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Ceres and abseil as static libraries" FORCE)
     add_subdirectory("${_solvers_tp}/ceres" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/ceres" EXCLUDE_FROM_ALL)
+    set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
   endif()
 endfunction()
 solvers_add_optional_dependencies()

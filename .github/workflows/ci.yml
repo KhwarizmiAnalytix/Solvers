@@ -181,7 +181,7 @@ jobs:
       - name: Install Ceres dependencies
         if: contains(matrix.args, 'ceres')
         run: |
-          brew install google-glog gflags
+          brew install glog gflags
 
       - name: Configure, build, and test
         working-directory: Scripts
