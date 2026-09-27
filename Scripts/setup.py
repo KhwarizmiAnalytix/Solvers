@@ -418,11 +418,6 @@ def check_dependencies() -> list[str]:
     """Check if required dependencies are installed."""
     missing_deps = []
 
-    try:
-        import psutil  # noqa: F401
-    except ImportError:
-        missing_deps.append("psutil")
-
     # Check for CMake
     try:
         subprocess.run(["cmake", "--version"], capture_output=True, check=True)
