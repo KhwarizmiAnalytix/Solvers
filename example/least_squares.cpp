@@ -34,8 +34,12 @@ int main()
     vector_type params(num_params);
     params << 1.0, 0.0;
 
-    solverslib::solver_options_lm options(100, 1e-8, 0.0, 1e-8);
-    auto result = solver.solve(params, options);
+    auto options = solverslib::solver_options_lm_builder()
+        .with_max_iterations(100)
+        .with_function_tolerance(1e-8)
+        .with_parameter_tolerance(1e-8)
+        .build();
+    auto result = solver.solve(params, *options);
 
     std::printf("LM: a = %.6f, b = %.6f  (y = a*x + b)\n",
         params(0), params(1));
