@@ -66,7 +66,16 @@ public:
             std::vector<double> r_vec(residuals.size());
 
             double const* params[] = {x_vec.data()};
-            double* jacobians_arr[] = {jacobians ? jacobians->data() : nullptr};
+            std::unique_ptr<std::vector<double>> j_vec;
+            double* jacobians_arr[] = {nullptr};
+
+            // If Jacobian requested, allocate row-major buffer for Ceres to write
+            if (jacobians)
+            {
+                j_vec = std::make_unique<std::vector<double>>(
+                    metadata_.num_residuals * metadata_.num_parameters);
+                jacobians_arr[0] = j_vec->data();
+            }
 
             // Evaluate through Ceres interface
             bool ok = cost_function_->Evaluate(params, r_vec.data(), jacobians_arr);
@@ -86,9 +95,15 @@ public:
                 residuals[i] = r_vec[i];
             }
 
-            // Validate Jacobian if requested
-            if (jacobians)
+            // Copy and convert Jacobian if requested (Ceres writes row-major, Eigen is column-major)
+            if (jacobians && j_vec)
             {
+                // Map the row-major buffer Ceres wrote to as a temporary, then convert to column-major
+                Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
+                    row_major_view(j_vec->data(), metadata_.num_residuals, metadata_.num_parameters);
+                *jacobians = row_major_view;  // Assignment converts layout automatically
+
+                // Validate Jacobian entries
                 for (std::size_t i = 0; i < jacobians->size(); ++i)
                 {
                     if (!std::isfinite((*jacobians)(i / jacobians->cols(), i % jacobians->cols())))
@@ -139,7 +154,7 @@ public:
 
     const api::detail::provider_metadata& metadata() const override { return metadata_; }
 
-    std::unique_ptr<api::detail::residual_evaluator> create_evaluator() override
+    std::unique_ptr<api::detail::residual_evaluator> create_evaluator() const override
     {
         return std::make_unique<CeresAutoDiffEvaluator<Functor>>(functor_, n_, m_);
     }
@@ -170,6 +185,14 @@ api::least_squares_problem make_ceres_autodiff_problem(
 
     // Store the functor for potential legacy access
     problem.set_templated_residuals(templated_residuals);
+
+    // Set the residuals callback to invoke the templated functor with double
+    problem.residuals = [templated_residuals](const vector_type& x, vector_type& r) {
+        if (!templated_residuals(x.data(), r.data()))
+        {
+            throw std::runtime_error("Templated residuals functor returned false");
+        }
+    };
 
     // Create and attach the provider factory
     // The solver will use this to instantiate the AD evaluator

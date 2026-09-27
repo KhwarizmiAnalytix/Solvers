@@ -58,10 +58,24 @@ if(NOT TARGET Logging::Logging)
   endif()
 endif()
 
-# Determine which optional backends are available
-set(SOLVERS_HAS_CERES @SOLVERS_ENABLE_CERES@)
-set(SOLVERS_HAS_IPOPT @SOLVERS_ENABLE_IPOPT@)
-set(SOLVERS_HAS_PETSC @SOLVERS_ENABLE_PETSC@)
+# Determine which optional backends are available (as numeric values)
+if(@SOLVERS_ENABLE_CERES@)
+  set(SOLVERS_HAS_CERES 1)
+else()
+  set(SOLVERS_HAS_CERES 0)
+endif()
+
+if(@SOLVERS_ENABLE_IPOPT@)
+  set(SOLVERS_HAS_IPOPT 1)
+else()
+  set(SOLVERS_HAS_IPOPT 0)
+endif()
+
+if(@SOLVERS_ENABLE_PETSC@)
+  set(SOLVERS_HAS_PETSC 1)
+else()
+  set(SOLVERS_HAS_PETSC 0)
+endif()
 
 # Ceres (optional, but required for Solvers::CeresAutodiff)
 if(SOLVERS_HAS_CERES)

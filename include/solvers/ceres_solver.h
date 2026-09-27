@@ -40,6 +40,12 @@ public:
 
     SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_ceres& option);
 
+    // Solve and return Ceres summary for detailed diagnostics
+    SOLVER_API void solve_with_summary(
+        std::vector<double>&    parameters,
+        const solver_options_ceres& options,
+        void*                   summary_ptr);  // ceres::Solver::Summary*
+
     SOLVER_API static bool is_supported();
 
 private:

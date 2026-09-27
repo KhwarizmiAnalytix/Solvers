@@ -12,6 +12,12 @@ add_executable(
                  TestVerboseAndCornerCases.cpp ${CERES_TEST_FILES}
 )
 target_link_libraries(SolversTests PRIVATE Solvers::Solvers GTest::gtest_main)
+
+# Link Ceres for tests when available
+if(SOLVERS_ENABLE_CERES AND TARGET Ceres::ceres)
+    target_link_libraries(SolversTests PRIVATE Ceres::ceres)
+    target_compile_definitions(SolversTests PRIVATE SOLVERS_HAS_CERES=1)
+endif()
 # PRE_TEST defers gtest enumeration to ctest time instead of running the (here
 # coverage-instrumented) test binary as a post-link build step. Under a fully
 # parallel build the post-build enumeration competes with in-flight compiles

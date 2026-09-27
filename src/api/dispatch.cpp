@@ -12,6 +12,10 @@
 #include "solver_options/solver_options_petsc.h"
 #include "detail/native_result.h"
 #include "solvers/ceres_solver.h"
+
+#if SOLVERS_HAS_CERES
+#include <ceres/ceres.h>
+#endif
 #include "solvers/gauss_newton_solver.h"
 #include "solvers/ipopt_solver.h"
 #include "solvers/lbfgs_solver.h"
@@ -30,7 +34,7 @@ namespace
 {
 // Map a resolved algorithm to the backend that realizes it, when the caller
 // left the backend on automatic.
-backend backend_for(algorithm value)
+backend backend_for(algorithm value, const problem_traits& traits)
 {
     switch (value)
     {
@@ -38,6 +42,11 @@ backend backend_for(algorithm value)
     case algorithm::gauss_newton:
     case algorithm::bfgs:
     case algorithm::lbfgs:
+        // If AD provider is available but no callable Jacobian, must use Ceres
+        if (traits.has_autodiff_provider && !traits.has_callable_jacobian)
+        {
+            return backend::ceres;
+        }
         return backend::native;
     case algorithm::pounders:
         return backend::pounders;
@@ -169,7 +178,7 @@ backend select_backend(const problem_traits& traits, const solve_options& option
     {
         return options.backend;
     }
-    return backend_for(select_algorithm(traits, options));
+    return backend_for(select_algorithm(traits, options), traits);
 }
 
 namespace
@@ -387,31 +396,44 @@ solver_result run_ceres(const least_squares_problem& problem,
     std::vector<double> parameters(
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
-    // Create solver using appropriate path based on derivative resolution
+    // Create solver using appropriate path based on resolved derivative policy
+    std::shared_ptr<const api::detail::provider_factory> provider_to_use;
+    ceres_solver::CostFunctionLambda_aad jacobian_to_use;
+
+    // Only use provider if AD was resolved to be the derivative source
+    if (resolved_derivatives == api::derivative_mode::automatic_differentiation)
+    {
+        provider_to_use = problem.provider_factory;
+    }
+    // If supplied derivatives were resolved, use the Jacobian callback
+    else if (resolved_derivatives == api::derivative_mode::supplied && problem.jacobian)
+    {
+        jacobian_to_use = *problem.jacobian;
+    }
+    // Otherwise use default path (automatic/numeric finite differences)
+
     ceres_solver solver(problem.num_parameters,
         problem.num_residuals,
         problem.residuals,
-        problem.provider_factory,
+        provider_to_use,
         problem.bounds.lower,
         problem.bounds.upper);
 
-    // If no provider but we have a Jacobian callback, set it
-    if (!problem.provider_factory && problem.jacobian)
+    // If using supplied Jacobian, set it now
+    if (jacobian_to_use && !provider_to_use)
     {
-        // Use legacy constructor signature
-        ceres_solver::CostFunctionLambda_aad jac = *problem.jacobian;
         solver = ceres_solver(problem.num_parameters,
             problem.num_residuals,
             problem.residuals,
-            jac,
+            jacobian_to_use,
             problem.bounds.lower,
             problem.bounds.upper);
     }
 
-    bool usable = false;
+    ceres::Solver::Summary summary;
     try
     {
-        usable = solver.solve(parameters, *ceres_opts);
+        solver.solve_with_summary(parameters, *ceres_opts, &summary);
     }
     catch (const std::exception& e)
     {
@@ -420,13 +442,40 @@ solver_result run_ceres(const least_squares_problem& problem,
         return result;
     }
 
+    // Extract truthful results from Ceres summary
     result.parameters =
         to_vector_type(parameters.data(), static_cast<std::size_t>(parameters.size()));
     const double rnorm   = residual_norm_at(problem, result.parameters);
     result.residual_norm = rnorm;
     result.objective     = 0.5 * rnorm * rnorm;
-    result.status        = usable ? solver_status::converged : solver_status::numerical_failure;
-    result.message = usable ? "Ceres returned a usable solution" : "Ceres solution not usable";
+
+    // Map Ceres termination to solver status truthfully
+    if (summary.termination_type == ceres::TerminationType::CONVERGENCE)
+    {
+        result.status = solver_status::converged;
+        result.message = "Ceres converged";
+    }
+    else if (summary.termination_type == ceres::TerminationType::NO_CONVERGENCE)
+    {
+        // Distinguish: hit iteration limit vs. failure
+        if (summary.IsSolutionUsable() && summary.iterations.size() > 0)
+        {
+            result.status = solver_status::max_iterations;
+            result.message = "Ceres reached maximum iterations (solution usable)";
+        }
+        else
+        {
+            result.status = solver_status::numerical_failure;
+            result.message = "Ceres did not converge";
+        }
+    }
+    else
+    {
+        result.status = solver_status::numerical_failure;
+        result.message = "Ceres failed";
+    }
+
+    result.iterations                 = static_cast<int>(summary.iterations.size());
     result.effective_derivative_source = resolved_derivatives;
     return result;
 }

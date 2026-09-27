@@ -418,6 +418,21 @@ bool ceres_solver::solve(
     SOLVERS_UNUSED const solver_options_ceres& options)
 {
 #if SOLVERS_HAS_CERES
+    ceres::Solver::Summary summary;
+    solve_with_summary(parameters, options, &summary);
+    return summary.IsSolutionUsable();
+#else
+    SOLVERS_NOT_IMPLEMENTED("ceres solver not supported");
+#endif
+}
+
+void ceres_solver::solve_with_summary(
+    SOLVERS_UNUSED std::vector<double>&        parameters,
+    SOLVERS_UNUSED const solver_options_ceres& options,
+    SOLVERS_UNUSED void*                       summary_ptr)
+{
+#if SOLVERS_HAS_CERES
+    ceres::Solver::Summary& summary = *static_cast<ceres::Solver::Summary*>(summary_ptr);
     SOLVERS_CHECK(parameters.size() == num_parameters_);
 
     ceres::Problem problem;
@@ -465,16 +480,48 @@ bool ceres_solver::solve(
 
                 for (size_t i = 0; i < number_of_parameters; ++i)
                 {
-                    x_tmp[i] += bump;
+                    // Compute step respecting bounds (one-sided if necessary)
+                    double step = bump;
+                    bool use_central = true;
 
+                    // Check upper bound
+                    if (!upper_bounds_.empty() && x[i] + step >= upper_bounds_[i])
+                    {
+                        step = std::min(bump, 0.1 * (upper_bounds_[i] - x[i]));
+                        use_central = false;
+                    }
+
+                    // Check lower bound
+                    if (!lower_bounds_.empty() && x[i] - step <= lower_bounds_[i])
+                    {
+                        step = std::min(bump, 0.1 * (x[i] - lower_bounds_[i]));
+                        use_central = false;
+                    }
+
+                    // Compute finite differences
+                    x_tmp[i] = x[i] + step;
                     cost_function_(x_tmp, y_plus);
 
-                    x_tmp[i] -= 2 * bump;
-                    cost_function_(x_tmp, y_minus);
-
-                    for (size_t j = 0; j < y_plus.size(); ++j)
+                    if (use_central)
                     {
-                        dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
+                        x_tmp[i] = x[i] - step;
+                        cost_function_(x_tmp, y_minus);
+
+                        for (size_t j = 0; j < y_plus.size(); ++j)
+                        {
+                            dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / step;
+                        }
+                    }
+                    else
+                    {
+                        // One-sided forward difference
+                        vector_type y_base = make_vector(number_of_targets);
+                        cost_function_(x, y_base);
+
+                        for (size_t j = 0; j < y_plus.size(); ++j)
+                        {
+                            dy_dx(j, i) = (y_plus[j] - y_base[j]) / step;
+                        }
                     }
 
                     x_tmp[i] = x[i];
@@ -520,88 +567,13 @@ bool ceres_solver::solve(
 
     ceres::Solver::Options output_options;
     update_options(output_options, options);
-#if 0
-    // General settings
-    output_options.minimizer_type                 = ceres::MinimizerType::TRUST_REGION;
-    output_options.line_search_direction_type     = ceres::LineSearchDirectionType::STEEPEST_DESCENT;
-    output_options.line_search_interpolation_type = ceres::LineSearchInterpolationType::BISECTION;
-    output_options.line_search_type               = ceres::LineSearchType::WOLFE;
-    output_options.trust_region_strategy_type     = ceres::TrustRegionStrategyType::LEVENBERG_MARQUARDT;
-    output_options.dogleg_type                    = ceres::DoglegType::SUBSPACE_DOGLEG;
 
-    // Iteration settings
-    output_options.max_num_iterations           = 100;
-    output_options.function_tolerance           = 1e-14;
-    output_options.gradient_tolerance           = 1e-14;
-    output_options.parameter_tolerance          = 1e-14;
-    output_options.minimizer_progress_to_stdout = false;
-    output_options.update_state_every_iteration = false;
-
-    // Linear solver settings
-    output_options.linear_solver_type                = ceres::LinearSolverType::DENSE_SCHUR;
-    output_options.linear_solver_ordering_type       = ceres::LinearSolverOrderingType::NESDIS;
-    output_options.dense_linear_algebra_library_type = ceres::DenseLinearAlgebraLibraryType::EIGEN;
-    output_options.sparse_linear_algebra_library_type =
-        ceres::SparseLinearAlgebraLibraryType::SUITE_SPARSE;
-    output_options.preconditioner_type        = ceres::PreconditionerType::JACOBI;
-    output_options.visibility_clustering_type = ceres::VisibilityClusteringType::CANONICAL_VIEWS;
-
-    // Trust region settings
-    output_options.initial_trust_region_radius = 0.1;
-    output_options.max_trust_region_radius     = 1e16;
-    output_options.min_trust_region_radius     = 1e-32;
-    output_options.min_relative_decrease       = 1e-3;
-    output_options.eta                         = 0.0001;
-
-    // Inner iteration settings
-    output_options.use_inner_iterations      = false;
-    output_options.inner_iteration_tolerance = 1e-14;
-
-    // Jacobian scaling and sparsity
-    output_options.jacobi_scaling   = true;
-    output_options.dynamic_sparsity = false;
-
-    // Mixed precision settings
-    output_options.use_mixed_precision_solves    = false;
-    output_options.max_num_refinement_iterations = 0;
-
-    // Line search settings
-    output_options.min_line_search_step_size                 = 1e-9;
-    output_options.line_search_sufficient_function_decrease  = 1e-4;
-    output_options.line_search_sufficient_curvature_decrease = 0.9;
-    output_options.max_line_search_step_contraction          = 1e-3;
-    output_options.min_line_search_step_contraction          = 0.6;
-    output_options.max_line_search_step_expansion            = 10.0;
-
-    // Debugging and logging
-    output_options.check_gradients                                      = false;
-    output_options.gradient_check_relative_precision                    = 1e-8;
-    output_options.gradient_check_numeric_derivative_relative_step_size = 1e-6;
-
-    // Time and iteration limits
-    output_options.max_solver_time_in_seconds   = 1e9;
-    output_options.num_threads                  = 1;
-    output_options.min_linear_solver_iterations = 0;
-    output_options.max_linear_solver_iterations = 500;
-
-    // Dumping output_options
-    output_options.trust_region_minimizer_iterations_to_dump = {};
-    output_options.trust_region_problem_dump_directory       = "/tmp";
-    output_options.trust_region_problem_dump_format_type     = ceres::DumpFormatType::TEXTFILE;
-
-    // Callbacks
-    output_options.callbacks = {};
-#endif
-
-    ceres::Solver::Summary summary;
     ceres::Solve(output_options, &problem, &summary);
 
     if (options.verbose())
     {
         SOLVERS_LOG_INFO("ceres solver summary: {}", summary.BriefReport());
     }
-
-    return summary.IsSolutionUsable();
 #else
     SOLVERS_NOT_IMPLEMENTED("ceres solver not supported");
 #endif

@@ -60,7 +60,7 @@ public:
 
     // Create an evaluator for one solve
     // Must be thread-safe per call (evaluator ownership is per-thread after creation)
-    virtual std::unique_ptr<residual_evaluator> create_evaluator() = 0;
+    virtual std::unique_ptr<residual_evaluator> create_evaluator() const = 0;
 };
 
 }  // namespace solverslib::api::detail
