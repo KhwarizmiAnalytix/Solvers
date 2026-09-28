@@ -5,6 +5,7 @@ This module handles static code analysis using cppcheck.
 
 import os
 import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Optional
 
@@ -58,18 +59,22 @@ class CppcheckIssue:
 
 def get_logical_processor_count() -> int:
     """Get the number of logical processors available."""
-    try:
-        import psutil  # type: ignore[import-untyped]
-
-        return psutil.cpu_count(logical=True)  # type: ignore[no-untyped-call,no-any-return]
-    except ImportError:
+    if "psutil" in sys.modules:
+        psutil = sys.modules["psutil"]
         try:
-            count = os.cpu_count()
-            return count if count is not None else 1
-        except AttributeError:
-            import multiprocessing
+            count = psutil.cpu_count(logical=True)
+            if isinstance(count, int):
+                return count
+        except (AttributeError, TypeError):
+            pass
 
-            return multiprocessing.cpu_count()
+    try:
+        count = os.cpu_count()
+        return count if count is not None else 1
+    except (AttributeError, TypeError):
+        import multiprocessing
+
+        return multiprocessing.cpu_count()
 
 
 def build_cppcheck_command(
@@ -146,9 +151,7 @@ def build_cppcheck_command(
         for inc_dir in additional_includes:
             cmd.extend(["-I", inc_dir])
 
-    suppressions_file = os.path.join(
-        source_path, "Scripts", "suppressions", "cppcheck_suppressions.txt"
-    )
+    suppressions_file = os.path.join(source_path, "Scripts", "suppressions", "cppcheck_suppressions.txt")
     if os.path.exists(suppressions_file):
         cmd.append(f"--suppressions-list={suppressions_file}")
 
@@ -226,9 +229,7 @@ def print_issue_summary(issues: list[CppcheckIssue]) -> None:
         print()
 
 
-def process_cppcheck_results(
-    result: subprocess.CompletedProcess[str], output_file: str, verbose: bool = False
-) -> int:
+def process_cppcheck_results(result: subprocess.CompletedProcess[str], output_file: str, verbose: bool = False) -> int:
     """Process cppcheck results and return exit code."""
     if not os.path.exists(output_file):
         print(f"Error: Output file {output_file} not found")
