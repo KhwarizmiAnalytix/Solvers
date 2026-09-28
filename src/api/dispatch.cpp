@@ -292,10 +292,9 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
     // Use the resolved derivative source to guide construction.
     jacobian_function jac;
 
-    if (problem.jacobian_provider)
+    if (resolved_derivatives != derivative_mode::finite_difference && problem.jacobian_provider)
     {
         // Wrap the provider so native solvers see a standard jacobian_function.
-        // The provider may be analytic, finite-difference, or autodiff.
         auto provider_ptr = problem.jacobian_provider;
         jac = [provider_ptr](const vector_type& x_, matrix_type& J_) {
             vector_type r_tmp = make_vector(provider_ptr->num_residuals());
@@ -304,7 +303,7 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
     }
     else
     {
-        // Fall back to the explicit jacobian callback or null (native FD).
+        // Explicit callback, or null so the native solver uses finite differences.
         jac = problem.jacobian.value_or(jacobian_function{});
     }
 
@@ -453,15 +452,29 @@ solver_result run_ceres(const least_squares_problem& problem,
 
     if (resolved_derivatives == api::derivative_mode::automatic_differentiation)
     {
-        // Ceres-native AD: use the provider_factory directly.
-        // This comes from either problem.provider_factory (legacy path) or from
-        // an AutoDiffJacobianProvider attached via set_jacobian_provider().
-        provider_to_use = problem.provider_factory;
+        if (problem.provider_factory)
+        {
+            // Ceres-native AD: the factory produces a CostFunction using Jet.
+            provider_to_use = problem.provider_factory;
+        }
+        else if (problem.jacobian_provider &&
+                 problem.jacobian_provider->source() ==
+                     api::derivative_mode::automatic_differentiation)
+        {
+            // AD provider without a Ceres factory: wrap compute() as a Jacobian callback.
+            auto jp = problem.jacobian_provider;
+            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_) {
+                vector_type r_tmp = make_vector(jp->num_residuals());
+                jp->compute(x_, r_tmp, J_);
+            };
+        }
     }
     else if (resolved_derivatives == api::derivative_mode::supplied)
     {
-        // Prefer the generic JacobianProvider (wraps as a Jacobian callback).
-        if (problem.jacobian_provider)
+        // Only use a provider whose source() is actually "supplied"; otherwise
+        // fall through to the explicit Jacobian callback so the resolved mode is honoured.
+        if (problem.jacobian_provider &&
+            problem.jacobian_provider->source() == api::derivative_mode::supplied)
         {
             auto jp = problem.jacobian_provider;
             jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_) {
@@ -741,6 +754,13 @@ solver_result run_ipopt(const optimization_problem& problem,
     {
         result.status  = solver_status::backend_unavailable;
         result.message = "Ipopt backend was not compiled in (SOLVERS_ENABLE_IPOPT=OFF)";
+        return result;
+    }
+
+    if (!problem.constraints.empty())
+    {
+        result.status  = solver_status::unsupported_capability;
+        result.message = "Ipopt adapter does not support general nonlinear constraints; only box bounds are implemented";
         return result;
     }
 

@@ -10,10 +10,7 @@ template <typename T> inline double l2_norm(T const& h)
 {
     return h.norm();
 }
-template <typename T> inline double l_max_norm(T const& h)
-{
-    return h.cwiseAbs().maxCoeff();
-}
+
 }  // namespace
 
 template <lbfgs_line_search_type type> class line_search

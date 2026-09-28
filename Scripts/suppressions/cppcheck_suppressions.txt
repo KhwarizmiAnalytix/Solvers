@@ -1,0 +1,12 @@
+// Public API utilities declared in derivative_provider.h and used from tests;
+// cppcheck does not scan Testing/ so it reports them as unused.
+unusedFunction:src/api/derivative_provider.cpp
+
+// Brent's method: `d` is intentionally initialised to 0 because on the first
+// iteration, when the f2*fc > 0 branch is NOT taken, the initial value of d
+// is read on the `std::fabs(e) >= epsilon` guard in subsequent iterations.
+unreadVariable:src/solvers/root_finding_algorithms.cpp
+
+// The Jacobian lambda parameter `dy_dx` is an output parameter that IS
+// assigned inside the loop; cppcheck's inter-lambda analysis misses the write.
+constParameterReference:src/solvers/lbfgs_solver.cpp

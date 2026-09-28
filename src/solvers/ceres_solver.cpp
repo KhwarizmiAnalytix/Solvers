@@ -483,39 +483,59 @@ void ceres_solver::solve_with_summary(
                 {
                     // Compute step respecting bounds (one-sided if necessary)
                     double step = bump;
-                    bool use_central = true;
 
-                    // Check upper bound: use backward difference at upper bound
+                    // Check upper bound: use backward difference at upper bound.
+                    // Cap step so it cannot cross the lower bound (if present) or become
+                    // sub-representable (x - step == x in floating point).
                     if (!upper_bounds_.empty() && upper_bounds_[i] < x[i] + bump)
                     {
-                        step = std::max(1e-12, 0.1 * (upper_bounds_[i] - x[i]));
-                        // Use backward difference from current point
+                        const double available_backward =
+                            lower_bounds_.empty()
+                                ? (x[i] - bump)  // unconstrained lower side
+                                : (x[i] - lower_bounds_[i]);
+                        step = std::min(0.1 * (upper_bounds_[i] - x[i]), available_backward);
+                        if (step <= 0.0 || x[i] - step == x[i])
+                        {
+                            for (size_t j = 0; j < number_of_targets; ++j)
+                            {
+                                dy_dx(j, i) = 0.0;
+                            }
+                            x_tmp[i] = x[i];
+                            continue;
+                        }
                         x_tmp[i] = x[i] - step;
-                        cost_function_(x_tmp, y_plus);  // Actually y_minus for backward
+                        cost_function_(x_tmp, y_plus);  // backward sample
 
                         vector_type y_base = make_vector(number_of_targets);
                         cost_function_(x, y_base);
 
                         for (size_t j = 0; j < number_of_targets; ++j)
                         {
-                            if (step > 0)
-                            {
-                                dy_dx(j, i) = (y_base[j] - y_plus[j]) / step;
-                            }
-                            else
-                            {
-                                dy_dx(j, i) = 0;  // Cannot compute derivative at exact bound
-                            }
+                            dy_dx(j, i) = (y_base[j] - y_plus[j]) / step;
                         }
                         x_tmp[i] = x[i];
                         continue;
                     }
 
-                    // Check lower bound: use forward difference at lower bound
+                    // Check lower bound: use forward difference at lower bound.
+                    // Cap step so it cannot cross the upper bound (if present) or become
+                    // sub-representable (x + step == x in floating point).
                     if (!lower_bounds_.empty() && lower_bounds_[i] > x[i] - bump)
                     {
-                        step = std::max(1e-12, 0.1 * (x[i] - lower_bounds_[i]));
-                        // Use forward difference from current point
+                        const double available_forward =
+                            upper_bounds_.empty()
+                                ? (x[i] + bump)  // unconstrained upper side
+                                : (upper_bounds_[i] - x[i]);
+                        step = std::min(0.1 * (x[i] - lower_bounds_[i]), available_forward);
+                        if (step <= 0.0 || x[i] + step == x[i])
+                        {
+                            for (size_t j = 0; j < number_of_targets; ++j)
+                            {
+                                dy_dx(j, i) = 0.0;
+                            }
+                            x_tmp[i] = x[i];
+                            continue;
+                        }
                         x_tmp[i] = x[i] + step;
                         cost_function_(x_tmp, y_plus);
 
@@ -524,14 +544,7 @@ void ceres_solver::solve_with_summary(
 
                         for (size_t j = 0; j < number_of_targets; ++j)
                         {
-                            if (step > 0)
-                            {
-                                dy_dx(j, i) = (y_plus[j] - y_base[j]) / step;
-                            }
-                            else
-                            {
-                                dy_dx(j, i) = 0;  // Cannot compute derivative at exact bound
-                            }
+                            dy_dx(j, i) = (y_plus[j] - y_base[j]) / step;
                         }
                         x_tmp[i] = x[i];
                         continue;

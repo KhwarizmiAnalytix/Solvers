@@ -63,6 +63,11 @@ public:
             throw std::runtime_error(
                 err.value_or("AutoDiffJacobianProvider: fatal error in evaluation"));
         }
+        if (status == api::detail::evaluation_status::invalid_trial)
+        {
+            throw std::runtime_error(
+                "AutoDiffJacobianProvider: functor returned false (invalid trial point)");
+        }
     }
 
     void residuals_only(const vector_type& x, vector_type& residuals) const override
@@ -74,6 +79,11 @@ public:
             auto err = evaluator->last_error();
             throw std::runtime_error(
                 err.value_or("AutoDiffJacobianProvider: fatal error in residual-only evaluation"));
+        }
+        if (status == api::detail::evaluation_status::invalid_trial)
+        {
+            throw std::runtime_error(
+                "AutoDiffJacobianProvider: functor returned false (invalid trial point)");
         }
     }
 

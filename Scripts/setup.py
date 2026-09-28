@@ -1129,6 +1129,8 @@ class SolversConfiguration:
 
         try:
             from coverage_tool import get_coverage
+            import coverage_tool.common as _ct_common
+            import coverage_tool.clang_coverage as _ct_clang
         except ImportError:
             print_status(
                 "coverage-tool is not installed. Install with: pip install coverage-tool",
@@ -1136,14 +1138,41 @@ class SolversConfiguration:
             )
             return 1
 
-        coverage_result = get_coverage(
-            compiler="auto",
-            build_folder=build_path,
-            source_folder=source_path,
-            output_folder=os.path.join(build_path, "coverage_report"),
-            summary=True,
-            project_root=source_path,
-        )
+        # coverage_tool.find_library only looks for shared libraries (.dylib/.so).
+        # Solvers can be built as a static library; in that case the test executable
+        # carries all instrumented symbols (static linking), so fall back to it.
+        _orig_find_library = _ct_common.find_library
+
+        def _find_library_with_static_fallback(build_dir, lib_folder, module_name, dll_extension):
+            result = _orig_find_library(build_dir, lib_folder, module_name, dll_extension)
+            if result is not None:
+                return result
+            # Try the test executable — it statically links the instrumented library.
+            from pathlib import Path
+            for candidate in [
+                Path(build_dir) / "Testing" / "Cxx" / f"{module_name}Tests",
+                Path(build_dir) / "bin" / f"{module_name}Tests",
+            ]:
+                if candidate.exists():
+                    return str(candidate)
+            return None
+
+        _ct_common.find_library = _find_library_with_static_fallback
+        _ct_clang.find_library = _find_library_with_static_fallback
+
+        try:
+            coverage_result = get_coverage(
+                compiler="auto",
+                build_folder=build_path,
+                source_folder=os.path.join(source_path, "src"),
+                output_folder=os.path.join(build_path, "coverage_report"),
+                summary=True,
+                project_root=source_path,
+                exclude_patterns=[".*ThirdParty.*", ".*Testing.*", ".*build.*"],
+            )
+        finally:
+            _ct_common.find_library = _orig_find_library
+            _ct_clang.find_library = _orig_find_library
         if coverage_result == 0:
             print_status("Coverage collection completed successfully", "SUCCESS")
             self.summary_reporter.add_coverage_report(build_path, 0)
