@@ -37,23 +37,16 @@ namespace solverslib
 //   template <typename T>
 //   bool operator()(const T* const x, T* residuals) const;
 //
-template <class Functor>
-class AutoDiffJacobianProvider final : public api::JacobianProvider
+template <class Functor> class AutoDiffJacobianProvider final : public api::JacobianProvider
 {
 public:
     AutoDiffJacobianProvider(const Functor& functor, std::size_t n, std::size_t m)
-        : functor_(functor),
-          n_(n),
-          m_(m),
-          factory_(
-              std::make_shared<detail::CeresAutoDiffFactory<Functor>>(functor, n, m))
+        : functor_(functor), n_(n), m_(m),
+          factory_(std::make_shared<detail::CeresAutoDiffFactory<Functor>>(functor, n, m))
     {
     }
 
-    void compute(
-        const vector_type& x,
-        vector_type&       residuals,
-        matrix_type&       jacobian) const override
+    void compute(const vector_type& x, vector_type& residuals, matrix_type& jacobian) const override
     {
         auto evaluator = factory_->create_evaluator();
         auto status    = evaluator->evaluate(x, residuals, &jacobian);
@@ -103,8 +96,8 @@ public:
     }
 
 private:
-    Functor functor_;
-    std::size_t n_, m_;
+    Functor                                                functor_;
+    std::size_t                                            n_, m_;
     std::shared_ptr<detail::CeresAutoDiffFactory<Functor>> factory_;
 };
 
@@ -136,15 +129,15 @@ inline api::auto_diff_tag auto_diff()
 //   problem.derivatives(api::auto_diff());   // instantiates AutoDiffJacobianProvider
 //   auto result = api::solve(problem, x0);
 template <class Functor>
-api::least_squares_problem least_squares(
-    const Functor& functor, std::size_t n, std::size_t m)
+api::least_squares_problem least_squares(const Functor& functor, std::size_t n, std::size_t m)
 {
     api::least_squares_problem p;
     p.num_parameters = n;
     p.num_residuals  = m;
 
     // Double-precision residuals callback (no AD types required)
-    p.residuals = [functor](const vector_type& x, vector_type& r) {
+    p.residuals = [functor](const vector_type& x, vector_type& r)
+    {
         if (!functor(x.data(), r.data()))
         {
             throw std::runtime_error("least_squares model functor returned false");
@@ -153,10 +146,8 @@ api::least_squares_problem least_squares(
 
     // Store a factory so problem.derivatives(auto_diff()) can instantiate
     // the AutoDiffJacobianProvider later without knowing the Functor type.
-    p.model_provider_factory =
-        [functor, n, m]() -> std::shared_ptr<api::JacobianProvider> {
-        return std::make_shared<AutoDiffJacobianProvider<Functor>>(functor, n, m);
-    };
+    p.model_provider_factory = [functor, n, m]() -> std::shared_ptr<api::JacobianProvider>
+    { return std::make_shared<AutoDiffJacobianProvider<Functor>>(functor, n, m); };
 
     return p;
 }
@@ -165,20 +156,18 @@ api::least_squares_problem least_squares(
 
 // Stubs when Ceres is not available.
 
-template <class Functor>
-class AutoDiffJacobianProvider final : public api::JacobianProvider
+template <class Functor> class AutoDiffJacobianProvider final : public api::JacobianProvider
 {
 public:
     AutoDiffJacobianProvider(const Functor&, std::size_t, std::size_t)
     {
         static_assert(
-            sizeof(Functor) == 0,
-            "AutoDiffJacobianProvider requires SOLVERS_ENABLE_CERES=ON");
+            sizeof(Functor) == 0, "AutoDiffJacobianProvider requires SOLVERS_ENABLE_CERES=ON");
     }
 
-    void        compute(const vector_type&, vector_type&, matrix_type&) const override {}
-    std::size_t num_parameters() const override { return 0; }
-    std::size_t num_residuals() const override { return 0; }
+    void                 compute(const vector_type&, vector_type&, matrix_type&) const override {}
+    std::size_t          num_parameters() const override { return 0; }
+    std::size_t          num_residuals() const override { return 0; }
     api::derivative_mode source() const override
     {
         return api::derivative_mode::automatic_differentiation;
@@ -189,9 +178,7 @@ template <class Functor>
 std::shared_ptr<AutoDiffJacobianProvider<Functor>> auto_diff(
     const Functor&, std::size_t, std::size_t)
 {
-    static_assert(
-        sizeof(Functor) == 0,
-        "auto_diff() requires SOLVERS_ENABLE_CERES=ON");
+    static_assert(sizeof(Functor) == 0, "auto_diff() requires SOLVERS_ENABLE_CERES=ON");
     return nullptr;
 }
 
@@ -203,8 +190,7 @@ inline api::auto_diff_tag auto_diff()
 template <class Functor>
 api::least_squares_problem least_squares(const Functor&, std::size_t, std::size_t)
 {
-    static_assert(
-        sizeof(Functor) == 0,
+    static_assert(sizeof(Functor) == 0,
         "least_squares() convenience factory requires SOLVERS_ENABLE_CERES=ON. "
         "Without Ceres, create least_squares_problem directly and supply an "
         "analytic Jacobian or finite_difference() provider.");

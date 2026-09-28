@@ -4,13 +4,13 @@
 #include <string>
 #include <vector>
 
+#include "detail/native_result.h"
 #include "solver_options/solver_options_bfgs.h"
 #include "solver_options/solver_options_ceres.h"
 #include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_ipopt.h"
 #include "solver_options/solver_options_lm.h"
 #include "solver_options/solver_options_petsc.h"
-#include "detail/native_result.h"
 #include "solvers/ceres_solver.h"
 
 #if SOLVERS_HAS_CERES
@@ -44,9 +44,8 @@ backend backend_for(algorithm value, const problem_traits& traits)
     case algorithm::lbfgs:
         // Route to Ceres only when the provider is Ceres-native AD and no
         // other Jacobian (callable or generic provider) is available.
-        if (traits.has_autodiff_provider
-            && !traits.has_callable_jacobian
-            && !traits.has_jacobian_provider)
+        if (traits.has_autodiff_provider && !traits.has_callable_jacobian &&
+            !traits.has_jacobian_provider)
         {
             return backend::ceres;
         }
@@ -86,21 +85,23 @@ solver_result failed(solver_status status, const std::string& message, const vec
     return result;
 }
 
-solver_result from_native(const native_result& out, const vector_type& x, api::algorithm alg,
-    api::derivative_mode deriv_mode = api::derivative_mode::automatic)
+solver_result from_native(const native_result& out,
+    const vector_type&                         x,
+    api::algorithm                             alg,
+    api::derivative_mode                       deriv_mode = api::derivative_mode::automatic)
 {
     solver_result result;
-    result.status         = translate_native(out.status);
-    result.parameters     = x;
-    result.residual_norm  = out.residual_norm;
-    result.objective      = 0.5 * out.residual_norm * out.residual_norm;
-    result.iterations     = out.iterations;
-    result.backend        = backend::native;
-    result.algorithm      = alg;
-    result.backend_status = static_cast<int>(out.status);
+    result.status                      = translate_native(out.status);
+    result.parameters                  = x;
+    result.residual_norm               = out.residual_norm;
+    result.objective                   = 0.5 * out.residual_norm * out.residual_norm;
+    result.iterations                  = out.iterations;
+    result.backend                     = backend::native;
+    result.algorithm                   = alg;
+    result.backend_status              = static_cast<int>(out.status);
     result.effective_derivative_source = deriv_mode;
-    result.message        = (result.status == solver_status::converged) ? "native converged"
-                                                                        : "native reached iteration limit";
+    result.message = (result.status == solver_status::converged) ? "native converged"
+                                                                 : "native reached iteration limit";
     return result;
 }
 }  // namespace
@@ -113,9 +114,8 @@ problem_traits inspect(const least_squares_problem& problem)
     traits.has_jacobian_provider = !!problem.jacobian_provider;
     traits.has_autodiff_provider = !!problem.provider_factory;
     // has_jacobian is true when any derivative source is available
-    traits.has_jacobian = traits.has_callable_jacobian
-                       || traits.has_jacobian_provider
-                       || problem.jacobian.has_value();
+    traits.has_jacobian = traits.has_callable_jacobian || traits.has_jacobian_provider ||
+                          problem.jacobian.has_value();
     traits.has_bounds     = !problem.bounds.empty();
     traits.num_parameters = problem.num_parameters;
     traits.num_residuals  = problem.num_residuals;
@@ -200,9 +200,7 @@ struct derivative_resolution
 // Uses provider source() instead of conflating all providers as "supplied".
 // Applied to all backends for consistency.
 derivative_resolution resolve_derivatives(
-    const least_squares_problem& problem,
-    const solve_options& options,
-    const vector_type& x)
+    const least_squares_problem& problem, const solve_options& options, const vector_type& x)
 {
     auto policy = options.derivatives;
 
@@ -216,13 +214,14 @@ derivative_resolution resolve_derivatives(
             const bool has_supplied_source =
                 problem.has_callable_jacobian() ||
                 (problem.jacobian_provider &&
-                 problem.jacobian_provider->source() == derivative_mode::supplied);
+                    problem.jacobian_provider->source() == derivative_mode::supplied);
 
             if (!has_supplied_source)
             {
                 auto err = new solver_result();
-                *err = failed(solver_status::invalid_problem,
-                    "supplied Jacobian required but not provided", x);
+                *err     = failed(solver_status::invalid_problem,
+                    "supplied Jacobian required but not provided",
+                    x);
                 return {policy, err};
             }
         }
@@ -230,12 +229,13 @@ derivative_resolution resolve_derivatives(
         {
             // Require an executable AD provider
             if (!problem.provider_factory &&
-                (!problem.jacobian_provider ||
-                 problem.jacobian_provider->source() != derivative_mode::automatic_differentiation))
+                (!problem.jacobian_provider || problem.jacobian_provider->source() !=
+                                                   derivative_mode::automatic_differentiation))
             {
                 auto err = new solver_result();
-                *err = failed(solver_status::unsupported_capability,
-                    "automatic differentiation required but no compatible AD provider available", x);
+                *err     = failed(solver_status::unsupported_capability,
+                    "automatic differentiation required but no compatible AD provider available",
+                    x);
                 return {policy, err};
             }
         }
@@ -296,7 +296,8 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
     {
         // Wrap the provider so native solvers see a standard jacobian_function.
         auto provider_ptr = problem.jacobian_provider;
-        jac = [provider_ptr](const vector_type& x_, matrix_type& J_) {
+        jac               = [provider_ptr](const vector_type& x_, matrix_type& J_)
+        {
             vector_type r_tmp = make_vector(provider_ptr->num_residuals());
             provider_ptr->compute(x_, r_tmp, J_);
         };
@@ -333,7 +334,8 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
                                .with_verbose(options.verbose)
                                .build();
         lbfgs_solver solver(problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(solver.solve(x, *native_opts), x, algorithm::lbfgs, resolved_derivatives);
+        return from_native(
+            solver.solve(x, *native_opts), x, algorithm::lbfgs, resolved_derivatives);
     }
     case algorithm::levenberg_marquardt:
     default:
@@ -347,7 +349,8 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
                                .build();
         levenberg_marquardt_solver solver(
             problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(solver.solve(x, *native_opts), x, algorithm::levenberg_marquardt, resolved_derivatives);
+        return from_native(
+            solver.solve(x, *native_opts), x, algorithm::levenberg_marquardt, resolved_derivatives);
     }
     }
 }
@@ -447,8 +450,8 @@ solver_result run_ceres(const least_squares_problem& problem,
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
     // Select the derivative source for the Ceres backend.
-    std::shared_ptr<const api::detail::provider_factory>    provider_to_use;
-    std::function<void(const vector_type&, matrix_type&)>   jacobian_to_use;
+    std::shared_ptr<const api::detail::provider_factory>  provider_to_use;
+    std::function<void(const vector_type&, matrix_type&)> jacobian_to_use;
 
     if (resolved_derivatives == api::derivative_mode::automatic_differentiation)
     {
@@ -457,13 +460,13 @@ solver_result run_ceres(const least_squares_problem& problem,
             // Ceres-native AD: the factory produces a CostFunction using Jet.
             provider_to_use = problem.provider_factory;
         }
-        else if (problem.jacobian_provider &&
-                 problem.jacobian_provider->source() ==
-                     api::derivative_mode::automatic_differentiation)
+        else if (problem.jacobian_provider && problem.jacobian_provider->source() ==
+                                                  api::derivative_mode::automatic_differentiation)
         {
             // AD provider without a Ceres factory: wrap compute() as a Jacobian callback.
-            auto jp = problem.jacobian_provider;
-            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_) {
+            auto jp         = problem.jacobian_provider;
+            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_)
+            {
                 vector_type r_tmp = make_vector(jp->num_residuals());
                 jp->compute(x_, r_tmp, J_);
             };
@@ -476,8 +479,9 @@ solver_result run_ceres(const least_squares_problem& problem,
         if (problem.jacobian_provider &&
             problem.jacobian_provider->source() == api::derivative_mode::supplied)
         {
-            auto jp = problem.jacobian_provider;
-            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_) {
+            auto jp         = problem.jacobian_provider;
+            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_)
+            {
                 vector_type r_tmp = make_vector(jp->num_residuals());
                 jp->compute(x_, r_tmp, J_);
             };
@@ -529,7 +533,7 @@ solver_result run_ceres(const least_squares_problem& problem,
     // Map Ceres termination to solver status truthfully
     if (summary.termination_type == ceres::TerminationType::CONVERGENCE)
     {
-        result.status = solver_status::converged;
+        result.status  = solver_status::converged;
         result.message = "Ceres converged";
     }
     else if (summary.termination_type == ceres::TerminationType::NO_CONVERGENCE)
@@ -537,22 +541,22 @@ solver_result run_ceres(const least_squares_problem& problem,
         // Distinguish: hit iteration limit vs. failure
         if (summary.IsSolutionUsable() && summary.iterations.size() > 0)
         {
-            result.status = solver_status::max_iterations;
+            result.status  = solver_status::max_iterations;
             result.message = "Ceres reached maximum iterations (solution usable)";
         }
         else
         {
-            result.status = solver_status::numerical_failure;
+            result.status  = solver_status::numerical_failure;
             result.message = "Ceres did not converge";
         }
     }
     else
     {
-        result.status = solver_status::numerical_failure;
+        result.status  = solver_status::numerical_failure;
         result.message = "Ceres failed";
     }
 
-    result.iterations                 = static_cast<int>(summary.iterations.size());
+    result.iterations                  = static_cast<int>(summary.iterations.size());
     result.effective_derivative_source = resolved_derivatives;
     return result;
 #else
@@ -645,7 +649,8 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
     if (problem.jacobian_provider)
     {
         auto provider_ptr = problem.jacobian_provider;
-        jac = [provider_ptr](const vector_type& x_, matrix_type& J_) {
+        jac               = [provider_ptr](const vector_type& x_, matrix_type& J_)
+        {
             vector_type r_tmp = make_vector(provider_ptr->num_residuals());
             provider_ptr->compute(x_, r_tmp, J_);
         };
@@ -696,7 +701,7 @@ solver_result run_native_optimization(const optimization_problem& problem,
     if (problem.gradient_provider)
     {
         auto gp = problem.gradient_provider;
-        grad = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+        grad    = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
     }
     else if (problem.gradient)
     {
@@ -760,7 +765,8 @@ solver_result run_ipopt(const optimization_problem& problem,
     if (!problem.constraints.empty())
     {
         result.status  = solver_status::unsupported_capability;
-        result.message = "Ipopt adapter does not support general nonlinear constraints; only box bounds are implemented";
+        result.message = "Ipopt adapter does not support general nonlinear constraints; only box "
+                         "bounds are implemented";
         return result;
     }
 
@@ -782,7 +788,7 @@ solver_result run_ipopt(const optimization_problem& problem,
     gradient_function grad_for_ipopt;
     if (problem.gradient_provider)
     {
-        auto gp = problem.gradient_provider;
+        auto gp        = problem.gradient_provider;
         grad_for_ipopt = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
     }
     else if (problem.gradient)
@@ -852,7 +858,7 @@ solver_result run_petsc_tao_objective(const optimization_problem& problem,
     gradient_function grad_for_tao;
     if (problem.gradient_provider)
     {
-        auto gp = problem.gradient_provider;
+        auto gp      = problem.gradient_provider;
         grad_for_tao = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
     }
     else if (problem.gradient)

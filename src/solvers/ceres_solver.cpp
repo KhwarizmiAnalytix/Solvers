@@ -6,8 +6,8 @@
 
 #include <ceres/ceres.h>
 
-#include "solvers/api/detail/evaluator.h"
 #include "solver_options/solver_options_ceres.h"
+#include "solvers/api/detail/evaluator.h"
 
 #define DEBUG_AAD 0
 
@@ -18,14 +18,12 @@ class LambdaCostFunctor : public ceres::CostFunction
 public:
     using jacobian_fn = std::function<void(const vector_type&, matrix_type&)>;
 
-    LambdaCostFunctor(
-        ceres_solver::CostFunctionLambda cost_function,
-        jacobian_fn                      jacobian_callback,
-        size_t                           num_parameters,
-        size_t                           num_residuals)
+    LambdaCostFunctor(ceres_solver::CostFunctionLambda cost_function,
+        jacobian_fn                                    jacobian_callback,
+        size_t                                         num_parameters,
+        size_t                                         num_residuals)
         : cost_function_(std::move(cost_function)),
-          cost_function_aad_(std::move(jacobian_callback)),
-          num_parameters_(num_parameters),
+          cost_function_aad_(std::move(jacobian_callback)), num_parameters_(num_parameters),
           num_residuals_(num_residuals)
     {
         // Set the number of residuals and the size of each parameter block
@@ -107,8 +105,7 @@ class CeresProviderCostFunction : public ceres::CostFunction
 {
 public:
     explicit CeresProviderCostFunction(
-        std::unique_ptr<api::detail::residual_evaluator> evaluator,
-        size_t                                            num_residuals)
+        std::unique_ptr<api::detail::residual_evaluator> evaluator, size_t num_residuals)
         : evaluator_(std::move(evaluator))
     {
         set_num_residuals(static_cast<int>(num_residuals));
@@ -121,10 +118,10 @@ public:
     {
         try
         {
-            const auto& meta = evaluator_->metadata();
-            vector_type x = to_vector_type(parameters[0], meta.num_parameters);
-            vector_type r = make_vector(meta.num_residuals);
-            matrix_type* jac = nullptr;
+            const auto&  meta = evaluator_->metadata();
+            vector_type  x    = to_vector_type(parameters[0], meta.num_parameters);
+            vector_type  r    = make_vector(meta.num_residuals);
+            matrix_type* jac  = nullptr;
 
             // Prepare Jacobian buffer if requested
             if (jacobians && jacobians[0])
@@ -274,135 +271,136 @@ void update_options(
         static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type());
 }
 
-//void update_options(ceres::Solver::Options& output_options, const solver_options_ceres& input_options)
+// void update_options(ceres::Solver::Options& output_options, const solver_options_ceres&
+// input_options)
 //{
-//    // General settings
-//    output_options.minimizer_type = static_cast<ceres::MinimizerType>(input_options.minimizer_type());
+//     // General settings
+//     output_options.minimizer_type =
+//     static_cast<ceres::MinimizerType>(input_options.minimizer_type());
 //
-//    output_options.line_search_direction_type =
-//        static_cast<ceres::LineSearchDirectionType>(input_options.line_search_direction_type_);
+//     output_options.line_search_direction_type =
+//         static_cast<ceres::LineSearchDirectionType>(input_options.line_search_direction_type_);
 //
-//    output_options.line_search_interpolation_type =
-//        static_cast<ceres::LineSearchInterpolationType>(input_options.line_search_interpolation_type_);
+//     output_options.line_search_interpolation_type =
+//         static_cast<ceres::LineSearchInterpolationType>(input_options.line_search_interpolation_type_);
 //
-//    output_options.line_search_type = static_cast<ceres::LineSearchType>(input_options.line_search_type_);
+//     output_options.line_search_type =
+//     static_cast<ceres::LineSearchType>(input_options.line_search_type_);
 //
-//    output_options.trust_region_strategy_type =
-//        static_cast<ceres::TrustRegionStrategyType>(input_options.trust_region_strategy_type_);
+//     output_options.trust_region_strategy_type =
+//         static_cast<ceres::TrustRegionStrategyType>(input_options.trust_region_strategy_type_);
 //
-//    output_options.dogleg_type = static_cast<ceres::DoglegType>(input_options.dogleg_type_);
+//     output_options.dogleg_type = static_cast<ceres::DoglegType>(input_options.dogleg_type_);
 //
-//    // Iteration settings
-//    output_options.max_num_iterations           = input_options.max_num_iterations();
-//    output_options.function_tolerance           = input_options.function_tolerance();
-//    output_options.gradient_tolerance           = input_options.gradient_tolerance();
-//    output_options.parameter_tolerance          = input_options.parameter_tolerance();
-//    output_options.minimizer_progress_to_stdout = false;
-//    output_options.update_state_every_iteration = false;
+//     // Iteration settings
+//     output_options.max_num_iterations           = input_options.max_num_iterations();
+//     output_options.function_tolerance           = input_options.function_tolerance();
+//     output_options.gradient_tolerance           = input_options.gradient_tolerance();
+//     output_options.parameter_tolerance          = input_options.parameter_tolerance();
+//     output_options.minimizer_progress_to_stdout = false;
+//     output_options.update_state_every_iteration = false;
 //
-//    // Linear solver settings
-//    output_options.linear_solver_type = static_cast<ceres::LinearSolverType>(input_options.linear_solver_type_);
+//     // Linear solver settings
+//     output_options.linear_solver_type =
+//     static_cast<ceres::LinearSolverType>(input_options.linear_solver_type_);
 //
-//    output_options.linear_solver_ordering_type =
-//        static_cast<ceres::LinearSolverOrderingType>(input_options.linear_solver_ordering_type_);
+//     output_options.linear_solver_ordering_type =
+//         static_cast<ceres::LinearSolverOrderingType>(input_options.linear_solver_ordering_type_);
 //
-//    output_options.dense_linear_algebra_library_type = static_cast<ceres::DenseLinearAlgebraLibraryType>(
-//        input_options.dense_linear_algebra_library_type_);
+//     output_options.dense_linear_algebra_library_type =
+//     static_cast<ceres::DenseLinearAlgebraLibraryType>(
+//         input_options.dense_linear_algebra_library_type_);
 //
-//    output_options.sparse_linear_algebra_library_type = static_cast<ceres::SparseLinearAlgebraLibraryType>(
-//        input_options.sparse_linear_algebra_library_type_);
+//     output_options.sparse_linear_algebra_library_type =
+//     static_cast<ceres::SparseLinearAlgebraLibraryType>(
+//         input_options.sparse_linear_algebra_library_type_);
 //
-//    output_options.preconditioner_type =
-//        static_cast<ceres::PreconditionerType>(input_options.preconditioner_type_);
+//     output_options.preconditioner_type =
+//         static_cast<ceres::PreconditionerType>(input_options.preconditioner_type_);
 //
-//    output_options.visibility_clustering_type =
-//        static_cast<ceres::VisibilityClusteringType>(input_options.visibility_clustering_type_);
+//     output_options.visibility_clustering_type =
+//         static_cast<ceres::VisibilityClusteringType>(input_options.visibility_clustering_type_);
 //
-//    // Trust region settings
-//    output_options.initial_trust_region_radius = input_options.initial_trust_region_radius_;
-//    output_options.max_trust_region_radius     = input_options.max_trust_region_radius_;
-//    output_options.min_trust_region_radius     = input_options.min_trust_region_radius_;
-//    output_options.min_relative_decrease       = input_options.min_relative_decrease_;
-//    output_options.eta                         = input_options.eta_;
+//     // Trust region settings
+//     output_options.initial_trust_region_radius = input_options.initial_trust_region_radius_;
+//     output_options.max_trust_region_radius     = input_options.max_trust_region_radius_;
+//     output_options.min_trust_region_radius     = input_options.min_trust_region_radius_;
+//     output_options.min_relative_decrease       = input_options.min_relative_decrease_;
+//     output_options.eta                         = input_options.eta_;
 //
-//    // Inner iteration settings
-//    output_options.use_inner_iterations      = input_options.use_inner_iterations_;
-//    output_options.inner_iteration_tolerance = input_options.inner_iteration_tolerance_;
+//     // Inner iteration settings
+//     output_options.use_inner_iterations      = input_options.use_inner_iterations_;
+//     output_options.inner_iteration_tolerance = input_options.inner_iteration_tolerance_;
 //
-//    // Jacobian scaling and sparsity
-//    output_options.jacobi_scaling   = input_options.jacobi_scaling_;
-//    output_options.dynamic_sparsity = input_options.dynamic_sparsity_;
+//     // Jacobian scaling and sparsity
+//     output_options.jacobi_scaling   = input_options.jacobi_scaling_;
+//     output_options.dynamic_sparsity = input_options.dynamic_sparsity_;
 //
-//    // Mixed precision settings
-//    output_options.use_mixed_precision_solves    = input_options.use_mixed_precision_solves_;
-//    output_options.max_num_refinement_iterations = input_options.max_num_refinement_iterations_;
+//     // Mixed precision settings
+//     output_options.use_mixed_precision_solves    = input_options.use_mixed_precision_solves_;
+//     output_options.max_num_refinement_iterations = input_options.max_num_refinement_iterations_;
 //
-//    // Line search settings
-//    output_options.min_line_search_step_size = input_options.min_line_search_step_size_;
-//    output_options.line_search_sufficient_function_decrease =
-//        input_options.line_search_sufficient_function_decrease_;
-//    output_options.line_search_sufficient_curvature_decrease =
-//        input_options.line_search_sufficient_curvature_decrease_;
-//    output_options.max_line_search_step_contraction = input_options.max_line_search_step_contraction_;
-//    output_options.min_line_search_step_contraction = input_options.min_line_search_step_contraction_;
-//    output_options.max_line_search_step_expansion   = input_options.max_line_search_step_expansion_;
+//     // Line search settings
+//     output_options.min_line_search_step_size = input_options.min_line_search_step_size_;
+//     output_options.line_search_sufficient_function_decrease =
+//         input_options.line_search_sufficient_function_decrease_;
+//     output_options.line_search_sufficient_curvature_decrease =
+//         input_options.line_search_sufficient_curvature_decrease_;
+//     output_options.max_line_search_step_contraction =
+//     input_options.max_line_search_step_contraction_;
+//     output_options.min_line_search_step_contraction =
+//     input_options.min_line_search_step_contraction_;
+//     output_options.max_line_search_step_expansion   =
+//     input_options.max_line_search_step_expansion_;
 //
-//    // Debugging and logging
-//    output_options.check_gradients                   = false;
-//    output_options.gradient_check_relative_precision = input_options.gradient_check_relative_precision_;
-//    output_options.gradient_check_numeric_derivative_relative_step_size =
-//        input_options.gradient_check_numeric_derivative_relative_step_size_;
+//     // Debugging and logging
+//     output_options.check_gradients                   = false;
+//     output_options.gradient_check_relative_precision =
+//     input_options.gradient_check_relative_precision_;
+//     output_options.gradient_check_numeric_derivative_relative_step_size =
+//         input_options.gradient_check_numeric_derivative_relative_step_size_;
 //
-//    // Time and iteration limits
-//    output_options.max_solver_time_in_seconds   = input_options.max_solver_time_in_seconds_;
-//    output_options.num_threads                  = input_options.num_threads_;
-//    output_options.min_linear_solver_iterations = input_options.min_linear_solver_iterations_;
-//    output_options.max_linear_solver_iterations = input_options.max_linear_solver_iterations_;
+//     // Time and iteration limits
+//     output_options.max_solver_time_in_seconds   = input_options.max_solver_time_in_seconds_;
+//     output_options.num_threads                  = input_options.num_threads_;
+//     output_options.min_linear_solver_iterations = input_options.min_linear_solver_iterations_;
+//     output_options.max_linear_solver_iterations = input_options.max_linear_solver_iterations_;
 //
-//    // Dumping output_options
-//    output_options.trust_region_minimizer_iterations_to_dump =
-//        input_options.trust_region_minimizer_iterations_to_dump_;
-//    output_options.trust_region_problem_dump_directory = input_options.trust_region_problem_dump_directory_;
-//    output_options.trust_region_problem_dump_format_type =
-//        static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type_);
-//}
+//     // Dumping output_options
+//     output_options.trust_region_minimizer_iterations_to_dump =
+//         input_options.trust_region_minimizer_iterations_to_dump_;
+//     output_options.trust_region_problem_dump_directory =
+//     input_options.trust_region_problem_dump_directory_;
+//     output_options.trust_region_problem_dump_format_type =
+//         static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type_);
+// }
 }  // namespace solverslib
 #endif
 
 namespace solverslib
 {
-ceres_solver::ceres_solver(
-    size_t                                                num_parameters,
+ceres_solver::ceres_solver(size_t                         num_parameters,
     size_t                                                num_residuals,
     CostFunctionLambda                                    cost_function,
     std::function<void(const vector_type&, matrix_type&)> jacobian_callback,
     const std::vector<double>&                            lower_bounds,
     const std::vector<double>&                            upper_bounds)
-    : cost_function_(std::move(cost_function)),
-      jacobian_callback_(std::move(jacobian_callback)),
-      provider_(nullptr),
-      lower_bounds_(lower_bounds),
-      upper_bounds_(upper_bounds),
-      num_parameters_(num_parameters),
-      num_residuals_(num_residuals)
+    : cost_function_(std::move(cost_function)), jacobian_callback_(std::move(jacobian_callback)),
+      provider_(nullptr), lower_bounds_(lower_bounds), upper_bounds_(upper_bounds),
+      num_parameters_(num_parameters), num_residuals_(num_residuals)
 {
 }
 
 // Constructor with provider support
-ceres_solver::ceres_solver(
-    size_t                                                    num_parameters,
-    size_t                                                    num_residuals,
-    CostFunctionLambda                                        cost_function,
-    std::shared_ptr<const api::detail::provider_factory>     provider,
-    const std::vector<double>&                                lower_bounds,
-    const std::vector<double>&                                upper_bounds)
-    : cost_function_(std::move(cost_function)),
-      jacobian_callback_(nullptr),
-      provider_(std::move(provider)),
-      lower_bounds_(lower_bounds),
-      upper_bounds_(upper_bounds),
-      num_parameters_(num_parameters),
-      num_residuals_(num_residuals)
+ceres_solver::ceres_solver(size_t                        num_parameters,
+    size_t                                               num_residuals,
+    CostFunctionLambda                                   cost_function,
+    std::shared_ptr<const api::detail::provider_factory> provider,
+    const std::vector<double>&                           lower_bounds,
+    const std::vector<double>&                           upper_bounds)
+    : cost_function_(std::move(cost_function)), jacobian_callback_(nullptr),
+      provider_(std::move(provider)), lower_bounds_(lower_bounds), upper_bounds_(upper_bounds),
+      num_parameters_(num_parameters), num_residuals_(num_residuals)
 {
 }
 
@@ -415,9 +413,8 @@ bool ceres_solver::is_supported()
 #endif
 };
 
-bool ceres_solver::solve(
-    SOLVERS_UNUSED std::vector<double>&        parameters,
-    SOLVERS_UNUSED const solver_options_ceres& options)
+bool ceres_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
+    SOLVERS_UNUSED const solver_options_ceres&               options)
 {
 #if SOLVERS_HAS_CERES
     ceres::Solver::Summary summary;
@@ -428,16 +425,15 @@ bool ceres_solver::solve(
 #endif
 }
 
-void ceres_solver::solve_with_summary(
-    SOLVERS_UNUSED std::vector<double>&        parameters,
-    SOLVERS_UNUSED const solver_options_ceres& options,
-    SOLVERS_UNUSED void*                       summary_ptr)
+void ceres_solver::solve_with_summary(SOLVERS_UNUSED std::vector<double>& parameters,
+    SOLVERS_UNUSED const solver_options_ceres&                            options,
+    SOLVERS_UNUSED void*                                                  summary_ptr)
 {
 #if SOLVERS_HAS_CERES
     ceres::Solver::Summary& summary = *static_cast<ceres::Solver::Summary*>(summary_ptr);
     SOLVERS_CHECK(parameters.size() == num_parameters_);
 
-    ceres::Problem problem;
+    ceres::Problem       problem;
     ceres::CostFunction* cost_function = nullptr;
 
     // ============================================================================
@@ -454,9 +450,8 @@ void ceres_solver::solve_with_summary(
             meta.num_parameters == num_parameters_ && meta.num_residuals == num_residuals_,
             "Provider dimensions do not match problem dimensions");
 
-        evaluator = provider_->create_evaluator();
-        cost_function =
-            new CeresProviderCostFunction(std::move(evaluator), num_residuals_);
+        evaluator     = provider_->create_evaluator();
+        cost_function = new CeresProviderCostFunction(std::move(evaluator), num_residuals_);
     }
     else
     {
@@ -490,9 +485,8 @@ void ceres_solver::solve_with_summary(
                     if (!upper_bounds_.empty() && upper_bounds_[i] < x[i] + bump)
                     {
                         const double available_backward =
-                            lower_bounds_.empty()
-                                ? (x[i] - bump)  // unconstrained lower side
-                                : (x[i] - lower_bounds_[i]);
+                            lower_bounds_.empty() ? (x[i] - bump)  // unconstrained lower side
+                                                  : (x[i] - lower_bounds_[i]);
                         step = std::min(0.1 * (upper_bounds_[i] - x[i]), available_backward);
                         if (step <= 0.0 || x[i] - step == x[i])
                         {
@@ -523,9 +517,8 @@ void ceres_solver::solve_with_summary(
                     if (!lower_bounds_.empty() && lower_bounds_[i] > x[i] - bump)
                     {
                         const double available_forward =
-                            upper_bounds_.empty()
-                                ? (x[i] + bump)  // unconstrained upper side
-                                : (upper_bounds_[i] - x[i]);
+                            upper_bounds_.empty() ? (x[i] + bump)  // unconstrained upper side
+                                                  : (upper_bounds_[i] - x[i]);
                         step = std::min(0.1 * (x[i] - lower_bounds_[i]), available_forward);
                         if (step <= 0.0 || x[i] + step == x[i])
                         {
@@ -567,10 +560,7 @@ void ceres_solver::solve_with_summary(
         }
 
         cost_function = new LambdaCostFunctor(
-            cost_function_,
-            jacobian_callback_,
-            num_parameters_,
-            num_residuals_);
+            cost_function_, jacobian_callback_, num_parameters_, num_residuals_);
     }
 
     problem.AddResidualBlock(cost_function, nullptr, parameters.data());
@@ -580,25 +570,25 @@ void ceres_solver::solve_with_summary(
     // ============================================================================
     if (lower_bounds_.size() > 0)
     {
-        SOLVERS_CHECK(
-            lower_bounds_.size() >= num_parameters_,
+        SOLVERS_CHECK(lower_bounds_.size() >= num_parameters_,
             "Lower bounds size must be at least num_parameters");
 
         for (std::size_t i = 0; i < num_parameters_; ++i)
         {
-            problem.SetParameterLowerBound(parameters.data(), static_cast<int>(i), lower_bounds_[i]);
+            problem.SetParameterLowerBound(
+                parameters.data(), static_cast<int>(i), lower_bounds_[i]);
         }
     }
 
     if (upper_bounds_.size() > 0)
     {
-        SOLVERS_CHECK(
-            upper_bounds_.size() >= num_parameters_,
+        SOLVERS_CHECK(upper_bounds_.size() >= num_parameters_,
             "Upper bounds size must be at least num_parameters");
 
         for (std::size_t i = 0; i < num_parameters_; ++i)
         {
-            problem.SetParameterUpperBound(parameters.data(), static_cast<int>(i), upper_bounds_[i]);
+            problem.SetParameterUpperBound(
+                parameters.data(), static_cast<int>(i), upper_bounds_[i]);
         }
     }
 

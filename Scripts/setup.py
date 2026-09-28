@@ -1128,9 +1128,9 @@ class SolversConfiguration:
         print_status("Starting code coverage collection and report generation...", "INFO")
 
         try:
-            from coverage_tool import get_coverage
-            import coverage_tool.common as _ct_common
             import coverage_tool.clang_coverage as _ct_clang
+            import coverage_tool.common as _ct_common
+            from coverage_tool import get_coverage
         except ImportError:
             print_status(
                 "coverage-tool is not installed. Install with: pip install coverage-tool",
@@ -1149,6 +1149,7 @@ class SolversConfiguration:
                 return result
             # Try the test executable — it statically links the instrumented library.
             from pathlib import Path
+
             for candidate in [
                 Path(build_dir) / "Testing" / "Cxx" / f"{module_name}Tests",
                 Path(build_dir) / "bin" / f"{module_name}Tests",

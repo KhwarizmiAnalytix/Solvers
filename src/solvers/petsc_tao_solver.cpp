@@ -232,7 +232,7 @@ bool petsc_tao_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
         for (size_t i = 0; i < num_parameters_; ++i)
         {
             la[i] = lower_bounds_.empty() ? PETSC_NINFINITY : lower_bounds_[i];
-            ua[i] = upper_bounds_.empty() ? PETSC_INFINITY  : upper_bounds_[i];
+            ua[i] = upper_bounds_.empty() ? PETSC_INFINITY : upper_bounds_[i];
         }
         VecRestoreArray(xl, &la);
         VecRestoreArray(xu, &ua);
