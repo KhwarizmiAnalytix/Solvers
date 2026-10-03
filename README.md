@@ -200,6 +200,8 @@ cmake --build build --target SviCalibrationBenchmark
 ./build/Testing/Cxx/SviCalibrationBenchmark
 ```
 
+See the dedicated SVI calibration example in [svi_calib.md](svi_calib.md).
+
 ---
 
 ## Installation
