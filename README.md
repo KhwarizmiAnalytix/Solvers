@@ -186,12 +186,18 @@ Benchmark programs are in `Testing/Cxx/`:
 - `BenchmarkRootFinders.cpp`
 - `BenchmarkRootFindersVsLM.cpp`
 - `BenchmarkSolvers.cpp`
+- `BenchmarkSviCalibration.cpp` — calibrates the EURO STOXX 50 raw-SVI example
+  from [Ferhati (2020)](https://doi.org/10.2139/ssrn.3543766) with native,
+  Ceres, Ipopt, PETSc/TAO, and POUNDERS
 
 Each benchmark reports wall-clock time, iterations, function evaluations, and final residual. Reproduce them locally with:
 
 ```bash
 cmake --build build --target BenchmarkRootFinders
 ./build/Testing/Cxx/BenchmarkRootFinders
+
+cmake --build build --target SviCalibrationBenchmark
+./build/Testing/Cxx/SviCalibrationBenchmark
 ```
 
 ---

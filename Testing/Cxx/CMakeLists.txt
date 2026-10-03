@@ -30,7 +30,7 @@ gtest_discover_tests(SolversTests
     DISCOVERY_TIMEOUT 60
     PROPERTIES LABELS "Solvers")
 
-option(SOLVERS_ENABLE_BENCHMARKS "Build the Ceres/native solver benchmark executable" OFF)
+option(SOLVERS_ENABLE_BENCHMARKS "Build solver benchmark executables" OFF)
 if(SOLVERS_ENABLE_BENCHMARKS)
     add_executable(SolversBenchmark BenchmarkSolvers.cpp)
     target_link_libraries(SolversBenchmark PRIVATE Solvers::Solvers)
@@ -40,6 +40,9 @@ if(SOLVERS_ENABLE_BENCHMARKS)
 
     add_executable(RootFindersVsLMBenchmark BenchmarkRootFindersVsLM.cpp)
     target_link_libraries(RootFindersVsLMBenchmark PRIVATE Solvers::Solvers)
+
+    add_executable(SviCalibrationBenchmark BenchmarkSviCalibration.cpp)
+    target_link_libraries(SviCalibrationBenchmark PRIVATE Solvers::Solvers)
 
     # Ceres AD benchmark (only when Ceres is available)
     if(SOLVERS_ENABLE_CERES AND TARGET Ceres::ceres)
