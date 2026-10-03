@@ -1,5 +1,6 @@
 #include "solvers/api/solve.h"
 
+#include <cmath>
 #include <exception>
 #include <string>
 #include <vector>
@@ -136,6 +137,139 @@ problem_traits inspect(const optimization_problem& problem)
     return traits;
 }
 
+// Return a structured error before any user callback is evaluated when a
+// request asks an executor to silently drop a capability it cannot enforce.
+std::optional<solver_result> validate_request(const problem_traits& traits,
+    const solve_options&                                            options,
+    backend                                                         chosen,
+    algorithm                                                       selected,
+    const vector_type&                                              x)
+{
+    if (options.max_iterations <= 0 || options.max_function_evaluations < 0 ||
+        options.function_tolerance < 0.0 || options.gradient_tolerance < 0.0 ||
+        options.parameter_tolerance < 0.0)
+    {
+        return failed(solver_status::invalid_problem,
+            "iteration/evaluation budgets and tolerances must be non-negative; max_iterations must "
+            "be positive",
+            x);
+    }
+    if (options.max_function_evaluations > 0)
+    {
+        return failed(solver_status::unsupported_capability,
+            "max_function_evaluations is not yet enforceable across all native and external "
+            "adapters",
+            x);
+    }
+    if (!x.allFinite())
+    {
+        return failed(
+            solver_status::invalid_problem, "initial_guess must contain only finite values", x);
+    }
+    if (traits.has_bounds && chosen == backend::native)
+    {
+        return failed(solver_status::unsupported_capability,
+            "native backend does not enforce bounds; use a bound-capable backend",
+            x);
+    }
+    if (traits.has_nonlinear_constraints && chosen != backend::ipopt)
+    {
+        return failed(solver_status::unsupported_capability,
+            "the selected backend cannot enforce nonlinear constraints",
+            x);
+    }
+    if (traits.is_least_squares && traits.has_nonlinear_constraints)
+    {
+        return failed(solver_status::unsupported_capability,
+            "nonlinear constraints are only modeled for general objective problems",
+            x);
+    }
+    if (traits.has_hessian_vector_product && chosen != backend::petsc_tao)
+    {
+        return failed(solver_status::unsupported_capability,
+            "the Hessian-vector product requires the PETSc/TAO matrix-free backend",
+            x);
+    }
+    if (traits.is_least_squares)
+    {
+        if (options.algorithm != algorithm::automatic && chosen == backend::native &&
+            selected != algorithm::levenberg_marquardt && selected != algorithm::gauss_newton &&
+            selected != algorithm::lbfgs)
+        {
+            return failed(solver_status::unsupported_capability,
+                "the selected algorithm is not implemented by the native least-squares backend",
+                x);
+        }
+        if (options.algorithm != algorithm::automatic && chosen == backend::ceres &&
+            selected != algorithm::levenberg_marquardt)
+        {
+            return failed(solver_status::unsupported_capability,
+                "the Ceres adapter currently exposes only Levenberg-Marquardt",
+                x);
+        }
+        if (options.algorithm != algorithm::automatic &&
+            ((chosen == backend::ipopt) ||
+                (chosen == backend::pounders && selected != algorithm::pounders) ||
+                (chosen == backend::petsc_tao && selected != algorithm::newton_krylov &&
+                    selected != algorithm::pounders)))
+        {
+            return failed(solver_status::unsupported_capability,
+                "the selected algorithm is incompatible with the requested backend",
+                x);
+        }
+        if ((selected == algorithm::bfgs || selected == algorithm::interior_point) &&
+            chosen == backend::native)
+        {
+            return failed(solver_status::unsupported_capability,
+                "the requested algorithm is not implemented for native least squares",
+                x);
+        }
+        if (selected == algorithm::newton_krylov && chosen != backend::petsc_tao)
+        {
+            return failed(
+                solver_status::unsupported_capability, "Newton-Krylov requires PETSc/TAO", x);
+        }
+    }
+    else
+    {
+        if (options.algorithm != algorithm::automatic && chosen == backend::native &&
+            selected != algorithm::lbfgs)
+        {
+            return failed(solver_status::unsupported_capability,
+                "the native objective backend currently implements L-BFGS only",
+                x);
+        }
+        if (options.algorithm != algorithm::automatic && chosen == backend::ipopt &&
+            selected != algorithm::interior_point)
+        {
+            return failed(solver_status::unsupported_capability,
+                "Ipopt requires the interior-point algorithm",
+                x);
+        }
+        if (options.algorithm != algorithm::automatic && chosen == backend::petsc_tao &&
+            selected != algorithm::newton_krylov)
+        {
+            return failed(solver_status::unsupported_capability,
+                "PETSc/TAO objective execution requires Newton-Krylov",
+                x);
+        }
+        if ((selected == algorithm::levenberg_marquardt || selected == algorithm::gauss_newton ||
+                selected == algorithm::pounders) &&
+            chosen == backend::native)
+        {
+            return failed(solver_status::unsupported_capability,
+                "the requested least-squares algorithm cannot solve a scalar objective",
+                x);
+        }
+        if (selected == algorithm::newton_krylov && chosen != backend::petsc_tao)
+        {
+            return failed(
+                solver_status::unsupported_capability, "Newton-Krylov requires PETSc/TAO", x);
+        }
+    }
+    return std::nullopt;
+}
+
 bool is_large_scale(const problem_traits& traits, const dispatch_policy& policy)
 {
     if (policy.prefer_matrix_free && traits.has_hessian_vector_product)
@@ -151,6 +285,28 @@ algorithm select_algorithm(const problem_traits& traits, const solve_options& op
     if (options.algorithm != algorithm::automatic)
     {
         return options.algorithm;
+    }
+
+    // When the caller pins an executor but leaves the mathematical method
+    // automatic, choose that executor's supported default instead of deriving
+    // an algorithm that the executor cannot run.
+    if (options.backend != backend::automatic)
+    {
+        switch (options.backend)
+        {
+        case backend::native:
+            return traits.is_least_squares ? algorithm::levenberg_marquardt : algorithm::lbfgs;
+        case backend::ceres:
+            return algorithm::levenberg_marquardt;
+        case backend::ipopt:
+            return algorithm::interior_point;
+        case backend::pounders:
+            return algorithm::pounders;
+        case backend::petsc_tao:
+            return algorithm::newton_krylov;
+        case backend::automatic:
+            break;
+        }
     }
 
     if (traits.is_least_squares)
@@ -292,7 +448,8 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
     // Use the resolved derivative source to guide construction.
     jacobian_function jac;
 
-    if (resolved_derivatives != derivative_mode::finite_difference && problem.jacobian_provider)
+    if (resolved_derivatives != derivative_mode::finite_difference && problem.jacobian_provider &&
+        !(resolved_derivatives == derivative_mode::supplied && problem.has_callable_jacobian()))
     {
         // Wrap the provider so native solvers see a standard jacobian_function.
         auto provider_ptr = problem.jacobian_provider;
@@ -302,10 +459,17 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
             provider_ptr->compute(x_, r_tmp, J_);
         };
     }
+    else if (resolved_derivatives == derivative_mode::supplied && problem.has_callable_jacobian())
+    {
+        jac = problem.jacobian.value_or(jacobian_function{});
+    }
     else
     {
         // Explicit callback, or null so the native solver uses finite differences.
-        jac = problem.jacobian.value_or(jacobian_function{});
+        // A null Jacobian deliberately selects the native kernel's finite
+        // difference implementation, including when finite_difference was
+        // explicitly requested.
+        jac = jacobian_function{};
     }
 
     switch (alg)
@@ -698,14 +862,24 @@ solver_result run_native_optimization(const optimization_problem& problem,
 {
     // Build gradient callback: gradient_provider > gradient callback > error.
     gradient_function grad;
-    if (problem.gradient_provider)
+    derivative_mode   effective = derivative_mode::automatic;
+    if (options.derivatives == derivative_mode::finite_difference)
     {
-        auto gp = problem.gradient_provider;
-        grad    = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+        auto finite = std::make_shared<FiniteDifferenceGradientProvider>(
+            problem.objective, problem.num_parameters);
+        grad      = [finite](const vector_type& x_, vector_type& g_) { finite->compute(x_, g_); };
+        effective = derivative_mode::finite_difference;
     }
-    else if (problem.gradient)
+    else if (problem.gradient_provider && options.derivatives != derivative_mode::supplied)
     {
-        grad = *problem.gradient;
+        auto gp   = problem.gradient_provider;
+        grad      = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+        effective = gp->source();
+    }
+    else if (problem.gradient && options.derivatives != derivative_mode::automatic_differentiation)
+    {
+        grad      = *problem.gradient;
+        effective = derivative_mode::supplied;
     }
     else
     {
@@ -731,15 +905,16 @@ solver_result run_native_optimization(const optimization_problem& problem,
     auto         out = solver.solve(x, *native_opts);
 
     solver_result result;
-    result.status     = translate_native(out.status);
-    result.parameters = x;
-    result.objective  = problem.objective(x);
-    result.iterations = out.iterations;
-    result.backend    = backend::native;
-    result.algorithm  = algorithm::lbfgs;
-    result.message    = (result.status == solver_status::converged)
-                            ? "native L-BFGS converged"
-                            : "native L-BFGS reached iteration limit";
+    result.status                      = translate_native(out.status);
+    result.parameters                  = x;
+    result.objective                   = problem.objective(x);
+    result.iterations                  = out.iterations;
+    result.backend                     = backend::native;
+    result.algorithm                   = algorithm::lbfgs;
+    result.effective_derivative_source = effective;
+    result.message                     = (result.status == solver_status::converged)
+                                             ? "native L-BFGS converged"
+                                             : "native L-BFGS reached iteration limit";
     return result;
 }
 
@@ -847,6 +1022,14 @@ solver_result run_petsc_tao_objective(const optimization_problem& problem,
     result.backend    = backend::petsc_tao;
     result.algorithm  = algorithm::newton_krylov;
 
+    if (problem.hessian_vector)
+    {
+        result.status = solver_status::unsupported_capability;
+        result.message =
+            "PETSc/TAO matrix-free Hessian-vector execution is not implemented by this adapter";
+        return result;
+    }
+
     if (!petsc_tao_solver::is_supported())
     {
         result.status  = solver_status::backend_unavailable;
@@ -932,10 +1115,43 @@ solver_result solve(const least_squares_problem& problem,
             "initial_guess size does not match num_parameters",
             initial_guess);
     }
+    if ((!problem.bounds.lower.empty() && problem.bounds.lower.size() != problem.num_parameters) ||
+        (!problem.bounds.upper.empty() && problem.bounds.upper.size() != problem.num_parameters))
+    {
+        return failed(solver_status::invalid_problem,
+            "bound vectors must be empty or match num_parameters",
+            initial_guess);
+    }
+    if (!problem.bounds.lower.empty() || !problem.bounds.upper.empty())
+    {
+        for (std::size_t i = 0; i < problem.num_parameters; ++i)
+        {
+            const bool bad_lower =
+                !problem.bounds.lower.empty() && !std::isfinite(problem.bounds.lower[i]);
+            const bool bad_upper =
+                !problem.bounds.upper.empty() && !std::isfinite(problem.bounds.upper[i]);
+            const bool inverted = !problem.bounds.lower.empty() && !problem.bounds.upper.empty() &&
+                                  problem.bounds.lower[i] > problem.bounds.upper[i];
+            if (bad_lower || bad_upper || inverted)
+            {
+                return failed(solver_status::invalid_problem,
+                    "bounds must be finite and lower <= upper",
+                    initial_guess);
+            }
+        }
+    }
 
     const problem_traits traits = inspect(problem);
     const api::backend   chosen = select_backend(traits, options);
     const api::algorithm alg    = select_algorithm(traits, options);
+
+    if (const auto error = validate_request(traits, options, chosen, alg, initial_guess))
+    {
+        auto result      = *error;
+        result.backend   = chosen;
+        result.algorithm = alg;
+        return result;
+    }
 
     switch (chosen)
     {
@@ -990,10 +1206,40 @@ solver_result solve(const optimization_problem& problem,
             "initial_guess size does not match num_parameters",
             initial_guess);
     }
+    if ((!problem.bounds.lower.empty() && problem.bounds.lower.size() != problem.num_parameters) ||
+        (!problem.bounds.upper.empty() && problem.bounds.upper.size() != problem.num_parameters))
+    {
+        return failed(solver_status::invalid_problem,
+            "bound vectors must be empty or match num_parameters",
+            initial_guess);
+    }
+    for (std::size_t i = 0; i < problem.num_parameters; ++i)
+    {
+        const bool bad_lower =
+            !problem.bounds.lower.empty() && !std::isfinite(problem.bounds.lower[i]);
+        const bool bad_upper =
+            !problem.bounds.upper.empty() && !std::isfinite(problem.bounds.upper[i]);
+        const bool inverted = !problem.bounds.lower.empty() && !problem.bounds.upper.empty() &&
+                              problem.bounds.lower[i] > problem.bounds.upper[i];
+        if (bad_lower || bad_upper || inverted)
+        {
+            return failed(solver_status::invalid_problem,
+                "bounds must be finite and lower <= upper",
+                initial_guess);
+        }
+    }
 
     const problem_traits traits = inspect(problem);
     const api::backend   chosen = select_backend(traits, options);
     const api::algorithm alg    = select_algorithm(traits, options);
+
+    if (const auto error = validate_request(traits, options, chosen, alg, initial_guess))
+    {
+        auto result      = *error;
+        result.backend   = chosen;
+        result.algorithm = alg;
+        return result;
+    }
 
     switch (chosen)
     {

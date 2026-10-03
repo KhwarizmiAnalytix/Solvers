@@ -125,7 +125,7 @@ TEST(SolverApiDispatch, UnwiredBackendReportedUnavailable)
     if (!solverslib::petsc_tao_solver::is_supported())
     {
         solve_options options;
-        options.backend = backend::petsc_tao;
+        options.backend            = backend::petsc_tao;
         const solver_result result = solve(problem, vector_type::Zero(2), options);
         EXPECT_EQ(result.status, solver_status::backend_unavailable);
         EXPECT_EQ(result.backend, backend::petsc_tao);
@@ -137,7 +137,7 @@ TEST(SolverApiDispatch, UnwiredBackendReportedUnavailable)
         opt.objective      = [](const vector_type& x) { return x.squaredNorm(); };
         opt.gradient       = [](const vector_type& x, vector_type& g) { g = 2.0 * x; };
         solve_options options;
-        options.backend = backend::ipopt;
+        options.backend            = backend::ipopt;
         const solver_result result = solve(opt, vector_type::Zero(2), options);
         EXPECT_EQ(result.status, solver_status::backend_unavailable);
         EXPECT_EQ(result.backend, backend::ipopt);
@@ -364,6 +364,71 @@ TEST(SolverApiDispatch, NativeObjectiveRejectsBounds)
     const solver_result result = solve(problem, vector_type::Zero(2));
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
     EXPECT_EQ(result.backend, backend::native);
+}
+
+TEST(SolverApiDispatch, NativeObjectiveRejectsNonlinearConstraints)
+{
+    auto problem                       = make_quadratic_problem(vector_type::Ones(2), true);
+    problem.constraints.num_inequality = 1;
+    solve_options options;
+    options.backend = backend::native;
+
+    const solver_result result = solve(problem, vector_type::Zero(2), options);
+    EXPECT_EQ(result.status, solver_status::unsupported_capability);
+    EXPECT_EQ(result.backend, backend::native);
+}
+
+TEST(SolverApiDispatch, ForcedFiniteDifferenceReportsEffectiveSource)
+{
+    auto          problem = make_linear_problem(true);
+    solve_options options;
+    options.derivatives = derivative_mode::finite_difference;
+
+    const solver_result result = solve(problem, vector_type::Zero(2), options);
+    EXPECT_TRUE(result.has_usable_iterate());
+    ASSERT_TRUE(result.effective_derivative_source.has_value());
+    EXPECT_EQ(*result.effective_derivative_source, derivative_mode::finite_difference);
+}
+
+TEST(SolverApiDispatch, ObjectiveOffsetDoesNotPreventConvergence)
+{
+    auto problem      = make_quadratic_problem(vector_type::Constant(2, 2.0), true);
+    problem.objective = [](const vector_type& x)
+    { return 1000000.0 + (x - vector_type::Constant(2, 2.0)).squaredNorm(); };
+    problem.gradient = [](const vector_type& x, vector_type& g)
+    { g = 2.0 * (x - vector_type::Constant(2, 2.0)); };
+
+    const solver_result result = solve(problem, vector_type::Zero(2));
+    EXPECT_TRUE(result.converged());
+    EXPECT_NEAR(result.parameters[0], 2.0, 1e-4);
+}
+
+TEST(SolverApiDispatch, UnsupportedEvaluationBudgetIsExplicit)
+{
+    auto          problem = make_quadratic_problem(vector_type::Ones(2), true);
+    solve_options options;
+    options.max_function_evaluations = 1;
+    const solver_result result       = solve(problem, vector_type::Zero(2), options);
+    EXPECT_EQ(result.status, solver_status::unsupported_capability);
+}
+
+TEST(SolverApiDispatch, UnsupportedAlgorithmIsRejected)
+{
+    auto          problem = make_linear_problem(true);
+    solve_options options;
+    options.algorithm          = algorithm::bfgs;
+    options.backend            = backend::native;
+    const solver_result result = solve(problem, vector_type::Zero(2), options);
+    EXPECT_EQ(result.status, solver_status::unsupported_capability);
+}
+
+TEST(SolverApiDispatch, HessianVectorExecutionIsExplicitlyRejected)
+{
+    auto problem           = make_quadratic_problem(vector_type::Ones(2), true);
+    problem.hessian_vector = [](const vector_type&, const vector_type& v, vector_type& out)
+    { out = 2.0 * v; };
+    const solver_result result = solve(problem, vector_type::Zero(2));
+    EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
 }  // namespace
 }  // namespace solverslib::api

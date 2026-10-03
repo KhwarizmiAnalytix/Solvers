@@ -24,8 +24,11 @@ struct solve_options
     api::derivative_mode derivatives = api::derivative_mode::automatic;
 
     // Separate budgets rather than one overloaded "iterations" count.
-    int max_iterations           = 100;
-    int max_function_evaluations = 0;  // 0 == unlimited
+    int max_iterations = 100;
+    // 0 keeps the backend default. Positive budgets are currently rejected at
+    // the API boundary until all adapters can account for line-search and
+    // finite-difference evaluations consistently.
+    int max_function_evaluations = 0;
 
     // Named tolerances; units documented per quantity.
     double function_tolerance  = std::numeric_limits<double>::epsilon();

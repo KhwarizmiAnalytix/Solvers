@@ -3,7 +3,7 @@
 High-performance native numerical solvers for C++, extended with specialized engines for constrained and large-scale optimization.
 
 - **Native core** — root finding, least squares, BFGS/L-BFGS with no external dependencies beyond Eigen.
-- **Advanced backends** — Ipopt, PETSc/TAO, POUNDERS only where they add capabilities the native layer cannot cover.
+- **Advanced backends** — optional Ipopt, PETSc/TAO, POUNDERS, and Ceres integrations where they add capabilities the native layer cannot cover.
 - **Quant & scientific focus** — designed for calibration, bootstrapping, and pricing workloads.
 
 ---
@@ -16,8 +16,8 @@ High-performance native numerical solvers for C++, extended with specialized eng
 | Polynomial roots | Companion-matrix solver | Native |
 | Nonlinear least squares | Levenberg-Marquardt, Gauss-Newton | Native |
 | Unconstrained optimization | BFGS, L-BFGS | Native |
-| Constrained NLP | Interior-point method | Ipopt |
-| Large-scale / matrix-free | Newton-Krylov, trust-region | PETSc/TAO |
+| Bound-constrained scalar optimization | Interior-point method | Ipopt |
+| Large-scale optimization | Newton-Krylov, trust-region | PETSc/TAO |
 | Derivative-free least squares | POUNDERS | PETSc/TAO |
 
 ---
@@ -94,38 +94,48 @@ if (result.converged()) {
 
 ### Automatic Differentiation with Ceres
 
-For problems where hand-coded Jacobians are expensive or error-prone, use Ceres' automatic differentiation:
+For problems where hand-coded Jacobians are expensive or error-prone, define a templated residual functor and attach it to a least-squares problem. Ceres uses Jet-based forward automatic differentiation to compute the Jacobian.
 
 ```cpp
-#include <solvers/integrations/ceres_autodiff.h>
+#include <iostream>
+#include "solvers/api/solve.h"
+#include "solvers/integrations/autodiff_provider.h"
 
-// Define residuals using a templated functor (works with double and Ceres Jets)
 struct MyResiduals {
     template <typename T>
-    bool operator()(const T* const params, T* residuals) const {
-        residuals[0] = params[0] * params[0] - 4.0;  // (p - 2)(p + 2)
+    bool operator()(const T* parameters, T* residuals) const {
+        residuals[0] = parameters[0] * parameters[0] - T(4.0);
         return true;
     }
 };
 
-// Create problem with automatic differentiation
-auto problem = solverslib::make_ceres_autodiff_problem(
-    1,  // num_parameters
-    1,  // num_residuals
-    MyResiduals{}
-);
+int main() {
+    using namespace solverslib;
+    using namespace solverslib::api;
 
-vector_type x0 = {3.0};
-solverslib::api::solve_options opts;
-opts.backend = solverslib::api::backend::ceres;
-opts.derivatives = solverslib::api::derivative_mode::automatic_differentiation;
+    auto problem = least_squares(MyResiduals{}, 1, 1);
+    problem.derivatives(api::auto_diff());
 
-auto result = solverslib::api::solve(problem, x0, opts);
-// Jacobians computed automatically using Ceres' dual-number (Jet) differentiation
+    solve_options options;
+    options.backend = backend::ceres;
+    options.derivatives = derivative_mode::automatic_differentiation;
+
+    vector_type initial_guess(1);
+    initial_guess[0] = 3.0;
+
+    const solver_result result = solve(problem, initial_guess, options);
+    if (!result.converged()) {
+        std::cerr << result.message << '\n';
+        return 1;
+    }
+    std::cout << "solution: " << result.parameters[0] << '\n';
+}
 ```
 
+The convenience factory stores the model and dimensions; `derivatives(auto_diff())` creates the Ceres provider. The Ceres backend must be enabled at configure time.
+
 **Derivative policy** controls how Jacobians are computed:
-- `automatic` (default): Prefers hand-coded Jacobian, falls back to AD, then numerical
+- `automatic` (default): Prefers a supplied Jacobian, then an attached AD provider, then numerical or derivative-free execution
 - `supplied`: Requires Jacobian callback; error if missing
 - `automatic_differentiation`: Requires AD provider (Ceres); error if unavailable
 - `finite_difference`: Forces numerical differentiation
@@ -199,7 +209,7 @@ cmake -S . -B build \
     -DSOLVERS_ENABLE_PETSC=ON
 ```
 
-- **Ipopt** requires BLAS/LAPACK and a sparse linear solver (e.g. MUMPS). See [coin-or/Ipopt](https://github.com/coin-or/Ipopt).
+- **Ipopt** requires BLAS/LAPACK and a sparse linear solver (e.g. MUMPS). The current adapter supports box bounds; general nonlinear constraints are reported as unsupported. See [coin-or/Ipopt](https://github.com/coin-or/Ipopt).
 - **PETSc/TAO** includes TAO and POUNDERS. On macOS: `brew install petsc`. See [petsc/petsc](https://github.com/petsc/petsc).
 
 Advanced backends are not required for the native core.
@@ -215,15 +225,24 @@ Advanced backends are not required for the native core.
 - Levenberg-Marquardt
 - Gauss-Newton
 - BFGS / L-BFGS
+- Unified problem/solve API with structured results
+- Derivative providers for supplied, automatic-differentiation, and finite-difference paths
+- Capability validation for bounds, nonlinear constraints, backend/algorithm selection, and invalid inputs
+- Ceres automatic differentiation for templated least-squares residuals
+
+### Optional backends
+
+- Ipopt, PETSc/TAO, and POUNDERS adapters are implemented but require their system dependencies and are skipped when not compiled in.
 
 ### In development
 
-- Unified `LeastSquaresProblem` / `OptimizationProblem` types
-- Common `SolverResult` across all backends
-- Ipopt adapter
-- PETSc/TAO adapter (including POUNDERS)
 - Parameter and residual scaling
 - Reproducible benchmark suite with CI regression tracking
+
+The common API explicitly reports unsupported capabilities. Positive
+`max_function_evaluations` budgets are rejected until every backend can account
+for evaluations from line searches and finite-difference derivatives
+consistently.
 
 ---
 

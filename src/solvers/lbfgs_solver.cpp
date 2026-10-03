@@ -402,8 +402,11 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
 
     auto fx = lbfg_function(parameters, grad);
 
-    auto x2_p                 = fx;
-    auto x2_converged         = x2_p < options.function_tolerance();
+    auto x2_p = fx;
+    // A scalar objective may be shifted by an arbitrary constant.  Its
+    // absolute value is therefore not a valid convergence test; use step and
+    // gradient criteria below.  Residual mode retains the historical norm test.
+    auto x2_converged         = !scalar_mode_ && x2_p < options.function_tolerance();
     bool gradient_converged   = false;
     bool parameters_converged = false;
 
@@ -424,7 +427,8 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
 
     for (; !x2_converged && iter < options.max_num_iterations(); ++iter)
     {
-        scalar_type step = 0.5;
+        const scalar_type previous_fx = fx;
+        scalar_type       step        = 0.5;
 
         switch (options.type())
         {
@@ -442,7 +446,18 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
             break;
         }
 
-        if (std::fabs(fx) < options.function_tolerance())
+        if (!scalar_mode_ && std::fabs(fx) < options.function_tolerance())
+        {
+            parameters   = p_new;
+            x2_converged = true;
+            break;
+        }
+
+        // For scalar objectives use improvement, rather than the absolute
+        // objective value, so adding a constant cannot change convergence.
+        if (scalar_mode_ &&
+            std::fabs(fx - previous_fx) <=
+                options.function_tolerance() * std::max(std::fabs(previous_fx), scalar_type(1.0)))
         {
             parameters   = p_new;
             x2_converged = true;

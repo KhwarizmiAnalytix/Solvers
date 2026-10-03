@@ -37,9 +37,11 @@ endif()
 
 # loguru
 if(NOT TARGET Loguru::loguru)
-  add_library(Loguru::loguru STATIC IMPORTED)
+  add_library(Loguru::loguru UNKNOWN IMPORTED)
+  find_library(_solvers_loguru_path NAMES loguru logurud
+    PATHS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@" NO_DEFAULT_PATH)
   set_target_properties(Loguru::loguru PROPERTIES
-    IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/${CMAKE_STATIC_LIBRARY_PREFIX}loguru${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    IMPORTED_LOCATION "${_solvers_loguru_path}"
     INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/loguru"
     INTERFACE_LINK_LIBRARIES "Threads::Threads"
   )
@@ -47,9 +49,11 @@ endif()
 
 # Logging
 if(NOT TARGET Logging::Logging)
-  add_library(Logging::Logging STATIC IMPORTED)
+  add_library(Logging::Logging UNKNOWN IMPORTED)
+  find_library(_solvers_logging_path NAMES Logging Loggingd
+    PATHS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@" NO_DEFAULT_PATH)
   set_target_properties(Logging::Logging PROPERTIES
-    IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/${CMAKE_STATIC_LIBRARY_PREFIX}Logging${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    IMPORTED_LOCATION "${_solvers_logging_path}"
     INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/Logging;${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/Logging/include/logger"
     INTERFACE_LINK_LIBRARIES "Loguru::loguru;MagicEnum::magic_enum"
   )
@@ -101,9 +105,11 @@ endif()
 
 # Solvers
 if(NOT TARGET Solvers::Solvers)
-  add_library(Solvers::Solvers STATIC IMPORTED)
+  add_library(Solvers::Solvers UNKNOWN IMPORTED)
+  find_library(_solvers_library_path NAMES Solvers Solversd
+    PATHS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@" NO_DEFAULT_PATH)
   set_target_properties(Solvers::Solvers PROPERTIES
-    IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@/${CMAKE_STATIC_LIBRARY_PREFIX}Solvers${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    IMPORTED_LOCATION "${_solvers_library_path}"
     INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
     INTERFACE_COMPILE_FEATURES "cxx_std_17"
     INTERFACE_LINK_LIBRARIES "Eigen3::Eigen;Logging::Logging"
