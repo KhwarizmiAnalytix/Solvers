@@ -1,6 +1,6 @@
 # Solvers
 
-High-performance native numerical solvers for C++, extended with specialized engines for constrained and large-scale optimization.
+High-performance native numerical solvers for C++, with optional integrations for automatic differentiation, bound-constrained optimization, and large-scale workloads.
 
 - **Native core** — root finding, least squares, BFGS/L-BFGS with no external dependencies beyond Eigen.
 - **Advanced backends** — optional Ipopt, PETSc/TAO, POUNDERS, and Ceres integrations where they add capabilities the native layer cannot cover.
@@ -31,7 +31,7 @@ High-performance native numerical solvers for C++, extended with specialized eng
               │                          │
        Least Squares               General Objective
               │                          │
-       Jacobian available?         Constraints?
+       Jacobian available?         Bounds / constraints?
          /          \               /         \
        yes           no           yes          no
         │             │            │            │
@@ -44,6 +44,10 @@ High-performance native numerical solvers for C++, extended with specialized eng
 ```
 
 Scalar root-finding problems use the native root-solving layer directly.
+
+The common API rejects capabilities a selected backend cannot enforce. Ipopt is
+currently used for box bounds; general nonlinear constraints are reported as
+`unsupported_capability` until constraint callback contracts are implemented.
 
 ---
 
@@ -72,6 +76,9 @@ bool converged = solverslib::root_finding_algorithms::brent(
 
 ```cpp
 #include <solvers/levenberg_marquardt_solver.h>
+#include "detail/eigen_support.h"
+
+using solverslib::vector_type;
 
 auto residuals = [](vector_type const& params, vector_type& r) {
     // r_i = model(params, market_i) - market_i
@@ -154,7 +161,7 @@ This requires Ceres as a dependency; see [ceres-solver.org](http://ceres-solver.
 - **Native first** — root finding, LM, Gauss-Newton, BFGS, and L-BFGS are implemented directly. No external optimizer needed for common calibration problems.
 - **No redundant backends** — third-party libraries are added only when they introduce a genuinely new capability (constraints, large-scale, derivative-free).
 - **Lightweight core** — a native-only build requires only C++17, CMake, and Eigen.
-- **Common results** — all solvers report convergence status, iterations, and residual norms through a consistent interface.
+- **Common results** — the unified API reports convergence status, iterations, objective values, and diagnostics available from the selected backend.
 
 ---
 
@@ -166,7 +173,7 @@ This requires Ceres as a dependency; see [ceres-solver.org](http://ceres-solver.
 | Implied volatility | Brent / Newton |
 | Vol-surface calibration | Native LM / Gauss-Newton |
 | Interest-rate model calibration | Native LM / L-BFGS |
-| Constrained parameter calibration | Ipopt |
+| Box-constrained parameter calibration | Ipopt |
 | Large-scale PDE calibration | PETSc/TAO |
 | Expensive model without derivatives | POUNDERS |
 
@@ -205,12 +212,14 @@ ctest --test-dir build --output-on-failure
 
 ```bash
 cmake -S . -B build \
+    -DSOLVERS_ENABLE_CERES=ON \
     -DSOLVERS_ENABLE_IPOPT=ON \
     -DSOLVERS_ENABLE_PETSC=ON
 ```
 
 - **Ipopt** requires BLAS/LAPACK and a sparse linear solver (e.g. MUMPS). The current adapter supports box bounds; general nonlinear constraints are reported as unsupported. See [coin-or/Ipopt](https://github.com/coin-or/Ipopt).
 - **PETSc/TAO** includes TAO and POUNDERS. On macOS: `brew install petsc`. See [petsc/petsc](https://github.com/petsc/petsc).
+- **Ceres** enables the automatic-differentiation integration shown above. See [ceres-solver.org](http://ceres-solver.org).
 
 Advanced backends are not required for the native core.
 
@@ -228,11 +237,11 @@ Advanced backends are not required for the native core.
 - Unified problem/solve API with structured results
 - Derivative providers for supplied, automatic-differentiation, and finite-difference paths
 - Capability validation for bounds, nonlinear constraints, backend/algorithm selection, and invalid inputs
-- Ceres automatic differentiation for templated least-squares residuals
+- Ceres automatic differentiation for templated least-squares residuals when `SOLVERS_ENABLE_CERES=ON`
 
 ### Optional backends
 
-- Ipopt, PETSc/TAO, and POUNDERS adapters are implemented but require their system dependencies and are skipped when not compiled in.
+- Ceres, Ipopt, PETSc/TAO, and POUNDERS adapters are implemented but optional; they require their system dependencies and return `backend_unavailable` when not compiled in.
 
 ### In development
 

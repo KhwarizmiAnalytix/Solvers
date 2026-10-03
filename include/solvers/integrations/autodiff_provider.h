@@ -136,6 +136,8 @@ api::least_squares_problem least_squares(const Functor& functor, std::size_t n, 
     p.num_residuals  = m;
 
     // Double-precision residuals callback (no AD types required)
+    // Model failures intentionally propagate to the solver boundary.
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     p.residuals = [functor](const vector_type& x, vector_type& r)
     {
         if (!functor(x.data(), r.data()))
@@ -146,6 +148,8 @@ api::least_squares_problem least_squares(const Functor& functor, std::size_t n, 
 
     // Store a factory so problem.derivatives(auto_diff()) can instantiate
     // the AutoDiffJacobianProvider later without knowing the Functor type.
+    // Allocation failures intentionally propagate to the caller.
+    // NOLINTNEXTLINE(bugprone-exception-escape)
     p.model_provider_factory = [functor, n, m]() -> std::shared_ptr<api::JacobianProvider>
     { return std::make_shared<AutoDiffJacobianProvider<Functor>>(functor, n, m); };
 
