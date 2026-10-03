@@ -140,23 +140,30 @@ public:
     std::size_t num_quotes() const noexcept { return log_moneyness_.size(); }
     double      forward() const noexcept { return forward_; }
 
+    std::vector<double> lower_bounds() const
+    {
+        return {lower_[0], lower_[1], lower_[2], lower_[3], lower_[4]};
+    }
+
+    std::vector<double> upper_bounds() const
+    {
+        return {upper_[0], upper_[1], upper_[2], upper_[3], upper_[4]};
+    }
+
     vector_type initial_guess() const
     {
-        // Equation 3.17: (min(w_market)/2, 0.1, -0.5, 0.1, 0.1).
-        return encode({0.5 * *std::min_element(market_variance_.begin(), market_variance_.end()),
-            0.1,
-            -0.5,
-            0.1,
-            0.1});
+        // Equation 3.17: (min(w_market)/2, 0.1, -0.5, 0.1, 0.1) in the raw SVI parameter
+        // space. Use the dynamic Eigen vector factory to avoid static-size initialization issues.
+        vector_type x = make_vector(kNumParameters);
+        x << 0.5 * *std::min_element(market_variance_.begin(), market_variance_.end()), 0.1,
+            -0.5, 0.1, 0.1;
+        return x;
     }
 
     svi_parameters decode(const vector_type& unconstrained) const
     {
-        return {decode_component(unconstrained[0], 0),
-            decode_component(unconstrained[1], 1),
-            decode_component(unconstrained[2], 2),
-            decode_component(unconstrained[3], 3),
-            decode_component(unconstrained[4], 4)};
+        return {unconstrained[0], unconstrained[1], unconstrained[2], unconstrained[3],
+            unconstrained[4]};
     }
 
     void residuals(const vector_type& unconstrained, vector_type& residuals) const
@@ -172,13 +179,7 @@ public:
 
     void jacobian(const vector_type& unconstrained, matrix_type& jacobian) const
     {
-        const svi_parameters               parameters = decode(unconstrained);
-        std::array<double, kNumParameters> chain{};
-        for (std::size_t i = 0; i < kNumParameters; ++i)
-        {
-            const double unit = sigmoid(unconstrained[static_cast<index_type>(i)]);
-            chain[i]          = (upper_[i] - lower_[i]) * unit * (1.0 - unit);
-        }
+        const svi_parameters parameters = decode(unconstrained);
 
         for (std::size_t i = 0; i < num_quotes(); ++i)
         {
@@ -187,12 +188,11 @@ public:
                 std::sqrt(centered * centered + parameters.sigma * parameters.sigma);
             const index_type row = static_cast<index_type>(i);
 
-            jacobian(row, 0) = kVarianceScale * chain[0];
-            jacobian(row, 1) = kVarianceScale * (parameters.rho * centered + root) * chain[1];
-            jacobian(row, 2) = kVarianceScale * parameters.b * centered * chain[2];
-            jacobian(row, 3) =
-                kVarianceScale * parameters.b * (-parameters.rho - centered / root) * chain[3];
-            jacobian(row, 4) = kVarianceScale * parameters.b * parameters.sigma / root * chain[4];
+            jacobian(row, 0) = kVarianceScale * 1.0;
+            jacobian(row, 1) = kVarianceScale * (parameters.rho * centered + root);
+            jacobian(row, 2) = kVarianceScale * parameters.b * centered;
+            jacobian(row, 3) = kVarianceScale * parameters.b * (-parameters.rho - centered / root);
+            jacobian(row, 4) = kVarianceScale * parameters.b * parameters.sigma / root;
         }
     }
 
@@ -355,6 +355,8 @@ least_squares_problem make_least_squares_problem(
     problem.num_residuals  = calibration->num_quotes();
     problem.residuals      = [calibration](const vector_type& x, vector_type& residuals)
     { calibration->residuals(x, residuals); };
+    problem.bounds.lower   = calibration->lower_bounds();
+    problem.bounds.upper   = calibration->upper_bounds();
     if (with_jacobian)
     {
         problem.jacobian = [calibration](const vector_type& x, matrix_type& jacobian)
@@ -368,9 +370,11 @@ optimization_problem make_objective_problem(
 {
     optimization_problem problem;
     problem.num_parameters = kNumParameters;
-    problem.objective = [calibration](const vector_type& x) { return calibration->objective(x); };
-    problem.gradient  = [calibration](const vector_type& x, vector_type& gradient)
+    problem.objective      = [calibration](const vector_type& x) { return calibration->objective(x); };
+    problem.gradient       = [calibration](const vector_type& x, vector_type& gradient)
     { calibration->gradient(x, gradient); };
+    problem.bounds.lower   = calibration->lower_bounds();
+    problem.bounds.upper   = calibration->upper_bounds();
     return problem;
 }
 
@@ -444,11 +448,6 @@ std::vector<benchmark_case> make_cases(
         petsc_tao_options{.algorithm = tao_algorithm::pounders, .gatol = 1e-8, .grtol = 1e-8};
 
     return {
-        {"Native LM",
-            "native",
-            least_squares_case(backend::native, algorithm::levenberg_marquardt)},
-        {"Native GN", "native", least_squares_case(backend::native, algorithm::gauss_newton)},
-        {"Native L-BFGS", "native", objective_case(backend::native, algorithm::lbfgs)},
         {"Ceres LM", "ceres", least_squares_case(backend::ceres, algorithm::automatic)},
         {"Ipopt L-BFGS",
             "ipopt",
