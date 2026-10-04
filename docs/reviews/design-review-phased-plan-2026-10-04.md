@@ -322,6 +322,12 @@ Exit criteria, as checked:
 - **Phase 5:** a factorization breakdown is handled as a rejected step (more damping cures it) and becomes `numerical_failure` only at the damping ceiling; the plan said it should report `numerical_failure` outright. The `0.5||r||^2` function tolerance was applied to Gauss-Newton and least-squares L-BFGS as well, so the API has one meaning. `augmented_qr` is not allocation-free (Eigen's QR solve makes one temporary).
 - **Phase 6:** `real_roots` returns a `real_roots_result` (status plus roots) instead of a bare vector, so bad input is a status, not an exception. The new contract test also exposed that `dekker` ignored `function_offset`; fixed.
 
+### Follow-up after the phases
+
+- **Eigen confinement.** All Eigen includes and `Eigen::` names now live in `include/detail/eigen_support.h` (new helpers `resize_if_needed`, `copy_from_row_major`, `set_allocation_allowed`). Solver code still calls Eigen-style members on `vector_type`/`matrix_type` (`.norm()`, `.noalias()`, ...), so a replacement backend must provide that member API on those two types.
+- **Project script run** (`Scripts/setup.py build.test.benchmark.ceres.ipopt.petsc.spell.coverage.cppcheck.clangtidy.iwyu`). The first run failed in clang-tidy on `evaluators.cpp` (`performance-enum-size`, `performance-unnecessary-value-param`), fixed. After that, build, 256/256 tests and benchmarks passed. The same run reported: codespell flagging `kInf` as a typo of `kind` (renamed), 19 cppcheck style findings (three fixed in `dispatch.cpp`, the rest suppressed in `Scripts/suppressions/cppcheck_suppressions.txt` with reasons), and line coverage of 78.74% against the tool's 80% target. I added `TestApiPaths.cpp` (finite-difference stencils at bounds, evaluator error paths, policy errors, `to_string`, root-finding argument errors) to raise it.
+- **Not verified:** a second full script run was started to confirm those fixes and was stopped before it finished, so the spelling, cppcheck, coverage and IWYU results after the fixes are unconfirmed. The new tests pass in the default build only (the full-backend and Ceres builds were not re-run after adding them).
+
 ### Found while implementing, not caused by it
 
 - `SviCalibrationBenchmark`'s POUNDERS row fails with PETSc 3.25.5 (`X0 + delta > upper bound` from `TaoSolve_POUNDERS` on a bounded problem). It fails the same way on the baseline commit; it now surfaces as `numerical_failure` instead of `max_iterations`.

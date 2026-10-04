@@ -123,6 +123,8 @@ if (result.converged()) {
 }
 ```
 
+All Eigen usage is confined to `include/detail/eigen_support.h` (types, sizing helpers, dense factorizations), so the linear-algebra backend is a one-file change; solver code relies only on the member API of `vector_type`/`matrix_type`.
+
 A problem carries one derivative slot (a provider): `set_jacobian(...)` for a callback, `derivatives(auto_diff())` for Ceres AD, `set_jacobian_provider(finite_difference(...))` for a custom stencil. Algorithm-specific tuning lives next to the common options, for example `options.lm` for the native Levenberg–Marquardt damping, geodesic and variant controls.
 
 `solver_result::status` is one closed vocabulary across backends: `converged`, `max_iterations` (budget used up, iterate usable), `stalled` (no acceptable step; the last accepted point is valid), and the failure statuses. Work counters (`residual_evaluations`, `jacobian_evaluations`, `accepted_steps`, ...) are `std::optional`: an empty value means the backend does not report it, an engaged zero means it measured zero.
