@@ -275,3 +275,7 @@ See `LICENSE`.
 
 Native LM mathematics, literature references, advanced options, and review findings:
 [Levenberg–Marquardt](docs/levenberg-marquardt.md).
+
+[Riemann-normal-coordinate LM (RNC-LM)](docs/rnc-lm.md) implements the
+2026 higher-order curve method, with Taylor automatic differentiation and
+curve orders 1–4 through the unified solve API.

@@ -22,6 +22,7 @@
 #include "solvers/lbfgs_solver.h"
 #include "solvers/levenberg_marquardt_solver.h"
 #include "solvers/petsc_tao_solver.h"
+#include "solvers/rnc_lm_solver.h"
 
 // Central dispatcher for the problem-structure API. It derives traits, resolves
 // backend::automatic / algorithm::automatic, validates the request, and either
@@ -50,6 +51,8 @@ backend backend_for(algorithm value, const problem_traits& traits)
         {
             return backend::ceres;
         }
+        return backend::native;
+    case algorithm::riemann_normal_coordinate_lm:
         return backend::native;
     case algorithm::pounders:
         return backend::pounders;
@@ -145,6 +148,12 @@ std::optional<solver_result> validate_request(const problem_traits& traits,
     algorithm                                                       selected,
     const vector_type&                                              x)
 {
+    if (selected == algorithm::riemann_normal_coordinate_lm &&
+        (!traits.is_least_squares || chosen != backend::native))
+        return failed(solver_status::unsupported_capability,
+            "RNC-LM requires native residual least squares",
+            x);
+
     if (options.max_iterations <= 0 || options.max_function_evaluations < 0 ||
         options.function_tolerance < 0.0 || options.gradient_tolerance < 0.0 ||
         options.parameter_tolerance < 0.0)
@@ -194,7 +203,7 @@ std::optional<solver_result> validate_request(const problem_traits& traits,
     {
         if (options.algorithm != algorithm::automatic && chosen == backend::native &&
             selected != algorithm::levenberg_marquardt && selected != algorithm::gauss_newton &&
-            selected != algorithm::lbfgs)
+            selected != algorithm::lbfgs && selected != algorithm::riemann_normal_coordinate_lm)
         {
             return failed(solver_status::unsupported_capability,
                 "the selected algorithm is not implemented by the native least-squares backend",
@@ -432,6 +441,9 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
     const solve_options&                                            options,
     algorithm                                                       alg)
 {
+    if (alg == algorithm::riemann_normal_coordinate_lm)
+        return solve_rnc_lm(problem, initial_guess, options);
+
     vector_type x = initial_guess;
 
     // Resolve derivative policy for native backend

@@ -14,6 +14,7 @@
 // numerical surface, while backend/storage specifics (interop with raw
 // buffers, dense decompositions, row-major/column-major layout) stay behind
 // free functions or small wrapper classes the caller never names directly.
+#include <Eigen/Cholesky>
 #include <Eigen/Core>
 #include <Eigen/LU>
 
@@ -85,6 +86,18 @@ public:
 
 private:
     Eigen::PartialPivLU<matrix_type> factorization_;
+};
+
+// RNC coefficient systems share one symmetric positive-definite matrix.
+class positive_definite_solver
+{
+public:
+    explicit positive_definite_solver(const matrix_type& a) : factorization_(a) {}
+    bool        valid() const { return factorization_.info() == Eigen::Success; }
+    vector_type solve(const vector_type& b) const { return factorization_.solve(b); }
+
+private:
+    Eigen::LLT<matrix_type> factorization_;
 };
 
 }  // namespace solverslib

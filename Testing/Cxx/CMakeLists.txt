@@ -9,7 +9,8 @@ endif()
 add_executable(
     SolversTests TestOptimizationAlgorithm.cpp TestOptimizerWrapper.cpp TestSolverBackends.cpp
                  TestRootFindingAndPolynomialSolvers.cpp TestSolverApiDispatch.cpp
-                 TestVerboseAndCornerCases.cpp TestDerivativeProviders.cpp TestLevenbergMarquardtLiterature.cpp ${CERES_TEST_FILES}
+                 TestVerboseAndCornerCases.cpp TestDerivativeProviders.cpp TestLevenbergMarquardtLiterature.cpp
+                 TestRncLm.cpp ${CERES_TEST_FILES}
 )
 target_link_libraries(SolversTests PRIVATE Solvers::Solvers GTest::gtest_main)
 
@@ -32,6 +33,9 @@ gtest_discover_tests(SolversTests
 
 option(SOLVERS_ENABLE_BENCHMARKS "Build solver benchmark executables" OFF)
 if(SOLVERS_ENABLE_BENCHMARKS)
+    add_executable(RncLmBenchmark BenchmarkRncLm.cpp)
+    target_link_libraries(RncLmBenchmark PRIVATE Solvers::Solvers)
+
     add_executable(SolversBenchmark BenchmarkSolvers.cpp)
     target_link_libraries(SolversBenchmark PRIVATE Solvers::Solvers)
 

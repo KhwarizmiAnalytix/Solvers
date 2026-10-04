@@ -12,6 +12,21 @@
 // review section 10). The dispatcher maps them to the internal option objects.
 namespace solverslib::api
 {
+// RNC-LM (Liu & Zhang, arXiv:2607.07623v2, Sections 4.2 and 4.4).
+// Algorithm-specific controls; budgets/tolerances live in solve_options.
+struct rnc_lm_options
+{
+    int    order                  = 3;  // Truncation order K, 1..4
+    int    max_curve_trials       = 4;  // Includes the initial t=1 trial
+    double acceptance_threshold   = 1e-4;
+    double contraction_min        = 0.3;
+    double contraction_max        = 0.5;
+    double initial_damping        = 1e-4;
+    double damping_floor          = 1e-15;
+    double damping_ceiling        = 1e12;
+    double diagonal_scaling_floor = 1e-12;
+};
+
 // -- Ceres -------------------------------------------------------------------
 enum class ceres_linear_solver : std::uint8_t
 {

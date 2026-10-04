@@ -11,6 +11,8 @@
 #include "detail/eigen_support.h"
 #include "detail/support.h"
 #include "solvers/api/derivative_provider.h"
+#include "solvers/api/status.h"
+#include "solvers/rnc_lm_derivatives.h"
 
 namespace solverslib::api::detail
 {
@@ -82,6 +84,10 @@ struct least_squares_problem
     // the provider supports native Ceres AD). Used by the Ceres backend to
     // bypass the generic JacobianProvider interface for better efficiency.
     std::shared_ptr<const detail::provider_factory> provider_factory;
+
+    // Required by RNC-LM; analytic or Taylor-mode derivatives along a curve.
+    rnc_derivative_function rnc_derivatives;
+    derivative_mode         rnc_derivative_source = derivative_mode::supplied;
 
     api::bounds bounds;
 

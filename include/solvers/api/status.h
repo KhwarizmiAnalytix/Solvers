@@ -35,7 +35,8 @@ enum class algorithm : std::uint8_t
     lbfgs,
     pounders,
     interior_point,
-    newton_krylov
+    newton_krylov,
+    riemann_normal_coordinate_lm
 };
 
 // Which library/executor realized the algorithm.
@@ -52,8 +53,8 @@ enum class backend : std::uint8_t
 // How derivatives are computed or selected.
 enum class derivative_mode : std::uint8_t
 {
-    automatic,                  // Prefer supplied Jacobian; fallback to AD; fallback to numeric/derivative-free
-    supplied,                   // Require an engaged, callable Jacobian; error if missing
+    automatic,  // Prefer supplied Jacobian; fallback to AD; fallback to numeric/derivative-free
+    supplied,   // Require an engaged, callable Jacobian; error if missing
     automatic_differentiation,  // Require a compatible AD provider; error if missing or unsupported
     finite_difference           // Use explicit numerical differentiation even if AD/supplied exist
 };
@@ -102,6 +103,8 @@ inline const char* to_string(algorithm value)
         return "interior_point";
     case algorithm::newton_krylov:
         return "newton_krylov";
+    case algorithm::riemann_normal_coordinate_lm:
+        return "riemann_normal_coordinate_lm";
     }
     return "unknown";
 }

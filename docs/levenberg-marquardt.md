@@ -3,6 +3,12 @@
 Reviewed 4 October 2026. Scope: the native solver, option builder, dense solve
 helper, dispatch integration, and stopping/result behavior.
 
+This document describes the existing LM/LM-GA implementation and its custom
+combination of damping and acceptance policies. Passing its regression tests
+is not evidence of reproducing a complete published algorithm. The separately
+implemented [RNC-LM method](rnc-lm.md) targets Liu and Zhang’s September 2026
+revision and is selected with `algorithm::riemann_normal_coordinate_lm`.
+
 ## Mathematical references
 
 Transtrum and Sethna, [*Improvements to the Levenberg-Marquardt algorithm for
@@ -25,8 +31,10 @@ Newer related work includes S. J. Brooks, [*Higher-Order Corrections to
 Optimisers based on Newton’s Method*](https://arxiv.org/abs/2307.03820v2)
 (2023; revised May 2024), which develops third- and fourth-order corrections
 from geodesic acceleration. Those higher-order methods are not implemented
-here and do not replace the original bold-acceptance definition. The search
-through the review date is not an exhaustive literature survey.
+in this LM strategy and do not replace the original bold-acceptance definition.
+Liu and Zhang’s [RNC-LM (2026, v2)](https://arxiv.org/abs/2607.07623v2) adds
+moving-tangent corrections and a curve-length search; see the separate
+implementation and mathematical mapping in [rnc-lm.md](rnc-lm.md).
 
 ## Equations implemented
 
@@ -81,7 +89,10 @@ is bounded to avoid runaway updates.
 The directional finite difference suppresses remainders within an eight-epsilon
 roundoff bound based on residual and coordinate scales. This implementation
 safeguard prevents cancellation noise from rejecting every trial near a solution.
-It is not an additional formula prescribed by the cited paper.
+It is not an additional formula prescribed by the cited paper. In particular,
+its coordinate-dependent threshold can suppress real curvature after a large
+translation of parameters. The RNC-LM implementation obtains derivatives through
+Taylor AD or an analytic callback and does not use this heuristic.
 
 ## Public options
 
@@ -150,7 +161,7 @@ suggests `h=0.1`, which can be selected explicitly. Likewise the fixed factors
    zero steps. Parameter convergence and logging handle zero parameter norms.
 9. **Medium: invalid and mutable options.** Invalid numeric settings are rejected
    at build time; later builder mutations no longer change previously built
-   options. Public aliases preserve source compatibility.
+   options. The current API uses the renamed options listed above.
 
 ## Remaining implementation limits
 
@@ -187,4 +198,5 @@ Eight focused regression tests cover correction sign and ratio, mandatory
 acceleration rejection, aligned uphill acceptance, velocity-based acceptance,
 Nielsen damping with poor model agreement, initial stationarity, an inactive
 parameter column, and option validation/snapshot independence. The full Ceres-
-enabled CTest suite passes (172 passed, one unavailable-backend test skipped).
+enabled suite previously passed these regressions. RNC-LM validation is
+documented separately in [rnc-lm.md](rnc-lm.md).
