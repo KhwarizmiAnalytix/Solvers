@@ -6,8 +6,6 @@
 #include "detail/support.h"
 #include "solver_options/solver_options_lm.h"
 
-#define MAX_LAMBDA 1e12
-
 namespace solverslib
 {
 namespace
@@ -51,7 +49,7 @@ native_result levenberg_marquardt_solver::solve(
     auto jacobian = jacobian_;
     if (jacobian == nullptr)
     {
-        auto bump = options.bump();
+        auto bump = options.finite_difference_step();
 
         jacobian = [this, bump](vector_type const& x, matrix_type& dy_dx)
         {
@@ -61,11 +59,11 @@ native_result levenberg_marquardt_solver::solve(
 
             auto number_of_targets = dy_dx.rows();
 
-            vector_type y_plus(number_of_targets);
-            vector_type y_minus(number_of_targets);
+            vector_type y_plus  = make_vector(number_of_targets);
+            vector_type y_minus = make_vector(number_of_targets);
 
-            vector_type x_tmp(number_of_parameters);
-            x_tmp = x;
+            vector_type x_tmp = make_vector(number_of_parameters);
+            x_tmp             = x;
 
             for (size_t i = 0; i < number_of_parameters; ++i)
             {
@@ -91,23 +89,32 @@ native_result levenberg_marquardt_solver::solve(
     const auto n = num_parameters_;
     const auto m = num_residuals_;
 
-    const auto max_iter           = options.max_num_iterations();
-    const auto accept_uphill_step = options.accept_uphill_step();
-    const auto alpha              = options.alpha();
-    const auto epsilon            = options.epsilon();
+    const auto max_iter                 = options.max_num_iterations();
+    const auto bold_acceptance          = options.bold_acceptance();
+    const auto bold_acceptance_exponent = options.bold_acceptance_exponent();
+    const auto alpha                    = options.geodesic_acceleration_threshold();
+    const auto epsilon                  = options.geodesic_acceleration_step();
 
     const auto Dh = 2. / (epsilon * epsilon);
 
-    auto lambda = options.lambda();
-    auto nu     = options.nu();
+    auto       lambda                              = options.initial_damping();
+    auto       nu                                  = options.initial_rejection_multiplier();
+    const auto damping_floor                       = options.damping_floor();
+    const auto nielsen_damping_floor               = options.nielsen_damping_floor();
+    const auto damping_ceiling                     = options.damping_ceiling();
+    const auto levenberg_marquardt_damping_ceiling = options.levenberg_marquardt_damping_ceiling();
+    const auto diagonal_scaling_floor              = options.diagonal_scaling_floor();
+    const auto roundoff_noise_factor               = options.roundoff_noise_factor();
 
     vector_type y_p(m), y_p_new(m), y_tmp(m);
-    vector_type JtWdy(n), p_new(n), last_accepted_step = vector_type::Zero(n);
-    vector_type step(n), tmp(n), diagonals             = vector_type::Ones(n);
+    vector_type JtWdy(n), p_new(n), last_accepted_velocity = vector_type::Zero(n), velocity(n);
+    vector_type step(n), tmp(n), diagonals                 = vector_type::Ones(n);
     matrix_type J(m, n), Jt(n, m), JtWJ(n, n), JtWJ_lambda(n, n);
 
     function_(parameters, y_p);
-    auto x2_p                 = l2_norm(y_p);
+    auto x2_p = l2_norm(y_p);
+    // Smallest cost yet found, C(θ) = Σ r_m(θ)^2.
+    auto min_cost             = y_p.squaredNorm();
     auto x2_converged         = x2_p < options.function_tolerance();
     bool gradient_converged   = false;
     bool parameters_converged = false;
@@ -123,7 +130,8 @@ native_result levenberg_marquardt_solver::solve(
         JtWJ  = Jt * J;
         JtWdy = Jt * y_p;
 
-        auto min_x2 = x2_p;
+        gradient_converged = JtWdy.norm() <= options.gradient_tolerance();
+        stop               = gradient_converged;
 
         for (; !stop && iteration < max_iter; ++iteration)
         {
@@ -133,16 +141,16 @@ native_result levenberg_marquardt_solver::solve(
             JtWJ_lambda = JtWJ;
             switch (options.type())
             {
-            case levenberg_marquardt_solver_enum::LEVENBERG:
+            case levenberg_marquardt_solver_enum::LEVENBERG_MARQUARDT:
             {
                 for (size_t i = 0; i < n; ++i)
                 {
-                    diagonals[i] = JtWJ(i, i);
-                    JtWJ_lambda(i, i) *= (1 + lambda);
+                    diagonals[i] = std::max(JtWJ(i, i), diagonal_scaling_floor);
+                    JtWJ_lambda(i, i) += lambda * diagonals[i];
                 }
                 break;
             }
-            case levenberg_marquardt_solver_enum::QUADRATIC:
+            case levenberg_marquardt_solver_enum::QUADRATIC_INTERPOLATION:
             {
                 for (size_t i = 0; i < n; ++i)
                 {
@@ -161,23 +169,40 @@ native_result levenberg_marquardt_solver::solve(
             }
             }
             linear_system_solver factorization(JtWJ_lambda);
-            step = factorization.solve(JtWdy);
+            step                = factorization.solve(JtWdy);
+            velocity            = step;  // Stored with opposite sign; cosine is unchanged.
+            bool geodesic_valid = step.allFinite();
 
-            if (options.use_geodesic())
+            if (options.geodesic_acceleration())
             {
                 p_new = parameters - epsilon * step;
                 function_(p_new, y_p_new);
 
                 y_tmp = J * step;
 
-                tmp = Jt * (Dh * ((y_p_new - y_p) + epsilon * y_tmp));
+                // The subtraction in Eq. (19) loses precision near a solution.
+                // Remove only remainders within a first-order roundoff bound;
+                // otherwise noise divided by h^2 can reject every tiny step.
+                vector_type remainder        = (y_p_new - y_p) + epsilon * y_tmp;
+                vector_type coordinate_scale = J.cwiseAbs() * parameters.cwiseAbs();
+                for (size_t i = 0; i < m; ++i)
+                {
+                    const double noise = roundoff_noise_factor *
+                                         std::numeric_limits<double>::epsilon() *
+                                         (std::abs(y_p_new[i]) + std::abs(y_p[i]) +
+                                             std::abs(epsilon * y_tmp[i]) + coordinate_scale[i]);
+                    if (std::abs(remainder[i]) <= noise)
+                        remainder[i] = 0.;
+                }
+                tmp = Jt * (Dh * remainder);
 
                 tmp = factorization.solve(tmp);
 
-                if (2. * l2_norm(tmp) < l2_norm(step) * alpha)
-                {
-                    step -= 0.5 * tmp;
-                }
+                // tmp = -a; Eq. (15) requires ||a|| <= alpha ||v||.
+                // Reject the entire trial when the perturbation is too large.
+                geodesic_valid =
+                    geodesic_valid && tmp.allFinite() && l2_norm(tmp) <= l2_norm(velocity) * alpha;
+                step += 0.5 * tmp;  // theta_new = theta + v + a/2.
             }
             p_new = parameters - step;
             function_(p_new, y_p_new);
@@ -185,12 +210,14 @@ native_result levenberg_marquardt_solver::solve(
 
             scalar_type alpha_quadratic = 0.;
 
-            if (options.type() == levenberg_marquardt_solver_enum::QUADRATIC)
+            if (options.type() == levenberg_marquardt_solver_enum::QUADRATIC_INTERPOLATION)
             {
                 auto dot_product = step.dot(JtWdy);
 
-                alpha_quadratic = dot_product / ((x2_p_new - x2_p) * 0.5 + 2.0 * dot_product);
-                if (x2_p_new > x2_p)
+                alpha_quadratic = dot_product / ((y_p_new.squaredNorm() - y_p.squaredNorm()) * 0.5 +
+                                                    2.0 * dot_product);
+                if (geodesic_valid && x2_p_new > x2_p && std::isfinite(alpha_quadratic) &&
+                    alpha_quadratic > 0.)
                 {
                     tmp = (-alpha_quadratic) * step;
                     tmp += parameters;
@@ -204,32 +231,44 @@ native_result levenberg_marquardt_solver::solve(
                         p_new    = tmp;
                         y_p_new  = y_tmp;
 
-                        if (accept_uphill_step)
-                        {
-                            step *= alpha_quadratic;
-                        }
+                        step *= alpha_quadratic;
                     }
                 }
             }
 
-            const auto numerator_rho   = x2_p - x2_p_new;
-            const auto denominator_rho = step.dot(lambda * diagonals.cwiseProduct(step) + JtWdy);
+            const auto numerator_rho = y_p.squaredNorm() - y_p_new.squaredNorm();
+            // Twice the linearized cost reduction, evaluated at the actual
+            // proposed step (including acceleration/interpolation).
+            const auto denominator_rho = 2. * step.dot(JtWdy) - (J * step).squaredNorm();
 
             bool update_step = ((numerator_rho > 0.) && (denominator_rho > 0.));
 
-            if (accept_uphill_step && iteration > 0)
+            // Bold acceptance of an uphill step. Transtrum & Sethna,
+            // "Improvements to the Levenberg-Marquardt algorithm for nonlinear
+            // least-squares minimization", arXiv preprint (2012),
+            // arXiv:1201.5885, Section 4. Downhill steps are accepted above.
+            // An uphill step is accepted when the proposed velocity stays
+            // aligned with the last accepted step:
+            //   β_i = cos(v_new, v_old)                         (20)
+            //   (1 - β_i)^b * C_{i+1} ≤ min(C_1, ..., C_i)        (22)
+            // The paper's comparisons use b = 2.
+            if (bold_acceptance && last_accepted_velocity.norm() > 0.)
             {
-                auto norm_previous_h = l2_norm(last_accepted_step);
-                auto norm_h          = l2_norm(step);
+                const auto norm_old = l2_norm(last_accepted_velocity);
+                const auto norm_new = l2_norm(velocity);
 
-                auto cos_theta = !is_almost_zero(norm_h * norm_previous_h)
-                                     ? step.dot(last_accepted_step) / (norm_h * norm_previous_h)
-                                     : 0.;
+                auto beta = norm_new > 0. && norm_old > 0.
+                                ? (velocity / norm_new).dot(last_accepted_velocity / norm_old)
+                                : 0.;
+                beta      = std::max(-1., std::min(1., beta));
 
-                min_x2 = std::min(x2_p, min_x2);
-
-                update_step = update_step || (1. - cos_theta) * x2_p_new < min_x2;
+                const auto cost_new = y_p_new.squaredNorm();
+                update_step = update_step ||
+                              std::pow(1. - beta, bold_acceptance_exponent) * cost_new <= min_cost;
             }
+
+            update_step = update_step && geodesic_valid && step.allFinite() && p_new.allFinite() &&
+                          y_p_new.allFinite() && std::isfinite(x2_p_new);
 
             if (update_step)
             {
@@ -237,7 +276,7 @@ native_result levenberg_marquardt_solver::solve(
                 y_p              = y_p_new;
                 auto previous_x2 = x2_p;
                 x2_p             = x2_p_new;
-                min_x2           = std::min(x2_p, min_x2);
+                min_cost         = std::min(y_p.squaredNorm(), min_cost);
 
                 // Enhanced logging for accepted steps
                 SOLVERS_LOG_IF(INFO,
@@ -254,18 +293,23 @@ native_result levenberg_marquardt_solver::solve(
                 // decrease lambda == > Gauss - Newton method
                 switch (options.type())
                 {
-                case levenberg_marquardt_solver_enum::LEVENBERG:
-                    lambda = std::max(lambda / options.lambda_down_fac(), 1.e-7);
+                case levenberg_marquardt_solver_enum::LEVENBERG_MARQUARDT:
+                    lambda = std::max(lambda / options.damping_decrease_factor(), damping_floor);
                     break;
 
-                case levenberg_marquardt_solver_enum::QUADRATIC:
-                    lambda = std::max(lambda / (1 + 2. * alpha_quadratic), 1.e-7);
+                case levenberg_marquardt_solver_enum::QUADRATIC_INTERPOLATION:
+                    lambda = std::max(lambda / (1 + 2. * alpha_quadratic), damping_floor);
                     break;
 
                 case levenberg_marquardt_solver_enum::NIELSEN:
-                    auto rho = numerator_rho / denominator_rho;
-                    lambda *= std::fmax(1. / 3., 1. - std::fabs(pow(2. * rho - 1., 3.)));
-                    nu = 2;
+                    // Bold acceptance can admit a trial without positive
+                    // predicted reduction. Treat that as poor model agreement.
+                    const auto rho = denominator_rho > 0. && std::isfinite(denominator_rho)
+                                         ? numerator_rho / denominator_rho
+                                         : 0.;
+                    lambda *= std::fmax(1. / 3., 1. - pow(2. * rho - 1., 3.));
+                    lambda = std::max(nielsen_damping_floor, std::min(lambda, damping_ceiling));
+                    nu     = options.initial_rejection_multiplier();
                     break;
                 }
 
@@ -280,10 +324,12 @@ native_result levenberg_marquardt_solver::solve(
                 auto gradient_norm = l2_norm(JtWdy);
 
                 parameters_converged =
-                    parameters_converged || step_norm < param_norm * options.parameter_tolerance();
+                    parameters_converged ||
+                    step_norm <= options.parameter_tolerance() *
+                                     (param_norm + options.parameter_tolerance());
 
                 gradient_converged =
-                    gradient_converged || gradient_norm < options.gradient_tolerance();
+                    gradient_converged || gradient_norm <= options.gradient_tolerance();
 
                 x2_converged = x2_converged || x2_p < options.function_tolerance();
 
@@ -292,18 +338,21 @@ native_result levenberg_marquardt_solver::solve(
                 {
                     SOLVERS_LOG_IF(INFO,
                         options.verbose(),
-                        "LM Iter {} | CONVERGENCE CHECK | rel_step = {} | grad_norm = {} | f(x) = {}",
+                        "LM Iter {} | CONVERGENCE CHECK | rel_step = {} | grad_norm = {} | f(x) = "
+                        "{}",
                         fmt_iter(iteration),
-                        fmt_sci(step_norm / param_norm, 2),
+                        fmt_sci(
+                            step_norm / std::max(param_norm, std::numeric_limits<double>::min()),
+                            2),
                         fmt_sci(gradient_norm, 2),
                         fmt_sci(x2_p, 3));
                 }
 
                 stop = parameters_converged || gradient_converged || x2_converged;
 
-                if (accept_uphill_step)
+                if (bold_acceptance)
                 {
-                    last_accepted_step = step;
+                    last_accepted_velocity = velocity;
                 }
             }
             else
@@ -322,18 +371,22 @@ native_result levenberg_marquardt_solver::solve(
                 // increase lambda == > gradient descent method
                 switch (options.type())
                 {
-                case levenberg_marquardt_solver_enum::LEVENBERG:
-                    lambda = std::min(lambda * options.lambda_up_fac(), 1.e7);
+                case levenberg_marquardt_solver_enum::LEVENBERG_MARQUARDT:
+                    lambda = std::min(lambda * options.damping_increase_factor(),
+                        levenberg_marquardt_damping_ceiling);
                     break;
 
-                case levenberg_marquardt_solver_enum::QUADRATIC:
-                    lambda = lambda + std::fabs(0.5 * (x2_p - x2_p_new) / alpha_quadratic);
-                    lambda = std::min(lambda, MAX_LAMBDA);
+                case levenberg_marquardt_solver_enum::QUADRATIC_INTERPOLATION:
+                    lambda = std::isfinite(alpha_quadratic) && alpha_quadratic > 0. &&
+                                     std::isfinite(numerator_rho)
+                                 ? lambda + std::fabs(0.5 * numerator_rho / alpha_quadratic)
+                                 : lambda * options.damping_increase_factor();
+                    lambda = std::min(lambda, damping_ceiling);
                     break;
 
                 case levenberg_marquardt_solver_enum::NIELSEN:
                     lambda *= nu;
-                    lambda = std::min(lambda, MAX_LAMBDA);
+                    lambda = std::min(lambda, damping_ceiling);
                     nu *= 2;
                     break;
                 }
@@ -345,7 +398,7 @@ native_result levenberg_marquardt_solver::solve(
                     fmt_iter(iteration),
                     fmt_sci(lambda, 2));
                 if (options.type() == levenberg_marquardt_solver_enum::NIELSEN &&
-                    lambda >= MAX_LAMBDA)
+                    lambda >= damping_ceiling)
                 {
                     break;
                 }

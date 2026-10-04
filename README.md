@@ -272,3 +272,6 @@ consistently.
 ## License
 
 See `LICENSE`.
+
+Native LM mathematics, literature references, advanced options, and review findings:
+[Levenberg–Marquardt](docs/levenberg-marquardt.md).

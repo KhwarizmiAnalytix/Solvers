@@ -1,0 +1,190 @@
+# Native Levenberg–Marquardt: mathematics and options
+
+Reviewed 4 October 2026. Scope: the native solver, option builder, dense solve
+helper, dispatch integration, and stopping/result behavior.
+
+## Mathematical references
+
+Transtrum and Sethna, [*Improvements to the Levenberg-Marquardt algorithm for
+nonlinear least-squares minimization*](https://arxiv.org/abs/1201.5885) (2012),
+Sections 2–4, Eqs. (12), (14), (15), (19), (20), (22), defines the two extensions:
+**geodesic acceleration** and **bold acceptance**. This is an arXiv preprint;
+the previous `J. Comput. Phys. (2012)` attribution was unsupported.
+
+[Geodesic acceleration and the small-curvature approximation for nonlinear
+least squares](https://arxiv.org/abs/1207.4999), Transtrum and Sethna (2012, arXiv preprint), supplies the
+subsequent theoretical treatment. Its convergence results do not establish
+convergence of this implementation with bold acceptance.
+
+[Nielsen, *Damping Parameter in Marquardt's Method*, IMM-REP-1999-05](https://www2.imm.dtu.dk/documents/ftp/tr99/tr05_99.pdf)
+is the damping reference. [Moré, *The Levenberg-Marquardt Algorithm:
+Implementation and Theory* (1978)](https://doi.org/10.1007/BFb0067700)
+is the reference for retaining maximum diagonal scaling across iterations.
+
+Newer related work includes S. J. Brooks, [*Higher-Order Corrections to
+Optimisers based on Newton’s Method*](https://arxiv.org/abs/2307.03820v2)
+(2023; revised May 2024), which develops third- and fourth-order corrections
+from geodesic acceleration. Those higher-order methods are not implemented
+here and do not replace the original bold-acceptance definition. The search
+through the review date is not an exhaustive literature survey.
+
+## Equations implemented
+
+Let residuals be `r(theta)`, Jacobian `J`, `g = J^T r`, and
+`A = J^T J + lambda S`. The minimized objective is
+
+\[
+F(\theta)=\tfrac12\|r(\theta)\|^2,\qquad Av=-g.
+\]
+
+Geodesic acceleration uses
+
+\[
+r_{vv}\simeq\frac{2}{h^2}[r(\theta+hv)-r(\theta)-hJv],\quad
+Aa=-J^T r_{vv},\quad s=v+\tfrac12a.
+\]
+
+Require `||a|| <= alpha ||v||`; otherwise reject the entire trial and increase
+damping. The internal `step` has sign `-s`, `velocity` has sign `-v`, and `tmp`
+has sign `-a`. Consequently `step += tmp/2` is the correct update.
+
+Bold acceptance retains the first-order velocity of the last accepted trial:
+
+\[
+\beta=\frac{v_{new}^T v_{old}}{\|v_{new}\|\|v_{old}\|},\qquad
+(1-\beta)^b\|r_{new}\|^2\leq\min_{accepted}\|r\|^2.
+\]
+
+A previous nonzero velocity is required. Nonfinite trials and trials failing
+the acceleration bound cannot be accepted by this rule.
+
+For the actual proposed displacement `s`, including both optional corrections,
+
+\[
+\rho=\frac{\|r\|^2-\|r(\theta+s)\|^2}
+{-2g^Ts-\|Js\|^2}.
+\]
+
+Ordinary acceptance requires positive actual and predicted reduction. Bold
+acceptance may permit negative reduction. Nielsen's accepted-step update is
+
+\[
+\lambda\leftarrow\lambda\max(1/3,1-(2\rho-1)^3).
+\]
+
+A nonpositive or nonfinite predicted reduction uses `rho=0` for damping.
+There is no absolute value around the cube. An accepted uphill trial usually
+increases damping under this rule. Rejection multiplies damping by `nu` and
+doubles `nu`; acceptance resets `nu` to its configured initial value. Damping
+is bounded to avoid runaway updates.
+
+The directional finite difference suppresses remainders within an eight-epsilon
+roundoff bound based on residual and coordinate scales. This implementation
+safeguard prevents cancellation noise from rejecting every trial near a solution.
+It is not an additional formula prescribed by the cited paper.
+
+## Public options
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `geodesic_acceleration` | true | Enable second-order step correction and safeguard |
+| `geodesic_acceleration_threshold` | 0.75 | Bound on acceleration/velocity norm |
+| `geodesic_acceleration_step` | 0.05 | Dimensionless directional finite-difference fraction `h` |
+| `bold_acceptance` | false | Enable conservative Eq. (22) |
+| `bold_acceptance_exponent` | 2 | Exponent `b` |
+| `initial_damping` | 1e-4 | Initial damping |
+| `initial_rejection_multiplier` | 2 | Initial Nielsen rejection multiplier |
+| `damping_decrease_factor` | 9 | Marquardt accepted-step divisor |
+| `damping_increase_factor` | 11 | Marquardt rejected-step multiplier; interpolation failure fallback |
+| `damping_floor` | 1e-7 | Minimum damping for Marquardt and quadratic interpolation |
+| `nielsen_damping_floor` | 1e-15 | Minimum Nielsen damping |
+| `damping_ceiling` | 1e12 | Maximum quadratic-interpolation/Nielsen damping |
+| `levenberg_marquardt_damping_ceiling` | 1e7 | Maximum Marquardt damping |
+| `diagonal_scaling_floor` | 1e-12 | Lower bound for Marquardt diagonal scaling |
+| `roundoff_noise_factor` | 8 | Multiplier for the geodesic finite-difference roundoff guard |
+| `finite_difference_step` | 1e-5 | Absolute central-difference Jacobian step |
+| `type` | `NIELSEN` | Coupled scaling and damping policy |
+
+Each option has a `with_...` builder method. The strategy enum contains only
+`LEVENBERG_MARQUARDT`, `QUADRATIC_INTERPOLATION`, and `NIELSEN`.
+`LEVENBERG_MARQUARDT` uses
+`S_ii = max((J^T J)_ii, diagonal_scaling_floor)` and fixed damping factors,
+with damping clamped to its configured floor and ceiling.
+`QUADRATIC_INTERPOLATION` uses identity scaling and a scalar interpolation
+trial, also with configured damping bounds. `NIELSEN` uses
+`S_ii = max(1, all encountered (J^T J)_ii)` with the Nielsen update and its
+own damping floor plus the shared ceiling. The
+maximum-history scaling and floor are implementation choices, rather than
+part of the Nielsen damping formula. No separate identity-scaled, fixed-factor
+Levenberg policy is currently exposed.
+
+`build()` validates finite positive algorithm parameters, damping factors above
+one, nonnegative tolerances/iteration limit, and enum values. Built options are
+independent snapshots. The `h=0.05` default is retained; the improvements paper
+suggests `h=0.1`, which can be selected explicitly. Likewise the fixed factors
+9/11 are retained and should not be called “delayed gratification.”
+
+## Review findings and corrections
+
+1. **High: wrong acceleration sign.** Subtracting `tmp/2` moved opposite the
+   derived correction. Corrected and checked against a quadratic residual
+   with an analytically known directional second derivative.
+2. **High: invalid acceleration acceptance.** The previous guard used
+   `2||a||` and accepted an uncorrected step on failure. It now uses `||a||`
+   and rejects the trial; bold acceptance cannot override it.
+3. **High: inconsistent gain ratio.** Actual reduction used residual norms,
+   while the denominator represented squared cost and assumed an unmodified
+   LM step. Both reductions now use squared quantities and the actual step.
+4. **High: incorrect Nielsen update.** Removing the absolute value restores
+   increasing damping for poor model agreement and accepted uphill moves.
+5. **Medium: wrong bold direction.** History previously stored corrected
+   displacements. It now stores LM velocities; rejection preserves history.
+6. **Medium: interpolation bookkeeping.** A successful scaled trial now updates
+   the step even with bold acceptance disabled. Interpolation uses squared
+   residual differences and guards invalid interpolation factors.
+7. **Medium: zero diagonal singularity.** Marquardt scaling now floors zero
+   diagonals so inactive parameter columns do not create a singular damped
+   system solely through their zero diagonal.
+8. **Medium: stationary initial point.** The initial gradient is checked before
+   proposing a trial. Zero gradients no longer exhaust iterations rejecting
+   zero steps. Parameter convergence and logging handle zero parameter norms.
+9. **Medium: invalid and mutable options.** Invalid numeric settings are rejected
+   at build time; later builder mutations no longer change previously built
+   options. Public aliases preserve source compatibility.
+
+## Remaining implementation limits
+
+The solver still forms normal equations and uses `PartialPivLU`, without a
+rank-revealing solve, factorization status, or a linear-system residual check.
+Finite trial checks help but do not establish accuracy for ill-conditioned
+problems. An augmented QR/SVD solve remains a separate numerical improvement.
+
+`function_tolerance` is an absolute residual-norm threshold, not a relative
+objective-change tolerance. Gradient tolerance is an absolute norm of `J^T r`;
+parameter tolerance tests `||s|| <= tol*(||theta_new||+tol)`. The defaults for
+gradient and parameter tolerance are zero. The numerical Jacobian uses an
+absolute bump and can lose accuracy across widely varying parameter scales.
+Callback dimensions and finite residual/Jacobian inputs are not fully validated
+at this native boundary; callback exceptions propagate.
+
+Bold acceptance returns the last accepted iterate, which may have greater cost
+than the best encountered iterate. The minimum cost is tracked for acceptance,
+but its parameters are not saved. Budget exhaustion and damping exhaustion
+both map to `not_converged`, and the historical iteration counter can
+underreport the trial that hits the damping cap. Verbose logs show residual
+norm as `f(x)`, rather than the minimized half-squared objective.
+
+The higher-level API dispatch builds native options only from common iteration,
+tolerance, and verbosity settings. These advanced options are available through
+the native LM builder; they are not exposed through the unified API. The native
+`log_file` option is not consumed directly by this solver. Changing API exposure,
+callback validation, result diagnostics, and linear algebra is outside this
+literature-alignment change.
+
+## Validation
+
+Eight focused regression tests cover correction sign and ratio, mandatory
+acceleration rejection, aligned uphill acceptance, velocity-based acceptance,
+Nielsen damping with poor model agreement, initial stationarity, an inactive
+parameter column, and option validation/snapshot independence. The full Ceres-
+enabled CTest suite passes (172 passed, one unavailable-backend test skipped).
