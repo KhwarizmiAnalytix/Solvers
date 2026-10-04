@@ -225,7 +225,9 @@ std::shared_ptr<const solver_options_lm> solver_options_lm_builder::build() cons
         options_->nielsen_damping_floor_ >= options_->damping_ceiling_ ||
         options_->damping_floor_ >= options_->levenberg_marquardt_damping_ceiling_ ||
         static_cast<int>(options_->type_) < 0 || static_cast<int>(options_->type_) > 2)
+    {
         throw std::invalid_argument("Invalid Levenberg-Marquardt options");
+    }
     return std::shared_ptr<const solver_options_lm>(new solver_options_lm(*options_));
 }
 }  // namespace solverslib

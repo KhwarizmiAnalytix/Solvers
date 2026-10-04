@@ -150,9 +150,11 @@ std::optional<solver_result> validate_request(const problem_traits& traits,
 {
     if (selected == algorithm::riemann_normal_coordinate_lm &&
         (!traits.is_least_squares || chosen != backend::native))
+    {
         return failed(solver_status::unsupported_capability,
             "RNC-LM requires native residual least squares",
             x);
+    }
 
     if (options.max_iterations <= 0 || options.max_function_evaluations < 0 ||
         options.function_tolerance < 0.0 || options.gradient_tolerance < 0.0 ||
@@ -442,7 +444,9 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
     algorithm                                                       alg)
 {
     if (alg == algorithm::riemann_normal_coordinate_lm)
+    {
         return solve_rnc_lm(problem, initial_guess, options);
+    }
 
     vector_type x = initial_guess;
 

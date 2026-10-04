@@ -593,6 +593,7 @@ class SolversFlags:
             "benchmark",
             "iwyu",
             # Helper-driven analysis tokens (no CMake option behind them)
+            "spell",
             "valgrind",
             "cppcheck",
         ]
@@ -608,6 +609,7 @@ class SolversFlags:
             "enable clang-tidy static analysis (SOLVERS_ENABLE_CLANGTIDY)",
             "build and run benchmark executables (SOLVERS_ENABLE_BENCHMARKS)",
             "enable include-what-you-use analysis (SOLVERS_ENABLE_IWYU)",
+            "run repository-configured CODESPELL checks",
             "execute the test suite under Valgrind",
             "run cppcheck static analysis after the build",
         ]
@@ -753,6 +755,9 @@ class SolversFlags:
 
     def is_cppcheck(self):
         return self.__value["cppcheck"] == self.ON
+
+    def is_spell(self):
+        return self.__value["spell"] == self.ON
 
     def is_benchmark(self):
         return self.__value.get("benchmark") == self.ON
@@ -1068,6 +1073,27 @@ class SolversConfiguration:
         """Process cppcheck results and provide user-friendly feedback."""
         return cppcheck_helper.process_cppcheck_results(result, output_file)
 
+    def spell(self, source_path):
+        if not self.__solvers_flags.is_spell():
+            return 0
+
+        print_status("Starting spelling checks with CODESPELL...", "INFO")
+        try:
+            result = subprocess.run(
+                ["lintrunner", "--take", "CODESPELL", "--all-files"],
+                cwd=source_path,
+                check=False,
+            )
+        except FileNotFoundError:
+            print_status("lintrunner was not found; install the repository lint tools", "ERROR")
+            return 1
+
+        if result.returncode == 0:
+            print_status("Spelling checks completed successfully", "SUCCESS")
+        else:
+            print_status("Spelling checks failed", "ERROR")
+        return result.returncode
+
     def test(self, source_path, build_path):
         if self.__value["test"] != "test":
             return 0
@@ -1331,16 +1357,23 @@ def main():
 
             coverage_start = time.perf_counter()
             compilation_calc.coverage(source_path, build_path)
-            end = time.perf_counter()
+            coverage_end = time.perf_counter()
+
+            spell_start = time.perf_counter()
+            spell_exit_code = compilation_calc.spell(source_path)
+            spell_end = time.perf_counter()
+            if spell_exit_code != 0:
+                sys.exit(spell_exit_code)
 
             print_status(f"Config time: {config_end - start:.4f} seconds", "INFO")
             print_status(f"Build time: {build_end - build_start:.4f} seconds", "INFO")
             print_status(f"Cppcheck time: {cppcheck_end - cppcheck_start:.4f} seconds", "INFO")
             print_status(f"Test time: {test_end - test_start:.4f} seconds", "INFO")
             print_status(f"Benchmark time: {benchmark_end - benchmark_start:.4f} seconds", "INFO")
-            print_status(f"Coverage time: {end - coverage_start:.4f} seconds", "INFO")
+            print_status(f"Coverage time: {coverage_end - coverage_start:.4f} seconds", "INFO")
+            print_status(f"Spell time: {spell_end - spell_start:.4f} seconds", "INFO")
 
-            print_status(f"Total time: {end - start:.4f} seconds", "INFO")
+            print_status(f"Total time: {spell_end - start:.4f} seconds", "INFO")
 
             print_status("Build process completed successfully!", "SUCCESS")
 

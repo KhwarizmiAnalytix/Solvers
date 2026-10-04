@@ -26,16 +26,15 @@ bool valid_options(const api::rnc_lm_options& cfg, const api::solve_options& opt
 
 bool valid_derivatives(const rnc_curve_derivatives& d, int order, index_type m, index_type n)
 {
-    if (d.residual.size() != static_cast<size_t>(order + 1) ||
-        d.jacobian.size() != static_cast<size_t>(std::max(0, order - 2) + 1))
+    if (d.residual.size() != static_cast<size_t>(order) + 1u ||
+        d.jacobian.size() != static_cast<size_t>(std::max(0, order - 2)) + 1u)
+    {
         return false;
-    for (const auto& r : d.residual)
-        if (r.size() != m || !r.allFinite())
-            return false;
-    for (const auto& j : d.jacobian)
-        if (j.rows() != m || j.cols() != n || !j.allFinite())
-            return false;
-    return true;
+    }
+    return std::all_of(d.residual.begin(), d.residual.end(),
+               [m](const vector_type& residual) { return residual.size() == m && residual.allFinite(); }) &&
+           std::all_of(d.jacobian.begin(), d.jacobian.end(), [m, n](const matrix_type& jacobian)
+               { return jacobian.rows() == m && jacobian.cols() == n && jacobian.allFinite(); });
 }
 }  // namespace
 
@@ -60,19 +59,27 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
     const auto m = static_cast<index_type>(problem.num_residuals);
     if (!valid_options(cfg, options) || n <= 0 || m <= 0 || initial_guess.size() != n ||
         !initial_guess.allFinite() || !problem.residuals)
+    {
         return finish(solver_status::invalid_problem, "Invalid RNC-LM problem or options");
+    }
     if (!problem.bounds.empty() || options.max_function_evaluations != 0)
+    {
         return finish(solver_status::unsupported_capability,
             "RNC-LM does not support bounds or evaluation budgets");
+    }
     if (!problem.rnc_derivatives)
+    {
         return finish(solver_status::unsupported_capability,
             "RNC-LM requires analytic or Taylor curve derivatives");
+    }
     if ((problem.rnc_derivative_source != api::derivative_mode::supplied &&
             problem.rnc_derivative_source != api::derivative_mode::automatic_differentiation) ||
         (options.derivatives != api::derivative_mode::automatic &&
             options.derivatives != problem.rnc_derivative_source))
+    {
         return finish(solver_status::unsupported_capability,
             "Requested derivative mode is incompatible with RNC curve derivatives");
+    }
 
     vector_type r(m), gradient(n);
     matrix_type j(m, n);
@@ -82,7 +89,9 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
         ++result.jacobian_evaluations;
         problem.rnc_derivatives(result.parameters, {}, 1, d);
         if (!valid_derivatives(d, 1, m, n))
+        {
             return false;
+        }
         r        = d.residual[0];
         j        = d.jacobian[0];
         gradient = j.transpose() * r;
@@ -101,10 +110,14 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
     try
     {
         if (!refresh())
+        {
             return finish(solver_status::numerical_failure, "Invalid RNC base derivatives");
+        }
         if (converged())
+        {
             return finish(
                 solver_status::converged, "RNC-LM residual or gradient tolerance reached");
+        }
         for (int iteration = 0; iteration < options.max_iterations; ++iteration)
         {
             ++result.iterations;  // Counts attempted curves, including rejected curves.
@@ -142,7 +155,9 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                     problem.rnc_derivatives(result.parameters, coefficients, order, derivatives);
                     curve_valid = valid_derivatives(derivatives, order, m, n);
                     if (!curve_valid)
+                    {
                         break;
+                    }
                     vector_type defect   = vector_type::Zero(n);
                     double      binomial = 1.;
                     for (int k = 0; k <= order - 2; ++k)
@@ -150,7 +165,9 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                         defect += binomial * derivatives.jacobian[k].transpose() *
                                   derivatives.residual[order - k];
                         if (k < order - 2)
+                        {
                             binomial *= double(order - 2 - k) / double(k + 1);
+                        }
                     }
                     const vector_type coefficient = factorization.solve(-defect);
                     curve_valid                   = coefficient.allFinite();
@@ -197,12 +214,18 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                     accepted = true;
                     // Eq. (40), separate from Nielsen and bold acceptance.
                     if (rho < .25)
+                    {
                         lambda = std::min(2. * lambda, cfg.damping_ceiling);
+                    }
                     else if (rho > .75)
+                    {
                         lambda = std::max(lambda / 3., cfg.damping_floor);
+                    }
                     if (!refresh())
+                    {
                         return finish(solver_status::numerical_failure,
                             "Invalid RNC derivatives at accepted point");
+                    }
                     SOLVERS_LOG_IF(INFO,
                         options.verbose,
                         "RNC-LM iteration {} | order {} | t = {} | cost = {} | rho = {} | lambda = "
@@ -214,13 +237,17 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                         rho,
                         lambda);
                     if (converged())
+                    {
                         return finish(solver_status::converged,
                             "RNC-LM residual or gradient tolerance reached");
+                    }
                     if (*result.step_norm <=
                         options.parameter_tolerance *
                             (result.parameters.stableNorm() + options.parameter_tolerance))
+                    {
                         return finish(
                             solver_status::converged, "RNC-LM parameter tolerance reached");
+                    }
                     break;
                 }
                 ++result.rejected_steps;  // Rejected trial points, not outer curves.
@@ -231,14 +258,18 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                                                ? sigma * t * t / denominator
                                                : cfg.contraction_min * t;
                 if (!std::isfinite(next_t))
+                {
                     next_t = cfg.contraction_min * t;
+                }
                 t = std::clamp(next_t, cfg.contraction_min * t, cfg.contraction_max * t);
             }
             if (!accepted)
             {
                 if (lambda >= cfg.damping_ceiling)
+                {
                     return finish(solver_status::numerical_failure,
                         "RNC-LM exhausted damping without an acceptable curve");
+                }
                 lambda = std::min(2. * lambda, cfg.damping_ceiling);
             }
         }

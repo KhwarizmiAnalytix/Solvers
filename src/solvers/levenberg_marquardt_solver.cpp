@@ -192,7 +192,9 @@ native_result levenberg_marquardt_solver::solve(
                                          (std::abs(y_p_new[i]) + std::abs(y_p[i]) +
                                              std::abs(epsilon * y_tmp[i]) + coordinate_scale[i]);
                     if (std::abs(remainder[i]) <= noise)
+                    {
                         remainder[i] = 0.;
+                    }
                 }
                 tmp = Jt * (Dh * remainder);
 
