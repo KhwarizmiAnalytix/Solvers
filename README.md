@@ -2,7 +2,7 @@
 
 High-performance native numerical solvers for C++, with optional integrations for automatic differentiation, bound-constrained optimization, and large-scale workloads.
 
-- **Native core** — root finding, least squares, BFGS/L-BFGS with no external dependencies beyond Eigen.
+- **Native core** — root finding, least squares and L-BFGS with no external dependencies beyond Eigen.
 - **Advanced backends** — optional Ipopt, PETSc/TAO, POUNDERS, and Ceres integrations where they add capabilities the native layer cannot cover.
 - **Quant & scientific focus** — designed for calibration, bootstrapping, and pricing workloads.
 
@@ -15,7 +15,7 @@ High-performance native numerical solvers for C++, with optional integrations fo
 | Scalar root finding | Brent, Newton, Ridders, Bisection, Secant, Dekker, False Position | Native |
 | Polynomial roots | Companion-matrix solver | Native |
 | Nonlinear least squares | Levenberg-Marquardt, Gauss-Newton | Native |
-| Unconstrained optimization | BFGS, L-BFGS | Native |
+| Unconstrained optimization | L-BFGS | Native |
 | Bound-constrained scalar optimization | Interior-point method | Ipopt |
 | Large-scale optimization | Newton-Krylov, trust-region | PETSc/TAO |
 | Derivative-free least squares | POUNDERS | PETSc/TAO |
@@ -31,17 +31,19 @@ High-performance native numerical solvers for C++, with optional integrations fo
               │                          │
        Least Squares               General Objective
               │                          │
-       Jacobian available?         Bounds / constraints?
+       Derivative source?          Bounds / constraints?
          /          \               /         \
        yes           no           yes          no
         │             │            │            │
-   Large scale?    POUNDERS       Ipopt     Large scale?
-     /      \                                /      \
-   yes      no                             yes       no
-    │        │                              │         │
-   TAO    Native LM/GN                    TAO    Native BFGS/
-                                                  L-BFGS
+   Large scale?   PETSc built?    Ipopt     Large scale?
+     /      \      /     \                    /      \
+   yes      no   yes      no                yes       no
+    │        │    │        │                 │         │
+   TAO   Native  POUNDERS  Native LM       TAO    Native L-BFGS
+         LM/GN             (finite diff.)
 ```
+
+Selection is table-driven: each (backend, algorithm) pair is one row with the capabilities it supports, and automatic mode only picks rows whose backend is built into this binary. A request nothing can serve is reported as `unsupported_capability` naming the missing capability.
 
 Scalar root-finding problems use the native root-solving layer directly.
 
@@ -72,32 +74,60 @@ bool converged = solverslib::root_finding_algorithms::brent(
     f, 0.0, 2.0, root, options);
 ```
 
-### Least-Squares Calibration
+For a status, counts and the best estimate instead of a `bool`, use the structured form:
 
 ```cpp
-#include <solvers/levenberg_marquardt_solver.h>
-#include "detail/eigen_support.h"
+#include <solvers/api/roots.h>
 
-using solverslib::vector_type;
+using namespace solverslib::api;
 
-auto residuals = [](vector_type const& params, vector_type& r) {
+root_options opts;
+opts.max_iterations = 200;
+const root_result result = find_root(root_method::brent, scalar_function(f), 0.0, 2.0, opts);
+if (result.converged()) {
+    // result.root, result.residual, result.iterations, result.evaluations
+}
+
+// Every real root of x^3 - 6x^2 + 11x - 6, then an explicit selection policy.
+const auto roots = real_roots_cubic(-6.0, 11.0, -6.0);          // {1, 2, 3}
+const auto first = smallest_positive_root(roots.roots);          // 1
+```
+
+### Least-Squares Calibration
+
+Everything goes through `api::solve`. Describe the problem, call `solve`, and read one structured result.
+
+```cpp
+#include "solvers/api/solve.h"
+
+using namespace solverslib;
+using namespace solverslib::api;
+
+least_squares_problem problem;
+problem.num_parameters = num_parameters;
+problem.num_residuals  = num_residuals;
+problem.residuals = [](const vector_type& params, vector_type& r) {
     // r_i = model(params, market_i) - market_i
 };
-
-auto jacobian = [](vector_type const& params, matrix_type& J) {
+// Optional: without it the solver differentiates numerically.
+problem.set_jacobian([](const vector_type& params, matrix_type& J) {
     // fill J with dr_i / dparam_j
-};
+});
 
-solverslib::levenberg_marquardt_solver solver(
-    num_parameters, num_residuals, residuals, jacobian);
+solve_options options;
+options.max_iterations = 100;
 
-vector_type params = initial_guess;
-auto result = solver.solve(params, lm_options);
-
+const solver_result result = solve(problem, initial_guess, options);
 if (result.converged()) {
-    // params now holds the calibrated values
+    // result.parameters holds the calibrated values
 }
 ```
+
+A problem carries one derivative slot (a provider): `set_jacobian(...)` for a callback, `derivatives(auto_diff())` for Ceres AD, `set_jacobian_provider(finite_difference(...))` for a custom stencil. Algorithm-specific tuning lives next to the common options, for example `options.lm` for the native Levenberg–Marquardt damping, geodesic and variant controls.
+
+`solver_result::status` is one closed vocabulary across backends: `converged`, `max_iterations` (budget used up, iterate usable), `stalled` (no acceptable step; the last accepted point is valid), and the failure statuses. Work counters (`residual_evaluations`, `jacobian_evaluations`, `accepted_steps`, ...) are `std::optional`: an empty value means the backend does not report it, an engaged zero means it measured zero.
+
+> The `solver_options_*` builders and the native kernel classes (`levenberg_marquardt_solver`, `gauss_newton_solver`, `lbfgs_solver`) are the internal layer behind `api::solve`. Calling them directly still works, but it is deprecated for new code: they will stop being public in a later release, and new options are only added to `api::solve_options`.
 
 ### Automatic Differentiation with Ceres
 
@@ -142,10 +172,12 @@ int main() {
 The convenience factory stores the model and dimensions; `derivatives(auto_diff())` creates the Ceres provider. The Ceres backend must be enabled at configure time.
 
 **Derivative policy** controls how Jacobians are computed:
-- `automatic` (default): Prefers a supplied Jacobian, then an attached AD provider, then numerical or derivative-free execution
-- `supplied`: Requires Jacobian callback; error if missing
-- `automatic_differentiation`: Requires AD provider (Ceres); error if unavailable
-- `finite_difference`: Forces numerical differentiation
+- `automatic` (default): uses the attached provider's own source (supplied, AD or finite difference); with no provider, numerical differentiation
+- `supplied`: requires a callback or analytic provider; `invalid_problem` if missing
+- `automatic_differentiation`: requires an AD provider (Ceres); `unsupported_capability` if unavailable
+- `finite_difference`: forces numerical differentiation even if other sources exist
+
+Every backend resolves the policy the same way, and `solver_result::effective_derivative_source` reports what was actually used.
 
 **Enable Ceres AD** with:
 ```bash
@@ -158,7 +190,7 @@ This requires Ceres as a dependency; see [ceres-solver.org](http://ceres-solver.
 
 ## Why Solvers
 
-- **Native first** — root finding, LM, Gauss-Newton, BFGS, and L-BFGS are implemented directly. No external optimizer needed for common calibration problems.
+- **Native first** — root finding, LM, Gauss-Newton and L-BFGS are implemented directly. No external optimizer needed for common calibration problems.
 - **No redundant backends** — third-party libraries are added only when they introduce a genuinely new capability (constraints, large-scale, derivative-free).
 - **Lightweight core** — a native-only build requires only C++17, CMake, and Eigen.
 - **Common results** — the unified API reports convergence status, iterations, objective values, and diagnostics available from the selected backend.
@@ -241,7 +273,7 @@ Advanced backends are not required for the native core.
 - Polynomial solver
 - Levenberg-Marquardt
 - Gauss-Newton
-- BFGS / L-BFGS
+- L-BFGS
 - Unified problem/solve API with structured results
 - Derivative providers for supplied, automatic-differentiation, and finite-difference paths
 - Capability validation for bounds, nonlinear constraints, backend/algorithm selection, and invalid inputs

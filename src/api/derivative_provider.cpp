@@ -5,6 +5,7 @@
 
 #include "detail/eigen_support.h"
 #include "detail/support.h"
+#include "solvers/api/detail/evaluators.h"
 
 namespace solverslib::api
 {
@@ -17,6 +18,12 @@ void JacobianProvider::residuals_only(const vector_type& x, vector_type& residua
 {
     matrix_type J = make_matrix(num_residuals(), num_parameters());
     compute(x, residuals, J);
+}
+
+void JacobianProvider::jacobian_only(const vector_type& x, matrix_type& jacobian) const
+{
+    vector_type scratch = make_vector(num_residuals());
+    compute(x, scratch, jacobian);
 }
 
 // ---------------------------------------------------------------------------
@@ -38,10 +45,14 @@ void AnalyticJacobianProvider::compute(
     jacobian_(x, jacobian);
 }
 
-void AnalyticJacobianProvider::residuals_only(
-    const vector_type& x, vector_type& residuals) const
+void AnalyticJacobianProvider::residuals_only(const vector_type& x, vector_type& residuals) const
 {
     residuals_(x, residuals);
+}
+
+void AnalyticJacobianProvider::jacobian_only(const vector_type& x, matrix_type& jacobian) const
+{
+    jacobian_(x, jacobian);
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +63,8 @@ FiniteDifferenceJacobianProvider::FiniteDifferenceJacobianProvider(
     residual_fn rf, std::size_t n, std::size_t m, double step)
     : residuals_(std::move(rf)), n_(n), m_(m), step_(step)
 {
-    SOLVERS_CHECK(residuals_, "FiniteDifferenceJacobianProvider: residual function must not be null");
+    SOLVERS_CHECK(
+        residuals_, "FiniteDifferenceJacobianProvider: residual function must not be null");
     SOLVERS_CHECK(step > 0.0, "FiniteDifferenceJacobianProvider: step must be positive");
 }
 
@@ -60,32 +72,46 @@ void FiniteDifferenceJacobianProvider::compute(
     const vector_type& x, vector_type& residuals, matrix_type& jacobian) const
 {
     residuals_(x, residuals);
+    jacobian_only(x, jacobian);
+}
 
-    vector_type x_plus  = x;
-    vector_type x_minus = x;
-    vector_type r_plus  = make_vector(m_);
-    vector_type r_minus = make_vector(m_);
-
-    for (std::size_t j = 0; j < n_; ++j)
-    {
-        const double h  = step_ * (std::abs(x[j]) + 1.0);
-        x_plus[j]       = x[j] + h;
-        x_minus[j]      = x[j] - h;
-        residuals_(x_plus, r_plus);
-        residuals_(x_minus, r_minus);
-        for (std::size_t i = 0; i < m_; ++i)
-        {
-            jacobian(i, j) = (r_plus[i] - r_minus[i]) / (2.0 * h);
-        }
-        x_plus[j]  = x[j];
-        x_minus[j] = x[j];
-    }
+void FiniteDifferenceJacobianProvider::jacobian_only(
+    const vector_type& x, matrix_type& jacobian) const
+{
+    // Central stencils never need r(x); the shared implementation takes it only
+    // for one-sided stencils, which this unbounded provider never uses.
+    const vector_type placeholder = make_vector(m_);
+    std::size_t       evaluations = 0;
+    detail::finite_difference_jacobian(
+        residuals_, x, placeholder, step_, api::bounds{}, jacobian, evaluations);
 }
 
 void FiniteDifferenceJacobianProvider::residuals_only(
     const vector_type& x, vector_type& residuals) const
 {
     residuals_(x, residuals);
+}
+
+// ---------------------------------------------------------------------------
+// CurveDerivativeProvider
+// ---------------------------------------------------------------------------
+
+CurveDerivativeProvider::CurveDerivativeProvider(
+    rnc_derivative_function derivatives, derivative_mode source, std::size_t n, std::size_t m)
+    : derivatives_(std::move(derivatives)), source_(source), n_(n), m_(m)
+{
+    SOLVERS_CHECK(derivatives_, "CurveDerivativeProvider: derivative function must not be null");
+}
+
+void CurveDerivativeProvider::compute(
+    const vector_type& x, vector_type& residuals, matrix_type& jacobian) const
+{
+    rnc_curve_derivatives out;
+    derivatives_(x, {}, 1, out);
+    SOLVERS_CHECK(!out.residual.empty() && !out.jacobian.empty(),
+        "CurveDerivativeProvider: order-1 derivatives must include the residual and Jacobian");
+    residuals = out.residual[0];
+    jacobian  = out.jacobian[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -111,42 +137,29 @@ FiniteDifferenceGradientProvider::FiniteDifferenceGradientProvider(
     objective_fn of, std::size_t n, double step)
     : objective_(std::move(of)), n_(n), step_(step)
 {
-    SOLVERS_CHECK(objective_, "FiniteDifferenceGradientProvider: objective function must not be null");
+    SOLVERS_CHECK(
+        objective_, "FiniteDifferenceGradientProvider: objective function must not be null");
     SOLVERS_CHECK(step > 0.0, "FiniteDifferenceGradientProvider: step must be positive");
 }
 
-void FiniteDifferenceGradientProvider::compute(
-    const vector_type& x, vector_type& gradient) const
+void FiniteDifferenceGradientProvider::compute(const vector_type& x, vector_type& gradient) const
 {
-    vector_type x_plus  = x;
-    vector_type x_minus = x;
-
-    for (std::size_t i = 0; i < n_; ++i)
-    {
-        const double h = step_ * (std::abs(x[i]) + 1.0);
-        x_plus[i]      = x[i] + h;
-        x_minus[i]     = x[i] - h;
-        const double f_plus  = objective_(x_plus);
-        const double f_minus = objective_(x_minus);
-        gradient[i]          = (f_plus - f_minus) / (2.0 * h);
-        x_plus[i]            = x[i];
-        x_minus[i]           = x[i];
-    }
+    std::size_t evaluations = 0;
+    detail::finite_difference_gradient(
+        objective_, x, nullptr, step_, api::bounds{}, gradient, evaluations);
 }
 
 // ---------------------------------------------------------------------------
 // Derivative validation
 // ---------------------------------------------------------------------------
 
-check_jacobian_result check_jacobian(
-    const JacobianProvider& provider_a,
-    const JacobianProvider& provider_b,
-    const vector_type&      x,
-    double                  tol)
+check_jacobian_result check_jacobian(const JacobianProvider& provider_a,
+    const JacobianProvider&                                  provider_b,
+    const vector_type&                                       x,
+    double                                                   tol)
 {
-    SOLVERS_CHECK(
-        provider_a.num_parameters() == provider_b.num_parameters() &&
-            provider_a.num_residuals() == provider_b.num_residuals(),
+    SOLVERS_CHECK(provider_a.num_parameters() == provider_b.num_parameters() &&
+                      provider_a.num_residuals() == provider_b.num_residuals(),
         "check_jacobian: providers have incompatible dimensions");
 
     const std::size_t n = provider_a.num_parameters();
@@ -167,7 +180,7 @@ check_jacobian_result check_jacobian(
     if (J_a.rows() != static_cast<int>(m) || J_a.cols() != static_cast<int>(n) ||
         J_b.rows() != static_cast<int>(m) || J_b.cols() != static_cast<int>(n))
     {
-        result.passed = false;
+        result.passed  = false;
         result.summary = "FAIL invalid dimensions";
         return result;
     }
@@ -186,7 +199,7 @@ check_jacobian_result check_jacobian(
             // Check for NaN or Inf in either Jacobian
             if (!std::isfinite(a) || !std::isfinite(b))
             {
-                result.passed = false;
+                result.passed    = false;
                 result.worst_row = static_cast<int>(i);
                 result.worst_col = static_cast<int>(j);
                 std::ostringstream oss;
@@ -202,7 +215,7 @@ check_jacobian_result check_jacobian(
             // Track worst absolute error independently
             if (abs_err > max_abs_error)
             {
-                max_abs_error = abs_err;
+                max_abs_error    = abs_err;
                 result.worst_row = static_cast<int>(i);
                 result.worst_col = static_cast<int>(j);
             }
@@ -217,11 +230,10 @@ check_jacobian_result check_jacobian(
 
     result.max_abs_error = max_abs_error;
     result.max_rel_error = max_rel_error;
-    result.passed = result.max_abs_error <= tol;
+    result.passed        = result.max_abs_error <= tol;
 
     std::ostringstream oss;
-    oss << (result.passed ? "PASS" : "FAIL")
-        << " max_abs=" << result.max_abs_error
+    oss << (result.passed ? "PASS" : "FAIL") << " max_abs=" << result.max_abs_error
         << " max_rel=" << result.max_rel_error;
     if (!result.passed)
     {
@@ -232,14 +244,12 @@ check_jacobian_result check_jacobian(
     return result;
 }
 
-check_gradient_result check_gradient(
-    const GradientProvider& provider_a,
-    const GradientProvider& provider_b,
-    const vector_type&      x,
-    double                  tol)
+check_gradient_result check_gradient(const GradientProvider& provider_a,
+    const GradientProvider&                                  provider_b,
+    const vector_type&                                       x,
+    double                                                   tol)
 {
-    SOLVERS_CHECK(
-        provider_a.num_parameters() == provider_b.num_parameters(),
+    SOLVERS_CHECK(provider_a.num_parameters() == provider_b.num_parameters(),
         "check_gradient: providers have incompatible dimensions");
 
     const std::size_t n = provider_a.num_parameters();
@@ -256,7 +266,7 @@ check_gradient_result check_gradient(
     // Check for invalid dimensions
     if (static_cast<std::size_t>(g_a.size()) != n || static_cast<std::size_t>(g_b.size()) != n)
     {
-        result.passed = false;
+        result.passed  = false;
         result.summary = "FAIL invalid dimensions";
         return result;
     }
@@ -273,7 +283,7 @@ check_gradient_result check_gradient(
         // Check for NaN or Inf in either gradient
         if (!std::isfinite(a) || !std::isfinite(b))
         {
-            result.passed = false;
+            result.passed      = false;
             result.worst_index = static_cast<int>(i);
             std::ostringstream oss;
             oss << "FAIL nonfinite at g[" << i << "]: a=" << a << ", b=" << b;
@@ -288,7 +298,7 @@ check_gradient_result check_gradient(
         // Track worst absolute error independently
         if (abs_err > max_abs_error)
         {
-            max_abs_error = abs_err;
+            max_abs_error      = abs_err;
             result.worst_index = static_cast<int>(i);
         }
 
@@ -301,11 +311,10 @@ check_gradient_result check_gradient(
 
     result.max_abs_error = max_abs_error;
     result.max_rel_error = max_rel_error;
-    result.passed = result.max_abs_error <= tol;
+    result.passed        = result.max_abs_error <= tol;
 
     std::ostringstream oss;
-    oss << (result.passed ? "PASS" : "FAIL")
-        << " max_abs=" << result.max_abs_error
+    oss << (result.passed ? "PASS" : "FAIL") << " max_abs=" << result.max_abs_error
         << " max_rel=" << result.max_rel_error;
     if (!result.passed)
     {

@@ -1,8 +1,10 @@
 #include "solvers/gauss_newton_solver.h"
 
 #include <iomanip>
+#include <optional>
 #include <sstream>
 
+#include "detail/native_evaluation.h"
 #include "detail/support.h"
 #include "solver_options/solver_options_gn.h"
 
@@ -43,46 +45,23 @@ gauss_newton_solver::gauss_newton_solver(size_t num_parameters,
 {
 }
 
+gauss_newton_solver::gauss_newton_solver(api::detail::residual_evaluator& evaluator)
+    : num_parameters_(evaluator.metadata().num_parameters),
+      num_residuals_(evaluator.metadata().num_residuals), evaluator_(&evaluator)
+{
+}
+
 native_result gauss_newton_solver::solve(
     vector_type& parameters, const solver_options_gn& options) const
 {
-    auto jacobian = jacobian_;
-    if (jacobian == nullptr)
-    {
-        auto bump = options.bump();
+    auto binding = bind_native_evaluator(
+        evaluator_, num_parameters_, num_residuals_, function_, jacobian_, options.bump());
+    auto& evaluator = *binding.evaluator;
 
-        jacobian = [this, bump](vector_type const& x, matrix_type& dy_dx)
-        {
-            auto number_of_parameters = x.size();
-
-            SOLVERS_CHECK(dy_dx.cols() == number_of_parameters);
-
-            auto number_of_targets = dy_dx.rows();
-
-            vector_type y_plus(number_of_targets);
-            vector_type y_minus(number_of_targets);
-
-            vector_type x_tmp(number_of_parameters);
-            x_tmp = x;
-
-            for (size_t i = 0; i < number_of_parameters; ++i)
-            {
-                x_tmp[i] += bump;
-
-                function_(x_tmp, y_plus);
-
-                x_tmp[i] -= 2 * bump;
-                function_(x_tmp, y_minus);
-
-                for (size_t j = 0; j < y_plus.size(); ++j)
-                {
-                    dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
-                }
-
-                x_tmp[i] = x[i];
-            }
-        };
-    }
+    using api::detail::evaluation_status;
+    std::string failure;  // non-empty once an evaluation fails fatally
+    auto        failed_to_evaluate = [&](evaluation_status status, const char* where)
+    { failure = evaluation_failure_message(evaluator, status, where); };
 
     SOLVERS_CHECK(num_parameters_ == parameters.size());
 
@@ -94,19 +73,35 @@ native_result gauss_newton_solver::solve(
     matrix_type J(m, n);
     vector_type gradient(n), step(n);
 
-    function_(parameters, y_p);
+    if (const auto status = evaluator.evaluate(parameters, y_p); status != evaluation_status::ok)
+    {
+        failed_to_evaluate(status, "residuals at the initial point");
+    }
     auto x2_p                 = l2_norm(y_p);
-    auto x2_converged         = x2_p < options.function_tolerance();
+    auto x2_converged         = failure.empty() && 0.5 * x2_p * x2_p < options.function_tolerance();
     bool gradient_converged   = false;
     bool parameters_converged = false;
 
     size_t iteration = 0;
 
-    for (; !x2_converged && !parameters_converged && !gradient_converged && iteration < max_iter;
-         ++iteration)
+    size_t                accepted_steps = 0;
+    size_t                rejected_steps = 0;
+    bool                  stalled        = false;
+    std::optional<double> last_step_norm;
+    std::optional<double> final_gradient_norm;
+
+    for (; failure.empty() && !x2_converged && !parameters_converged && !gradient_converged &&
+           iteration < max_iter;
+        ++iteration)
     {
-        jacobian(parameters, J);
-        gradient = J.transpose() * y_p;
+        if (const auto status = evaluator.jacobian(parameters, y_p, J);
+            status != evaluation_status::ok)
+        {
+            failed_to_evaluate(status, "Jacobian");
+            break;
+        }
+        gradient            = J.transpose() * y_p;
+        final_gradient_norm = gradient.norm();
 
         linear_system_solver factorization(J.transpose() * J);
         step = factorization.solve(gradient);
@@ -116,32 +111,46 @@ native_result gauss_newton_solver::solve(
         // step >= 0, so directional_derivative <= 0.
         const auto directional_derivative = -step.dot(gradient);
 
-        double step_scale = 1.0;
-        bool   accepted   = false;
-        double x2_trial   = x2_p;
+        double      step_scale = 1.0;
+        bool        accepted   = false;
+        double      x2_trial   = x2_p;
         vector_type trial(n);
 
         for (size_t line_search_iter = 0; line_search_iter < options.max_line_search_iterations();
-             ++line_search_iter)
+            ++line_search_iter)
         {
-            trial = parameters - step_scale * step;
-            function_(trial, y_trial);
+            trial             = parameters - step_scale * step;
+            const auto status = evaluator.evaluate(trial, y_trial);
+            if (status == evaluation_status::fatal_error)
+            {
+                failed_to_evaluate(status, "line-search trial point");
+                break;
+            }
             x2_trial = l2_norm(y_trial);
 
             // Armijo sufficient-decrease condition on f(x) = 0.5*||r(x)||^2.
-            if (0.5 * x2_trial * x2_trial <=
-                0.5 * x2_p * x2_p +
-                    options.line_search_sufficient_decrease() * step_scale * directional_derivative)
+            // An invalid (non-finite) trial counts as a failed condition.
+            if (status == evaluation_status::ok &&
+                0.5 * x2_trial * x2_trial <=
+                    0.5 * x2_p * x2_p + options.line_search_sufficient_decrease() * step_scale *
+                                            directional_derivative)
             {
                 accepted = true;
                 break;
             }
 
+            ++rejected_steps;
             step_scale *= options.line_search_backtracking_factor();
+        }
+
+        if (!failure.empty())
+        {
+            break;
         }
 
         if (!accepted)
         {
+            stalled = true;
             SOLVERS_LOG_IF(INFO,
                 options.verbose(),
                 "GN Iter {} | LINE SEARCH FAILED | f(x) = {} | best trial = {}",
@@ -151,14 +160,16 @@ native_result gauss_newton_solver::solve(
             break;
         }
 
+        ++accepted_steps;
         const auto previous_x2 = x2_p;
-        parameters              = trial;
-        y_p                     = y_trial;
-        x2_p                    = x2_trial;
+        parameters             = trial;
+        y_p                    = y_trial;
+        x2_p                   = x2_trial;
 
         SOLVERS_LOG_IF(INFO,
             options.verbose(),
-            "GN Iter {} | ACCEPTED STEP | f(x) = {} | prev = {} | improvement = {} | step_scale = {}",
+            "GN Iter {} | ACCEPTED STEP | f(x) = {} | prev = {} | improvement = {} | step_scale = "
+            "{}",
             fmt_iter(iteration),
             fmt_sci(x2_p, 3),
             fmt_sci(previous_x2, 3),
@@ -166,12 +177,13 @@ native_result gauss_newton_solver::solve(
             fmt_sci(step_scale, 2));
 
         const auto step_norm     = l2_norm(step_scale * step);
+        last_step_norm           = step_norm;
         const auto param_norm    = l2_norm(parameters);
         const auto gradient_norm = l2_norm(gradient);
 
         parameters_converged = step_norm < param_norm * options.parameter_tolerance();
         gradient_converged   = gradient_norm < options.gradient_tolerance();
-        x2_converged         = x2_p < options.function_tolerance();
+        x2_converged         = 0.5 * x2_p * x2_p < options.function_tolerance();
 
         if (parameters_converged || gradient_converged || x2_converged)
         {
@@ -198,7 +210,12 @@ native_result gauss_newton_solver::solve(
     native_result result;
     result.iterations    = iteration;
     result.residual_norm = l2_norm(y_p);
-    if (x2_converged)
+    if (!failure.empty())
+    {
+        result.status  = native_convergence::numerical_failure;
+        result.message = failure;
+    }
+    else if (x2_converged)
     {
         result.status = native_convergence::function_converged;
     }
@@ -210,6 +227,15 @@ native_result gauss_newton_solver::solve(
     {
         result.status = native_convergence::gradient_converged;
     }
+    else if (stalled)
+    {
+        result.status  = native_convergence::stalled;
+        result.message = "line search failed to find a sufficient decrease";
+    }
+    result.accepted_steps = accepted_steps;
+    result.rejected_steps = rejected_steps;
+    result.step_norm      = last_step_norm;
+    result.gradient_norm  = final_gradient_norm;
 
     return result;
 }

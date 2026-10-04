@@ -34,8 +34,9 @@ int main()
             start << 1., 1. / power;
             const auto result = api::solve(problem, start, options);
             std::cout << power << ',' << order << ',' << result.iterations << ','
-                      << result.accepted_steps << ',' << result.rejected_steps << ','
-                      << result.objective << ',' << api::to_string(result.status) << '\n';
+                      << result.accepted_steps.value_or(0) << ','
+                      << result.rejected_steps.value_or(0) << ',' << result.objective << ','
+                      << api::to_string(result.status) << '\n';
             if (!result.converged())
                 return 1;
         }

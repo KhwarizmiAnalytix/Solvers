@@ -21,16 +21,16 @@ namespace solverslib
 namespace
 {
 
-using api::AnalyticGradientProvider;
-using api::AnalyticJacobianProvider;
-using api::FiniteDifferenceGradientProvider;
-using api::FiniteDifferenceJacobianProvider;
 using api::analytic_gradient;
 using api::analytic_jacobian;
+using api::AnalyticGradientProvider;
+using api::AnalyticJacobianProvider;
 using api::check_gradient;
 using api::check_jacobian;
 using api::finite_difference;
 using api::finite_difference_gradient;
+using api::FiniteDifferenceGradientProvider;
+using api::FiniteDifferenceJacobianProvider;
 using testing::make_rosenbrock_problem;
 
 // ---------------------------------------------------------------------------
@@ -40,8 +40,8 @@ using testing::make_rosenbrock_problem;
 static vector_type rosenbrock_x()
 {
     vector_type x = make_vector(2);
-    x[0] = 1.5;
-    x[1] = 0.5;
+    x[0]          = 1.5;
+    x[1]          = 0.5;
     return x;
 }
 
@@ -52,11 +52,12 @@ static vector_type rosenbrock_x()
 TEST(AnalyticJacobianProvider, ComputeResiduals)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto        provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r        = make_vector(tp.num_residuals);
-    matrix_type J        = make_matrix(tp.num_residuals, tp.num_parameters);
+    vector_type       r = make_vector(tp.num_residuals);
+    matrix_type       J = make_matrix(tp.num_residuals, tp.num_parameters);
     provider->compute(x, r, J);
 
     vector_type r_expected = make_vector(tp.num_residuals);
@@ -69,11 +70,12 @@ TEST(AnalyticJacobianProvider, ComputeResiduals)
 TEST(AnalyticJacobianProvider, ComputeJacobian)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto        provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r        = make_vector(tp.num_residuals);
-    matrix_type J        = make_matrix(tp.num_residuals, tp.num_parameters);
+    vector_type       r = make_vector(tp.num_residuals);
+    matrix_type       J = make_matrix(tp.num_residuals, tp.num_parameters);
     provider->compute(x, r, J);
 
     matrix_type J_expected = make_matrix(tp.num_residuals, tp.num_parameters);
@@ -88,10 +90,11 @@ TEST(AnalyticJacobianProvider, ComputeJacobian)
 TEST(AnalyticJacobianProvider, ResidualsOnly)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto        provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r        = make_vector(tp.num_residuals);
+    vector_type       r = make_vector(tp.num_residuals);
     provider->residuals_only(x, r);
 
     vector_type r_expected = make_vector(tp.num_residuals);
@@ -104,7 +107,8 @@ TEST(AnalyticJacobianProvider, ResidualsOnly)
 TEST(AnalyticJacobianProvider, Metadata)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto        provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
 
     EXPECT_EQ(provider->num_parameters(), tp.num_parameters);
     EXPECT_EQ(provider->num_residuals(), tp.num_residuals);
@@ -132,12 +136,12 @@ TEST(AnalyticJacobianProvider, NullJacobianThrows)
 
 TEST(FiniteDifferenceJacobianProvider, ComputeResiduals)
 {
-    const auto& tp = make_rosenbrock_problem();
-    auto provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
+    const auto& tp       = make_rosenbrock_problem();
+    auto        provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r        = make_vector(tp.num_residuals);
-    matrix_type J        = make_matrix(tp.num_residuals, tp.num_parameters);
+    vector_type       r = make_vector(tp.num_residuals);
+    matrix_type       J = make_matrix(tp.num_residuals, tp.num_parameters);
     provider->compute(x, r, J);
 
     vector_type r_expected = make_vector(tp.num_residuals);
@@ -149,12 +153,12 @@ TEST(FiniteDifferenceJacobianProvider, ComputeResiduals)
 
 TEST(FiniteDifferenceJacobianProvider, JacobianAccuracy)
 {
-    const auto& tp = make_rosenbrock_problem();
-    auto provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
+    const auto& tp       = make_rosenbrock_problem();
+    auto        provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r        = make_vector(tp.num_residuals);
-    matrix_type J        = make_matrix(tp.num_residuals, tp.num_parameters);
+    vector_type       r = make_vector(tp.num_residuals);
+    matrix_type       J = make_matrix(tp.num_residuals, tp.num_parameters);
     provider->compute(x, r, J);
 
     matrix_type J_expected = make_matrix(tp.num_residuals, tp.num_parameters);
@@ -169,11 +173,11 @@ TEST(FiniteDifferenceJacobianProvider, JacobianAccuracy)
 
 TEST(FiniteDifferenceJacobianProvider, ResidualsOnly)
 {
-    const auto& tp = make_rosenbrock_problem();
-    auto provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
+    const auto& tp       = make_rosenbrock_problem();
+    auto        provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r        = make_vector(tp.num_residuals);
+    vector_type       r = make_vector(tp.num_residuals);
     provider->residuals_only(x, r);
 
     vector_type r_expected = make_vector(tp.num_residuals);
@@ -185,8 +189,8 @@ TEST(FiniteDifferenceJacobianProvider, ResidualsOnly)
 
 TEST(FiniteDifferenceJacobianProvider, Metadata)
 {
-    const auto& tp = make_rosenbrock_problem();
-    auto provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
+    const auto& tp       = make_rosenbrock_problem();
+    auto        provider = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
 
     EXPECT_EQ(provider->num_parameters(), tp.num_parameters);
     EXPECT_EQ(provider->num_residuals(), tp.num_residuals);
@@ -209,15 +213,16 @@ TEST(FiniteDifferenceJacobianProvider, NonPositiveStepThrows)
 TEST(AnalyticGradientProvider, Compute)
 {
     // f(x) = x[0]^2 + 2*x[1]^2, g = [2*x[0], 4*x[1]]
-    auto gf = [](const vector_type& x, vector_type& g) {
+    auto gf = [](const vector_type& x, vector_type& g)
+    {
         g[0] = 2.0 * x[0];
         g[1] = 4.0 * x[1];
     };
     auto provider = analytic_gradient(gf, 2);
 
     vector_type x = make_vector(2);
-    x[0] = 3.0;
-    x[1] = 1.5;
+    x[0]          = 3.0;
+    x[1]          = 1.5;
     vector_type g = make_vector(2);
     provider->compute(x, g);
 
@@ -227,7 +232,7 @@ TEST(AnalyticGradientProvider, Compute)
 
 TEST(AnalyticGradientProvider, Metadata)
 {
-    auto gf = [](const vector_type& x, vector_type& g) { g[0] = x[0]; };
+    auto gf       = [](const vector_type& x, vector_type& g) { g[0] = x[0]; };
     auto provider = analytic_gradient(gf, 1);
 
     EXPECT_EQ(provider->num_parameters(), 1u);
@@ -246,12 +251,12 @@ TEST(AnalyticGradientProvider, NullGradientThrows)
 TEST(FiniteDifferenceGradientProvider, GradientAccuracy)
 {
     // f(x) = x[0]^2 + 2*x[1]^2
-    auto of = [](const vector_type& x) { return x[0] * x[0] + 2.0 * x[1] * x[1]; };
+    auto of       = [](const vector_type& x) { return x[0] * x[0] + 2.0 * x[1] * x[1]; };
     auto provider = finite_difference_gradient(of, 2);
 
     vector_type x = make_vector(2);
-    x[0] = 3.0;
-    x[1] = 1.5;
+    x[0]          = 3.0;
+    x[1]          = 1.5;
     vector_type g = make_vector(2);
     provider->compute(x, g);
 
@@ -261,7 +266,7 @@ TEST(FiniteDifferenceGradientProvider, GradientAccuracy)
 
 TEST(FiniteDifferenceGradientProvider, Metadata)
 {
-    auto of = [](const vector_type& x) { return x[0]; };
+    auto of       = [](const vector_type& x) { return x[0]; };
     auto provider = finite_difference_gradient(of, 1);
 
     EXPECT_EQ(provider->num_parameters(), 1u);
@@ -283,15 +288,16 @@ TEST(CheckJacobian, AnalyticVsFiniteDifference)
 {
     const auto& tp = make_rosenbrock_problem();
 
-    auto analytic = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
-    auto fd       = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
+    auto analytic =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto fd = finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals);
 
-    const vector_type x = rosenbrock_x();
-    auto result = check_jacobian(*analytic, *fd, x, 1e-3);
+    const vector_type x      = rosenbrock_x();
+    auto              result = check_jacobian(*analytic, *fd, x, 1e-3);
 
     EXPECT_TRUE(result.passed) << result.summary;
-    EXPECT_GT(result.max_abs_error, 0.0);    // FD != analytic exactly
-    EXPECT_LT(result.max_abs_error, 1e-3);   // but within FD tolerance
+    EXPECT_GT(result.max_abs_error, 0.0);   // FD != analytic exactly
+    EXPECT_LT(result.max_abs_error, 1e-3);  // but within FD tolerance
 }
 
 TEST(CheckJacobian, IdenticalProvidersPasses)
@@ -300,8 +306,8 @@ TEST(CheckJacobian, IdenticalProvidersPasses)
     auto a = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
     auto b = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
 
-    const vector_type x = rosenbrock_x();
-    auto result = check_jacobian(*a, *b, x);
+    const vector_type x      = rosenbrock_x();
+    auto              result = check_jacobian(*a, *b, x);
 
     EXPECT_TRUE(result.passed);
     EXPECT_NEAR(result.max_abs_error, 0.0, 1e-14);
@@ -313,14 +319,12 @@ TEST(CheckJacobian, SummaryContainsPassFail)
     auto a = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
     auto b = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
 
-    const vector_type x = rosenbrock_x();
-    auto pass = check_jacobian(*a, *b, x);
+    const vector_type x    = rosenbrock_x();
+    auto              pass = check_jacobian(*a, *b, x);
     EXPECT_NE(pass.summary.find("PASS"), std::string::npos);
 
     // Provide a deliberately wrong Jacobian to trigger FAIL
-    auto wrong_jacobian = [](const vector_type&, matrix_type& J) {
-        J.setConstant(999.0);
-    };
+    auto wrong_jacobian = [](const vector_type&, matrix_type& J) { J.setConstant(999.0); };
     auto c = analytic_jacobian(tp.residuals, wrong_jacobian, tp.num_parameters, tp.num_residuals);
     auto fail = check_jacobian(*a, *c, x);
     EXPECT_FALSE(fail.passed);
@@ -334,7 +338,8 @@ TEST(CheckJacobian, SummaryContainsPassFail)
 TEST(CheckGradient, AnalyticVsFiniteDifference)
 {
     auto of = [](const vector_type& x) { return x[0] * x[0] + 2.0 * x[1] * x[1]; };
-    auto gf = [](const vector_type& x, vector_type& g) {
+    auto gf = [](const vector_type& x, vector_type& g)
+    {
         g[0] = 2.0 * x[0];
         g[1] = 4.0 * x[1];
     };
@@ -342,9 +347,9 @@ TEST(CheckGradient, AnalyticVsFiniteDifference)
     auto fd       = finite_difference_gradient(of, 2);
 
     vector_type x = make_vector(2);
-    x[0] = 3.0;
-    x[1] = 1.5;
-    auto result = check_gradient(*analytic, *fd, x, 1e-3);
+    x[0]          = 3.0;
+    x[1]          = 1.5;
+    auto result   = check_gradient(*analytic, *fd, x, 1e-3);
 
     EXPECT_TRUE(result.passed) << result.summary;
 }
@@ -352,12 +357,12 @@ TEST(CheckGradient, AnalyticVsFiniteDifference)
 TEST(CheckGradient, IdenticalProvidersPasses)
 {
     auto gf = [](const vector_type& x, vector_type& g) { g[0] = 2.0 * x[0]; };
-    auto a = analytic_gradient(gf, 1);
-    auto b = analytic_gradient(gf, 1);
+    auto a  = analytic_gradient(gf, 1);
+    auto b  = analytic_gradient(gf, 1);
 
     vector_type x = make_vector(1);
-    x[0] = 4.0;
-    auto result = check_gradient(*a, *b, x);
+    x[0]          = 4.0;
+    auto result   = check_gradient(*a, *b, x);
 
     EXPECT_TRUE(result.passed);
     EXPECT_NEAR(result.max_abs_error, 0.0, 1e-14);
@@ -369,7 +374,7 @@ TEST(CheckGradient, IdenticalProvidersPasses)
 
 TEST(LeastSquaresProblemIntegration, SetJacobianProviderPopulatesFlag)
 {
-    const auto& tp = make_rosenbrock_problem();
+    const auto&                tp = make_rosenbrock_problem();
     api::least_squares_problem p;
     p.num_parameters = tp.num_parameters;
     p.num_residuals  = tp.num_residuals;
@@ -377,42 +382,45 @@ TEST(LeastSquaresProblemIntegration, SetJacobianProviderPopulatesFlag)
 
     EXPECT_FALSE(p.has_jacobian_provider());
 
-    auto provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
     p.set_jacobian_provider(provider);
 
     EXPECT_TRUE(p.has_jacobian_provider());
-    EXPECT_NE(p.jacobian_provider, nullptr);
+    EXPECT_NE(p.derivative_provider(), nullptr);
 }
 
 TEST(LeastSquaresProblemIntegration, DerivativesFluentAlias)
 {
-    const auto& tp = make_rosenbrock_problem();
+    const auto&                tp = make_rosenbrock_problem();
     api::least_squares_problem p;
     p.num_parameters = tp.num_parameters;
     p.num_residuals  = tp.num_residuals;
     p.residuals      = tp.residuals;
 
-    auto provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
     p.derivatives(provider);
 
     EXPECT_TRUE(p.has_jacobian_provider());
 }
 
-TEST(LeastSquaresProblemIntegration, SetNullProviderClearsFactory)
+TEST(LeastSquaresProblemIntegration, SetNullProviderClearsTheSlot)
 {
-    const auto& tp = make_rosenbrock_problem();
+    const auto&                tp = make_rosenbrock_problem();
     api::least_squares_problem p;
     p.num_parameters = tp.num_parameters;
     p.num_residuals  = tp.num_residuals;
     p.residuals      = tp.residuals;
 
-    auto provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
     p.set_jacobian_provider(provider);
     EXPECT_TRUE(p.has_jacobian_provider());
 
     p.set_jacobian_provider(nullptr);
     EXPECT_FALSE(p.has_jacobian_provider());
-    EXPECT_EQ(p.provider_factory, nullptr);
+    EXPECT_EQ(p.derivative_provider(), nullptr);
 }
 
 TEST(LeastSquaresProblemIntegration, AutoDiffTagWithoutFactoryThrows)
@@ -433,7 +441,7 @@ TEST(LeastSquaresProblemIntegration, AutoDiffTagWithoutFactoryThrows)
 TEST(AutoDiffJacobianProvider, Metadata)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto provider = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto provider  = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
 
     EXPECT_EQ(provider->num_parameters(), tp.num_parameters);
     EXPECT_EQ(provider->num_residuals(), tp.num_residuals);
@@ -444,11 +452,11 @@ TEST(AutoDiffJacobianProvider, Metadata)
 TEST(AutoDiffJacobianProvider, ComputeResiduals)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto provider = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto provider  = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r        = make_vector(tp.num_residuals);
-    matrix_type J        = make_matrix(tp.num_residuals, tp.num_parameters);
+    vector_type       r = make_vector(tp.num_residuals);
+    matrix_type       J = make_matrix(tp.num_residuals, tp.num_parameters);
     provider->compute(x, r, J);
 
     vector_type r_expected = make_vector(tp.num_residuals);
@@ -461,11 +469,13 @@ TEST(AutoDiffJacobianProvider, ComputeResiduals)
 TEST(AutoDiffJacobianProvider, JacobianMatchesAnalytic)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto ad_provider      = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
-    auto analytic_provider = analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
+    auto        ad_provider =
+        auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto analytic_provider =
+        analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals);
 
-    const vector_type x = rosenbrock_x();
-    auto result = check_jacobian(*analytic_provider, *ad_provider, x, 1e-8);
+    const vector_type x      = rosenbrock_x();
+    auto              result = check_jacobian(*analytic_provider, *ad_provider, x, 1e-8);
 
     EXPECT_TRUE(result.passed) << result.summary;
 }
@@ -473,10 +483,10 @@ TEST(AutoDiffJacobianProvider, JacobianMatchesAnalytic)
 TEST(AutoDiffJacobianProvider, ResidualsOnly)
 {
     const auto& tp = make_rosenbrock_problem();
-    auto provider = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto provider  = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
 
     const vector_type x = rosenbrock_x();
-    vector_type r = make_vector(tp.num_residuals);
+    vector_type       r = make_vector(tp.num_residuals);
     provider->residuals_only(x, r);
 
     vector_type r_expected = make_vector(tp.num_residuals);
@@ -498,8 +508,9 @@ TEST(AutoDiffJacobianProvider, SetJacobianProviderExposesCeresFactory)
     auto provider = auto_diff(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
     p.set_jacobian_provider(provider);
 
-    // provider_factory is auto-populated from AutoDiffJacobianProvider::ceres_factory()
-    EXPECT_NE(p.provider_factory, nullptr);
+    // The Ceres factory is discovered from the provider, not stored separately.
+    ASSERT_NE(p.derivative_provider(), nullptr);
+    EXPECT_NE(p.derivative_provider()->ceres_factory(), nullptr);
 }
 
 TEST(AutoDiffJacobianProvider, LeastSquaresConvenienceFactory)
@@ -509,7 +520,9 @@ TEST(AutoDiffJacobianProvider, LeastSquaresConvenienceFactory)
     EXPECT_EQ(problem.num_parameters, 2u);
     EXPECT_EQ(problem.num_residuals, 2u);
     EXPECT_TRUE(static_cast<bool>(problem.residuals));
-    EXPECT_TRUE(static_cast<bool>(problem.model_provider_factory));
+    // The model factory is internal; its observable effect is that
+    // derivatives(auto_diff()) succeeds.
+    EXPECT_NO_THROW(problem.derivatives(api::auto_diff()));
 }
 
 TEST(AutoDiffJacobianProvider, AutoDiffTagInstantiatesProvider)
@@ -519,7 +532,8 @@ TEST(AutoDiffJacobianProvider, AutoDiffTagInstantiatesProvider)
     EXPECT_FALSE(problem.has_jacobian_provider());
     problem.derivatives(api::auto_diff());
     EXPECT_TRUE(problem.has_jacobian_provider());
-    EXPECT_NE(problem.provider_factory, nullptr);
+    ASSERT_NE(problem.derivative_provider(), nullptr);
+    EXPECT_NE(problem.derivative_provider()->ceres_factory(), nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -528,7 +542,7 @@ TEST(AutoDiffJacobianProvider, AutoDiffTagInstantiatesProvider)
 
 TEST(EndToEnd, AnalyticProviderLM)
 {
-    const auto& tp = make_rosenbrock_problem();
+    const auto&                tp = make_rosenbrock_problem();
     api::least_squares_problem p;
     p.num_parameters = tp.num_parameters;
     p.num_residuals  = tp.num_residuals;
@@ -536,8 +550,8 @@ TEST(EndToEnd, AnalyticProviderLM)
     p.set_jacobian_provider(
         analytic_jacobian(tp.residuals, tp.jacobian, tp.num_parameters, tp.num_residuals));
 
-    vector_type x0 = to_vector_type(tp.initial_guess);
-    auto result = api::solve(p, x0);
+    vector_type x0     = to_vector_type(tp.initial_guess);
+    auto        result = api::solve(p, x0);
 
     ASSERT_TRUE(result.converged()) << result.message;
     EXPECT_NEAR(result.parameters[0], tp.expected_solution[0], 1e-4);
@@ -546,16 +560,15 @@ TEST(EndToEnd, AnalyticProviderLM)
 
 TEST(EndToEnd, FiniteDifferenceProviderLM)
 {
-    const auto& tp = make_rosenbrock_problem();
+    const auto&                tp = make_rosenbrock_problem();
     api::least_squares_problem p;
     p.num_parameters = tp.num_parameters;
     p.num_residuals  = tp.num_residuals;
     p.residuals      = tp.residuals;
-    p.set_jacobian_provider(
-        finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals));
+    p.set_jacobian_provider(finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals));
 
-    vector_type x0 = to_vector_type(tp.initial_guess);
-    auto result = api::solve(p, x0);
+    vector_type x0     = to_vector_type(tp.initial_guess);
+    auto        result = api::solve(p, x0);
 
     ASSERT_TRUE(result.converged()) << result.message;
     EXPECT_NEAR(result.parameters[0], tp.expected_solution[0], 1e-3);
@@ -568,9 +581,9 @@ TEST(EndToEnd, AutoDiffProviderLM)
     problem.derivatives(api::auto_diff());
 
     vector_type x0 = make_vector(2);
-    x0[0] = -1.2;
-    x0[1] = 1.0;
-    auto result = api::solve(problem, x0);
+    x0[0]          = -1.2;
+    x0[1]          = 1.0;
+    auto result    = api::solve(problem, x0);
 
     ASSERT_TRUE(result.converged()) << result.message;
     EXPECT_NEAR(result.parameters[0], 1.0, 1e-4);
@@ -579,7 +592,7 @@ TEST(EndToEnd, AutoDiffProviderLM)
 
 TEST(EndToEnd, AllProvidersAgreeOnSolution)
 {
-    const auto& tp = make_rosenbrock_problem();
+    const auto&       tp = make_rosenbrock_problem();
     const vector_type x0 = to_vector_type(tp.initial_guess);
 
     // Analytic
@@ -596,8 +609,7 @@ TEST(EndToEnd, AllProvidersAgreeOnSolution)
     pfd.num_parameters = tp.num_parameters;
     pfd.num_residuals  = tp.num_residuals;
     pfd.residuals      = tp.residuals;
-    pfd.set_jacobian_provider(
-        finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals));
+    pfd.set_jacobian_provider(finite_difference(tp.residuals, tp.num_parameters, tp.num_residuals));
     auto rfd = api::solve(pfd, x0);
 
     // Autodiff (Ceres)

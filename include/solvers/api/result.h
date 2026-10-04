@@ -32,12 +32,20 @@ struct solver_result
     std::optional<double> gradient_norm;
     std::optional<double> step_norm;
 
-    std::size_t iterations           = 0;
-    std::size_t residual_evaluations = 0;
-    std::size_t jacobian_evaluations = 0;
-    std::size_t gradient_evaluations = 0;
-    std::size_t accepted_steps       = 0;
-    std::size_t rejected_steps       = 0;
+    std::size_t iterations = 0;
+
+    // Work counters. nullopt means the backend does not expose the quantity;
+    // an engaged zero means it was measured and nothing happened.
+    // residual_evaluations counts executions of the residual function, including
+    // those inside finite-difference stencils; objective_evaluations is the
+    // scalar-objective counterpart. A rejected step is a trial point that was
+    // evaluated and not accepted.
+    std::optional<std::size_t> residual_evaluations;
+    std::optional<std::size_t> jacobian_evaluations;
+    std::optional<std::size_t> objective_evaluations;
+    std::optional<std::size_t> gradient_evaluations;
+    std::optional<std::size_t> accepted_steps;
+    std::optional<std::size_t> rejected_steps;
 
     // Effective derivative source that was actually used
     std::optional<api::derivative_mode> effective_derivative_source;
@@ -53,10 +61,12 @@ struct solver_result
 
     bool converged() const noexcept { return status == solver_status::converged; }
 
-    // A limit-hit run still returns a usable iterate; hard failures do not.
+    // A limit-hit or stalled run still returns a usable iterate (the last
+    // accepted point); hard failures do not.
     bool has_usable_iterate() const noexcept
     {
-        return status == solver_status::converged || status == solver_status::max_iterations;
+        return status == solver_status::converged || status == solver_status::max_iterations ||
+               status == solver_status::stalled || status == solver_status::user_stopped;
     }
 };
 }  // namespace solverslib::api

@@ -40,7 +40,7 @@ struct MyModel {
         r[0] = x[0] * x[0] - 4.0;
         r[1] = x[1] * x[1] - 9.0;
     }
-    
+
     void jacobian(const vector_type& x, matrix_type& J) const {
         J(0, 0) = 2.0 * x[0];
         J(0, 1) = 0.0;
@@ -57,14 +57,14 @@ int main() {
     problem.residuals = [&](const vector_type& x, vector_type& r) {
         model.residuals(x, r);
     };
-    problem.jacobian = [&](const vector_type& x, matrix_type& J) {
+    problem.set_jacobian([&](const vector_type& x, matrix_type& J) {
         model.jacobian(x, J);
-    };
-    
+    });
+
     vector_type x = {1.0, 1.0};
     api::solve_options opts;
     auto result = api::solve(problem, x, opts);
-    
+
     return result.converged() ? 0 : 1;
 }
 ```
@@ -87,14 +87,14 @@ struct MyResiduals {
 int main() {
     // Create problem with AD provider
     auto problem = make_ceres_autodiff_problem(2, 2, MyResiduals{});
-    
+
     vector_type x = {1.0, 1.0};
     api::solve_options opts;
     opts.backend = api::backend::ceres;
     opts.derivatives = api::derivative_mode::automatic_differentiation;
-    
+
     auto result = api::solve(problem, x, opts);
-    
+
     return result.converged() ? 0 : 1;
 }
 ```
@@ -173,13 +173,13 @@ std::cout << "FD solution: " << result_fd.objective << std::endl;
 struct ExponentialFitResiduals {
     std::vector<double> times;
     std::vector<double> observations;
-    
+
     template <typename T>
     bool operator()(const T* const params, T* residuals) const {
         // params[0] = amplitude, params[1] = decay_rate
         T amp = params[0];
         T decay = params[1];
-        
+
         for (size_t i = 0; i < times.size(); ++i) {
             T t = T(times[i]);
             T obs = T(observations[i]);
@@ -193,19 +193,19 @@ struct ExponentialFitResiduals {
 int main() {
     std::vector<double> times = {0, 1, 2, 3, 4};
     std::vector<double> obs = {10, 4, 1.6, 0.64, 0.256};
-    
+
     ExponentialFitResiduals fit{times, obs};
     auto problem = make_ceres_autodiff_problem(2, 5, fit);
-    
+
     vector_type x = {1.0, 0.1};
     api::solve_options opts;
     opts.backend = api::backend::ceres;
-    
+
     auto result = api::solve(problem, x, opts);
-    
+
     std::cout << "Amplitude: " << result.parameters[0] << std::endl;
     std::cout << "Decay rate: " << result.parameters[1] << std::endl;
-    
+
     return 0;
 }
 ```

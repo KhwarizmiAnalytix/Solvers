@@ -31,9 +31,13 @@ bool valid_derivatives(const rnc_curve_derivatives& d, int order, index_type m, 
     {
         return false;
     }
-    return std::all_of(d.residual.begin(), d.residual.end(),
-               [m](const vector_type& residual) { return residual.size() == m && residual.allFinite(); }) &&
-           std::all_of(d.jacobian.begin(), d.jacobian.end(), [m, n](const matrix_type& jacobian)
+    return std::all_of(d.residual.begin(),
+               d.residual.end(),
+               [m](const vector_type& residual)
+               { return residual.size() == m && residual.allFinite(); }) &&
+           std::all_of(d.jacobian.begin(),
+               d.jacobian.end(),
+               [m, n](const matrix_type& jacobian)
                { return jacobian.rows() == m && jacobian.cols() == n && jacobian.allFinite(); });
 }
 }  // namespace
@@ -45,11 +49,22 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
     using api::solver_status;
     const auto         cfg = options.rnc_lm.value_or(api::rnc_lm_options{});
     api::solver_result result;
-    result.parameters                  = initial_guess;
-    result.algorithm                   = api::algorithm::riemann_normal_coordinate_lm;
-    result.backend                     = api::backend::native;
-    result.effective_derivative_source = problem.rnc_derivative_source;
-    const auto finish                  = [&](solver_status status, const char* message)
+    result.parameters = initial_guess;
+    result.algorithm  = api::algorithm::riemann_normal_coordinate_lm;
+    result.backend    = api::backend::native;
+    // RNC-LM reads its curve derivatives from the problem's one derivative slot.
+    const auto provider = problem.derivative_provider();
+    const auto curve_derivatives =
+        provider ? provider->curve_derivatives() : rnc_derivative_function{};
+    const auto derivative_source = provider ? provider->source() : api::derivative_mode::supplied;
+    result.effective_derivative_source = derivative_source;
+    // RNC-LM counts every one of these itself, so all start engaged at zero.
+    result.residual_evaluations = 0;
+    result.jacobian_evaluations = 0;
+    result.gradient_evaluations = 0;
+    result.accepted_steps       = 0;
+    result.rejected_steps       = 0;
+    const auto finish           = [&](solver_status status, const char* message)
     {
         result.status  = status;
         result.message = message;
@@ -67,15 +82,15 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
         return finish(solver_status::unsupported_capability,
             "RNC-LM does not support bounds or evaluation budgets");
     }
-    if (!problem.rnc_derivatives)
+    if (!curve_derivatives)
     {
         return finish(solver_status::unsupported_capability,
             "RNC-LM requires analytic or Taylor curve derivatives");
     }
-    if ((problem.rnc_derivative_source != api::derivative_mode::supplied &&
-            problem.rnc_derivative_source != api::derivative_mode::automatic_differentiation) ||
+    if ((derivative_source != api::derivative_mode::supplied &&
+            derivative_source != api::derivative_mode::automatic_differentiation) ||
         (options.derivatives != api::derivative_mode::automatic &&
-            options.derivatives != problem.rnc_derivative_source))
+            options.derivatives != derivative_source))
     {
         return finish(solver_status::unsupported_capability,
             "Requested derivative mode is incompatible with RNC curve derivatives");
@@ -86,8 +101,8 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
     const auto  refresh = [&]()
     {
         rnc_curve_derivatives d;
-        ++result.jacobian_evaluations;
-        problem.rnc_derivatives(result.parameters, {}, 1, d);
+        ++*result.jacobian_evaluations;
+        curve_derivatives(result.parameters, {}, 1, d);
         if (!valid_derivatives(d, 1, m, n))
         {
             return false;
@@ -95,7 +110,7 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
         r        = d.residual[0];
         j        = d.jacobian[0];
         gradient = j.transpose() * r;
-        ++result.gradient_evaluations;
+        ++*result.gradient_evaluations;
         result.residual_norm = r.stableNorm();
         result.objective     = .5 * r.squaredNorm();
         result.gradient_norm = gradient.stableNorm();
@@ -151,8 +166,8 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                 for (int order = 2; curve_valid && order <= cfg.order; ++order)
                 {
                     rnc_curve_derivatives derivatives;
-                    ++result.jacobian_evaluations;
-                    problem.rnc_derivatives(result.parameters, coefficients, order, derivatives);
+                    ++*result.jacobian_evaluations;
+                    curve_derivatives(result.parameters, coefficients, order, derivatives);
                     curve_valid = valid_derivatives(derivatives, order, m, n);
                     if (!curve_valid)
                     {
@@ -189,7 +204,7 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                 bool              finite = candidate.allFinite();
                 if (finite)
                 {
-                    ++result.residual_evaluations;
+                    ++*result.residual_evaluations;
                     problem.residuals(candidate, trial_residual);
                     finite = trial_residual.size() == m && trial_residual.allFinite();
                 }
@@ -210,7 +225,7 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                     result.residual_norm = trial_residual.stableNorm();
                     result.gradient_norm.reset();
                     result.step_norm = displacement.stableNorm();
-                    ++result.accepted_steps;
+                    ++*result.accepted_steps;
                     accepted = true;
                     // Eq. (40), separate from Nielsen and bold acceptance.
                     if (rho < .25)
@@ -250,7 +265,7 @@ api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
                     }
                     break;
                 }
-                ++result.rejected_steps;  // Rejected trial points, not outer curves.
+                ++*result.rejected_steps;  // Rejected trial points, not outer curves.
                 // Eqs. (37)-(38): scalar quadratic interpolation along the
                 // fixed polynomial curve; no new Jacobian or coefficients.
                 const double denominator = 2. * (trial_cost - result.objective + sigma * t);

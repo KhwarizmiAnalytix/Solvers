@@ -96,6 +96,19 @@ Taylor AD or an analytic callback and does not use this heuristic.
 
 ## Public options
 
+Reach these options through `api::solve` with `solve_options::lm`
+(`api::lm_options`, same names and defaults, with `variant` in place of `type`:
+`lm_variant::levenberg_marquardt`, `quadratic_interpolation`, `nielsen`). They
+are validated at the solve boundary: an invalid value returns `invalid_problem`
+instead of throwing. Budgets and tolerances stay in `solve_options`; the
+finite-difference step is owned by the shared finite-difference evaluator, not
+by this struct. The `solver_options_lm` builder below is the internal layer
+behind that mapping; direct use is deprecated for new code.
+
+A step rejected while the damping already sits at its ceiling ends the run with
+`solver_status::stalled` (the last accepted iterate is returned) rather than
+spending the remaining iterations, and is no longer reported as `max_iterations`.
+
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `geodesic_acceleration` | true | Enable second-order step correction and safeguard |
@@ -113,7 +126,7 @@ Taylor AD or an analytic callback and does not use this heuristic.
 | `levenberg_marquardt_damping_ceiling` | 1e7 | Maximum Marquardt damping |
 | `diagonal_scaling_floor` | 1e-12 | Lower bound for Marquardt diagonal scaling |
 | `roundoff_noise_factor` | 8 | Multiplier for the geodesic finite-difference roundoff guard |
-| `finite_difference_step` | 1e-5 | Absolute central-difference Jacobian step |
+| `finite_difference_step` | 1e-5 | Relative central-difference step, `h_j = step * max(1, abs(x_j))` (legacy kernel constructors only; `api::solve` uses the shared evaluator default) |
 | `type` | `NIELSEN` | Coupled scaling and damping policy |
 
 Each option has a `with_...` builder method. The strategy enum contains only
@@ -134,6 +147,59 @@ one, nonnegative tolerances/iteration limit, and enum values. Built options are
 independent snapshots. The `h=0.05` default is retained; the improvements paper
 suggests `h=0.1`, which can be selected explicitly. Likewise the fixed factors
 9/11 are retained and should not be called “delayed gratification.”
+
+## Linear solvers
+
+Each damped step solves `(J^T J + diag(D)) delta = J^T r`. Two methods are
+available (`lm_options::linear_solver`, or `with_linear_solver(...)` on the
+internal builder), both behind `damped_step_solver` in
+`include/detail/eigen_support.h`:
+
+| Method | Factorization | Use when |
+| --- | --- | --- |
+| `normal_ldlt` (default) | `Eigen::LDLT` of `J^T J + diag(D)` (symmetric positive definite, so no pivoting LU) | many more residuals than parameters; well-scaled `J` |
+| `augmented_qr` | `Eigen::ColPivHouseholderQR` of `[J; diag(sqrt(D))]` against `[r; 0]` | `J` is ill-conditioned: it never forms `J^T J`, so the condition number is not squared |
+
+The same pair is offered by Ceres (`DENSE_NORMAL_CHOLESKY` / `DENSE_QR`) and the
+QR form is what MINPACK `lmder` and Eigen's unsupported `LevenbergMarquardt`
+module use. A factorization that breaks down (non-finite input, or a rank
+deficient QR) is treated as a rejected step so the damping increases; if it still
+fails at the damping ceiling the run ends with `numerical_failure`.
+
+The normal-equations path allocates nothing inside the iteration loop: all
+workspace is created once per solve and products use `noalias()` into it. This is
+verified by `LmNoAllocCheck`, which compiles the kernel with Eigen's runtime
+malloc guard (`EIGEN_RUNTIME_NO_MALLOC`) and fails on any Eigen heap allocation
+between the first evaluation and the return. Eigen's QR solve makes one small
+temporary per solve call, so `augmented_qr` is not allocation-free.
+
+### Function tolerance
+
+`function_tolerance` is compared with the documented objective
+`F = 0.5 * ||r||^2` (it used to be compared with `||r||` in LM and Gauss-Newton and
+with `||r||^2` in least-squares L-BFGS). The default `epsilon` therefore now stops a
+run once `||r|| < sqrt(2 * epsilon) ~= 2.1e-8`, rather than only at an essentially
+exact zero residual. Callers who relied on the old reading should scale their
+tolerance by `0.5 * tolerance_old^2`.
+
+### Measured behavior
+
+Iteration counts and final costs are identical for both methods on the library's
+standard problems (`LmLinearSolversBenchmark`; analytic Jacobians, tolerances
+`1e-24 / 1e-14 / 1e-14`):
+
+| Problem | Linear solver | Status | Iterations | Final cost F |
+| --- | --- | --- | --- | --- |
+| LinearScalar | normal_ldlt / augmented_qr | converged | 3 / 3 | 2.750e-27 / 2.750e-27 |
+| Rosenbrock2D | normal_ldlt / augmented_qr | converged | 32 / 32 | 1.312e-26 / 1.312e-26 |
+| PowellSingular | normal_ldlt / augmented_qr | converged | 18 / 18 | 2.313e-20 / 2.313e-20 |
+| ExponentialFit | normal_ldlt / augmented_qr | converged | 5 / 5 | 6.642e-32 / 6.642e-32 |
+
+On the raw-SVI calibration fixture (`SviCalibrationBenchmark`, 5 parameters,
+analytic Jacobian, gradient tolerance 1e-3) both converge in 8 iterations to the
+same 3.37518 variance-bp RMSE as the other solvers; the median solve takes about
+6.8 us with `normal_ldlt` and 7.7 us with `augmented_qr` on the development
+machine, against 46 us for Ceres LM (16 iterations).
 
 ## Review findings and corrections
 

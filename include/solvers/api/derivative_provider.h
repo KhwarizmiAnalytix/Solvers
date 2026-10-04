@@ -12,6 +12,7 @@
 #include "detail/eigen_support.h"
 #include "detail/support.h"
 #include "solvers/api/status.h"
+#include "solvers/rnc_lm_derivatives.h"
 
 // Derivative-provider abstraction layer.
 //
@@ -45,12 +46,19 @@ public:
     // residuals: output buffer of size m
     // jacobian:  output m×n matrix (row i, column j = ∂r_i/∂x_j)
     virtual void compute(
-        const vector_type& x,
-        vector_type&       residuals,
-        matrix_type&       jacobian) const = 0;
+        const vector_type& x, vector_type& residuals, matrix_type& jacobian) const = 0;
 
     // Compute only residuals (no Jacobian). Default delegates to compute().
     virtual void residuals_only(const vector_type& x, vector_type& residuals) const;
+
+    // Compute only the Jacobian. Default delegates to compute() and discards the
+    // residuals; implementations that can skip the residual pass override it.
+    virtual void jacobian_only(const vector_type& x, matrix_type& jacobian) const;
+
+    // How many executions of the user's residual function one jacobian_only()
+    // call performs (0 for a callback Jacobian, 2n for a central stencil, 1 for
+    // an AD pass that yields residuals as a by-product). Used for honest counters.
+    virtual std::size_t residual_passes_per_jacobian() const { return 1; }
 
     virtual std::size_t     num_parameters() const = 0;
     virtual std::size_t     num_residuals() const  = 0;
@@ -65,6 +73,10 @@ public:
     {
         return nullptr;
     }
+
+    // Optional: derivatives of the residual along a curve in parameter space,
+    // as RNC-LM needs them. Empty for providers that only know the Jacobian.
+    virtual rnc_derivative_function curve_derivatives() const { return {}; }
 };
 
 // ---------------------------------------------------------------------------
@@ -91,15 +103,14 @@ public:
     using residual_fn = std::function<void(const vector_type&, vector_type&)>;
     using jacobian_fn = std::function<void(const vector_type&, matrix_type&)>;
 
-    AnalyticJacobianProvider(
-        residual_fn rf, jacobian_fn jf, std::size_t n, std::size_t m);
+    AnalyticJacobianProvider(residual_fn rf, jacobian_fn jf, std::size_t n, std::size_t m);
 
     void compute(
-        const vector_type& x,
-        vector_type&       residuals,
-        matrix_type&       jacobian) const override;
+        const vector_type& x, vector_type& residuals, matrix_type& jacobian) const override;
 
-    void residuals_only(const vector_type& x, vector_type& residuals) const override;
+    void        residuals_only(const vector_type& x, vector_type& residuals) const override;
+    void        jacobian_only(const vector_type& x, matrix_type& jacobian) const override;
+    std::size_t residual_passes_per_jacobian() const override { return 0; }
 
     std::size_t     num_parameters() const override { return n_; }
     std::size_t     num_residuals() const override { return m_; }
@@ -120,17 +131,14 @@ public:
     using residual_fn = std::function<void(const vector_type&, vector_type&)>;
 
     explicit FiniteDifferenceJacobianProvider(
-        residual_fn rf,
-        std::size_t n,
-        std::size_t m,
-        double      step = 1e-7);
+        residual_fn rf, std::size_t n, std::size_t m, double step = 1e-7);
 
     void compute(
-        const vector_type& x,
-        vector_type&       residuals,
-        matrix_type&       jacobian) const override;
+        const vector_type& x, vector_type& residuals, matrix_type& jacobian) const override;
 
-    void residuals_only(const vector_type& x, vector_type& residuals) const override;
+    void        residuals_only(const vector_type& x, vector_type& residuals) const override;
+    void        jacobian_only(const vector_type& x, matrix_type& jacobian) const override;
+    std::size_t residual_passes_per_jacobian() const override { return 2 * n_; }
 
     std::size_t     num_parameters() const override { return n_; }
     std::size_t     num_residuals() const override { return m_; }
@@ -143,6 +151,40 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Curve-derivative provider — wraps an RNC derivative function (analytic or
+// Taylor-mode AD). Order 1 with an empty curve yields the residual and Jacobian
+// at the base point, so every backend can use it as an ordinary provider;
+// RNC-LM additionally reads curve_derivatives().
+// ---------------------------------------------------------------------------
+class CurveDerivativeProvider final : public JacobianProvider
+{
+public:
+    // `source` is supplied (analytic) or automatic_differentiation (Taylor AD).
+    CurveDerivativeProvider(
+        rnc_derivative_function derivatives, derivative_mode source, std::size_t n, std::size_t m);
+
+    void compute(
+        const vector_type& x, vector_type& residuals, matrix_type& jacobian) const override;
+
+    std::size_t     num_parameters() const override { return n_; }
+    std::size_t     num_residuals() const override { return m_; }
+    derivative_mode source() const override { return source_; }
+
+    rnc_derivative_function curve_derivatives() const override { return derivatives_; }
+
+private:
+    rnc_derivative_function derivatives_;
+    derivative_mode         source_;
+    std::size_t             n_, m_;
+};
+
+inline std::shared_ptr<CurveDerivativeProvider> curve_derivatives(
+    rnc_derivative_function derivatives, derivative_mode source, std::size_t n, std::size_t m)
+{
+    return std::make_shared<CurveDerivativeProvider>(std::move(derivatives), source, n, m);
+}
+
+// ---------------------------------------------------------------------------
 // Analytic gradient provider — wraps user-supplied gradient function
 // ---------------------------------------------------------------------------
 class AnalyticGradientProvider final : public GradientProvider
@@ -152,8 +194,8 @@ public:
 
     AnalyticGradientProvider(gradient_fn gf, std::size_t n);
 
-    void        compute(const vector_type& x, vector_type& gradient) const override;
-    std::size_t num_parameters() const override { return n_; }
+    void            compute(const vector_type& x, vector_type& gradient) const override;
+    std::size_t     num_parameters() const override { return n_; }
     derivative_mode source() const override { return derivative_mode::supplied; }
 
 private:
@@ -169,11 +211,10 @@ class FiniteDifferenceGradientProvider final : public GradientProvider
 public:
     using objective_fn = std::function<double(const vector_type&)>;
 
-    explicit FiniteDifferenceGradientProvider(
-        objective_fn of, std::size_t n, double step = 1e-7);
+    explicit FiniteDifferenceGradientProvider(objective_fn of, std::size_t n, double step = 1e-7);
 
-    void        compute(const vector_type& x, vector_type& gradient) const override;
-    std::size_t num_parameters() const override { return n_; }
+    void            compute(const vector_type& x, vector_type& gradient) const override;
+    std::size_t     num_parameters() const override { return n_; }
     derivative_mode source() const override { return derivative_mode::finite_difference; }
 
 private:
@@ -217,24 +258,19 @@ inline std::shared_ptr<FiniteDifferenceJacobianProvider> finite_difference(
     std::size_t                                           m,
     double                                                step = 1e-7)
 {
-    return std::make_shared<FiniteDifferenceJacobianProvider>(
-        std::move(residual_fn), n, m, step);
+    return std::make_shared<FiniteDifferenceJacobianProvider>(std::move(residual_fn), n, m, step);
 }
 
 inline std::shared_ptr<AnalyticGradientProvider> analytic_gradient(
-    std::function<void(const vector_type&, vector_type&)> gradient_fn,
-    std::size_t                                           n)
+    std::function<void(const vector_type&, vector_type&)> gradient_fn, std::size_t n)
 {
     return std::make_shared<AnalyticGradientProvider>(std::move(gradient_fn), n);
 }
 
 inline std::shared_ptr<FiniteDifferenceGradientProvider> finite_difference_gradient(
-    std::function<double(const vector_type&)> objective_fn,
-    std::size_t                               n,
-    double                                    step = 1e-7)
+    std::function<double(const vector_type&)> objective_fn, std::size_t n, double step = 1e-7)
 {
-    return std::make_shared<FiniteDifferenceGradientProvider>(
-        std::move(objective_fn), n, step);
+    return std::make_shared<FiniteDifferenceGradientProvider>(std::move(objective_fn), n, step);
 }
 
 // ---------------------------------------------------------------------------
@@ -245,38 +281,36 @@ inline std::shared_ptr<FiniteDifferenceGradientProvider> finite_difference_gradi
 
 struct check_jacobian_result
 {
-    bool   passed             = false;
-    double max_abs_error      = 0.0;
-    double max_rel_error      = 0.0;
-    int    worst_row          = -1;
-    int    worst_col          = -1;
+    bool        passed        = false;
+    double      max_abs_error = 0.0;
+    double      max_rel_error = 0.0;
+    int         worst_row     = -1;
+    int         worst_col     = -1;
     std::string summary;
 };
 
 struct check_gradient_result
 {
-    bool   passed        = false;
-    double max_abs_error = 0.0;
-    double max_rel_error = 0.0;
-    int    worst_index   = -1;
+    bool        passed        = false;
+    double      max_abs_error = 0.0;
+    double      max_rel_error = 0.0;
+    int         worst_index   = -1;
     std::string summary;
 };
 
 // Compare two Jacobian implementations at a test point.
 // provider_a and provider_b must agree on dimensions.
 // tol: maximum acceptable absolute error
-check_jacobian_result check_jacobian(
-    const JacobianProvider& provider_a,
-    const JacobianProvider& provider_b,
-    const vector_type&      x,
-    double                  tol = 1e-5);
+check_jacobian_result check_jacobian(const JacobianProvider& provider_a,
+    const JacobianProvider&                                  provider_b,
+    const vector_type&                                       x,
+    double                                                   tol = 1e-5);
 
 // Compare two gradient implementations at a test point.
-check_gradient_result check_gradient(
-    const GradientProvider& provider_a,
-    const GradientProvider& provider_b,
-    const vector_type&      x,
-    double                  tol = 1e-5);
+check_gradient_result check_gradient(const GradientProvider& provider_a,
+    const GradientProvider&                                  provider_b,
+    const vector_type&                                       x,
+    double                                                   tol = 1e-5);
 
 }  // namespace solverslib::api
 

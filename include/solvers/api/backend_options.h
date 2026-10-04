@@ -27,6 +27,50 @@ struct rnc_lm_options
     double diagonal_scaling_floor = 1e-12;
 };
 
+// -- Native Levenberg-Marquardt -----------------------------------------------
+// Mirrors solver_options_lm (Transtrum & Sethna, arXiv:1201.5885; definitions
+// in docs/levenberg-marquardt.md) so the damping, geodesic and variant controls
+// are reachable from api::solve. Budgets and tolerances live in solve_options.
+enum class lm_variant : std::uint8_t
+{
+    levenberg_marquardt,      // multiplicative damping with diagonal scaling
+    quadratic_interpolation,  // damping from a quadratic line interpolation
+    nielsen                   // Nielsen's gain-ratio damping update (default)
+};
+
+// How each damped LM step is solved. normal_ldlt factors J^T J + damping (fast
+// for many more residuals than parameters); augmented_qr factors [J; sqrt(D)]
+// and never squares the condition number of J.
+enum class lm_linear_solver : std::uint8_t
+{
+    normal_ldlt,
+    augmented_qr
+};
+
+struct lm_options
+{
+    lm_variant       variant       = lm_variant::nielsen;
+    lm_linear_solver linear_solver = lm_linear_solver::normal_ldlt;
+
+    bool   bold_acceptance                 = false;
+    double bold_acceptance_exponent        = 2.0;
+    bool   geodesic_acceleration           = true;
+    double geodesic_acceleration_threshold = 0.75;
+    double geodesic_acceleration_step      = 0.05;
+
+    double initial_damping                     = 1e-4;
+    double initial_rejection_multiplier        = 2.0;  // Nielsen's nu
+    double damping_decrease_factor             = 9.0;
+    double damping_increase_factor             = 11.0;
+    double damping_floor                       = 1e-7;
+    double nielsen_damping_floor               = 1e-15;
+    double damping_ceiling                     = 1e12;
+    double levenberg_marquardt_damping_ceiling = 1e7;
+
+    double diagonal_scaling_floor = 1e-12;
+    double roundoff_noise_factor  = 8.0;
+};
+
 // -- Ceres -------------------------------------------------------------------
 enum class ceres_linear_solver : std::uint8_t
 {

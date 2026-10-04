@@ -235,8 +235,8 @@ TEST(RncLm, InvalidOptionsAndMissingDerivativesFailBeforeEvaluation)
     options             = configuration(3);
     options.derivatives = api::derivative_mode::finite_difference;
     EXPECT_EQ(api::solve(problem, x, options).status, api::solver_status::unsupported_capability);
-    options                 = configuration(3);
-    problem.rnc_derivatives = {};
+    options = configuration(3);
+    problem.set_jacobian_provider(nullptr);
     EXPECT_EQ(api::solve(problem, x, options).status, api::solver_status::unsupported_capability);
 }
 
@@ -260,8 +260,8 @@ TEST(RncLm, RejectedAndNonfiniteTrialsPreserveAcceptedParameters)
 TEST(RncLm, InvalidDerivativeDimensionsAreReported)
 {
     auto problem = rnc_least_squares(Quadratic{}, 1, 1);
-    problem.rnc_derivatives =
-        [](const vector_type&, const std::vector<vector_type>&, int, rnc_curve_derivatives&) {};
+    problem.set_curve_derivatives(
+        [](const vector_type&, const std::vector<vector_type>&, int, rnc_curve_derivatives&) {});
     const auto result = api::solve(problem, vector_type::Constant(1, 2.), configuration(3));
     EXPECT_EQ(result.status, api::solver_status::numerical_failure);
 }
@@ -286,21 +286,22 @@ TEST(RncLm, SevereValleyMatchesThePapersProblemScale)
 TEST(RncLm, AnalyticCurveDerivativeCallbackWorksWithoutAutodiffAdapter)
 {
     api::least_squares_problem problem;
-    problem.num_parameters  = 1;
-    problem.num_residuals   = 1;
-    problem.residuals       = [](const vector_type& x, vector_type& r) { r[0] = x[0] - 3.; };
-    problem.rnc_derivatives = [](const vector_type&               x,
-                                  const std::vector<vector_type>& c,
-                                  int                             order,
-                                  rnc_curve_derivatives&          d)
-    {
-        d.residual.assign(order + 1, vector_type::Zero(1));
-        d.jacobian.assign(std::max(0, order - 2) + 1, matrix_type::Zero(1, 1));
-        d.residual[0][0] = x[0] - 3.;
-        for (size_t q = 0; q < c.size(); ++q)
-            d.residual[q + 1] = c[q];
-        d.jacobian[0](0, 0) = 1.;
-    };
+    problem.num_parameters = 1;
+    problem.num_residuals  = 1;
+    problem.residuals      = [](const vector_type& x, vector_type& r) { r[0] = x[0] - 3.; };
+    problem.set_curve_derivatives(
+        [](const vector_type&               x,
+            const std::vector<vector_type>& c,
+            int                             order,
+            rnc_curve_derivatives&          d)
+        {
+            d.residual.assign(order + 1, vector_type::Zero(1));
+            d.jacobian.assign(std::max(0, order - 2) + 1, matrix_type::Zero(1, 1));
+            d.residual[0][0] = x[0] - 3.;
+            for (size_t q = 0; q < c.size(); ++q)
+                d.residual[q + 1] = c[q];
+            d.jacobian[0](0, 0) = 1.;
+        });
     const auto result = api::solve(problem, vector_type::Zero(1), configuration(4));
     EXPECT_TRUE(result.converged());
     EXPECT_NEAR(result.parameters[0], 3., 1e-10);
@@ -346,17 +347,19 @@ TEST(RncLm, TrustRatioUsesInitialTangentInsteadOfCorrectedDisplacement)
     const double        target      = std::sqrt(.34);
     const double        cubic       = (target - 1. - s - .5 * hessian * s * s) / (s * s * s);
     auto                problem     = rnc_least_squares(CubicResidual{hessian, cubic}, 1, 1);
-    auto                derivatives = problem.rnc_derivatives;
+    auto                derivatives = problem.derivative_provider()->curve_derivatives();
     std::vector<double> velocities;
-    problem.rnc_derivatives = [&](const vector_type&              base,
-                                  const std::vector<vector_type>& c,
-                                  int                             order,
-                                  rnc_curve_derivatives&          out)
-    {
-        if (order == 2)
-            velocities.push_back(c[0][0]);
-        derivatives(base, c, order, out);
-    };
+    problem.set_curve_derivatives(
+        [&](const vector_type&              base,
+            const std::vector<vector_type>& c,
+            int                             order,
+            rnc_curve_derivatives&          out)
+        {
+            if (order == 2)
+                velocities.push_back(c[0][0]);
+            derivatives(base, c, order, out);
+        },
+        api::derivative_mode::automatic_differentiation);
     auto options                    = configuration(2);
     options.max_iterations          = 2;
     options.rnc_lm->initial_damping = .1;

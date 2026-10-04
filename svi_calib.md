@@ -76,13 +76,13 @@ This result is consistent with the paper’s reported left-skew, where the round
 
 ## Model vs. targets
 
-![Raw-SVI model vs. market targets](svi_model_vs_targets.png)
+![Raw-SVI model vs. market targets](docs/images/svi_model_vs_targets.png)
 
 The plot below compares the calibrated raw-SVI curve against the target market variance points in log-moneyness space.
 
 ## Convergence trace
 
-![Ceres LM convergence on constrained raw-SVI calibration](convergence_svi.png)
+![Ceres LM convergence on constrained raw-SVI calibration](docs/images/convergence_svi.png)
 
 This convergence plot shows the objective dropping monotonically over the first ~16 iterations to reach the constrained minimum.
 

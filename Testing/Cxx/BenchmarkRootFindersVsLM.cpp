@@ -28,8 +28,7 @@ struct timing_result
     double median_ms;
 };
 
-template <typename Attempt>
-timing_result time_call(Attempt&& attempt, int warmup = 3, int runs = 9)
+template <typename Attempt> timing_result time_call(Attempt&& attempt, int warmup = 3, int runs = 9)
 {
     for (int i = 0; i < warmup; ++i)
         attempt();
@@ -63,9 +62,9 @@ void print_row(const std::string& problem_name,
 {
     std::cout << std::left << std::setw(20) << problem_name << std::setw(20) << method_name
               << std::setw(12) << (converged ? "converged" : "FAILED") << std::scientific
-              << std::setprecision(3) << std::setw(14) << error << std::fixed << "best="
-              << std::setprecision(4) << timing.best_ms << "ms median=" << timing.median_ms
-              << "ms\n";
+              << std::setprecision(3) << std::setw(14) << error << std::fixed
+              << "best=" << std::setprecision(4) << timing.best_ms
+              << "ms median=" << timing.median_ms << "ms\n";
 }
 
 void benchmark_problem(const root_finding_test_problem& problem)
@@ -78,26 +77,36 @@ void benchmark_problem(const root_finding_test_problem& problem)
 
     // Newton-Raphson.
     {
-        double root      = 0.0;
-        bool   converged = false;
-        const auto timing = time_call([&]() {
-            converged = root_finding_algorithms::newton_raphson(
-                problem.residual_with_derivative, problem.x2, root, rf_options);
-        });
-        print_row(problem.name, "RootFinder: Newton", converged,
-            std::fabs(root - problem.expected_root), timing);
+        double     root      = 0.0;
+        bool       converged = false;
+        const auto timing    = time_call(
+            [&]()
+            {
+                converged = root_finding_algorithms::newton_raphson(
+                    problem.residual_with_derivative, problem.x2, root, rf_options);
+            });
+        print_row(problem.name,
+            "RootFinder: Newton",
+            converged,
+            std::fabs(root - problem.expected_root),
+            timing);
     }
 
     // Brent.
     {
-        double root      = 0.0;
-        bool   converged = false;
-        const auto timing = time_call([&]() {
-            converged = root_finding_algorithms::brent(
-                problem.residual, problem.x1, problem.x2, root, rf_options);
-        });
-        print_row(problem.name, "RootFinder: Brent", converged,
-            std::fabs(root - problem.expected_root), timing);
+        double     root      = 0.0;
+        bool       converged = false;
+        const auto timing    = time_call(
+            [&]()
+            {
+                converged = root_finding_algorithms::brent(
+                    problem.residual, problem.x1, problem.x2, root, rf_options);
+            });
+        print_row(problem.name,
+            "RootFinder: Brent",
+            converged,
+            std::fabs(root - problem.expected_root),
+            timing);
     }
 
     // LM via the problem-structure API.
@@ -105,14 +114,14 @@ void benchmark_problem(const root_finding_test_problem& problem)
         api::least_squares_problem ls;
         ls.num_parameters = 1;
         ls.num_residuals  = 1;
-        ls.residuals = [&](const vector_type& x, vector_type& r) {
-            r(0) = problem.residual(x(0));
-        };
-        ls.jacobian = [&](const vector_type& x, matrix_type& J) {
-            double df;
-            problem.residual_with_derivative(x(0), df);
-            J(0, 0) = df;
-        };
+        ls.residuals = [&](const vector_type& x, vector_type& r) { r(0) = problem.residual(x(0)); };
+        ls.set_jacobian(
+            [&](const vector_type& x, matrix_type& J)
+            {
+                double df;
+                problem.residual_with_derivative(x(0), df);
+                J(0, 0) = df;
+            });
 
         api::solve_options opts;
         opts.algorithm           = api::algorithm::levenberg_marquardt;
@@ -124,16 +133,21 @@ void benchmark_problem(const root_finding_test_problem& problem)
         vector_type x0(1);
         x0 << problem.x2;
 
-        bool converged = false;
-        const auto timing = time_call([&]() {
-            auto result = api::solve(ls, x0, opts);
-            converged   = result.converged();
-        });
+        bool       converged = false;
+        const auto timing    = time_call(
+            [&]()
+            {
+                auto result = api::solve(ls, x0, opts);
+                converged   = result.converged();
+            });
 
-        auto   result    = api::solve(ls, x0, opts);
+        auto   result     = api::solve(ls, x0, opts);
         double final_root = result.parameters[0];
-        print_row(problem.name, "Solver: LM (API)", result.converged(),
-            std::fabs(final_root - problem.expected_root), timing);
+        print_row(problem.name,
+            "Solver: LM (API)",
+            result.converged(),
+            std::fabs(final_root - problem.expected_root),
+            timing);
     }
 
     std::cout << "\n";

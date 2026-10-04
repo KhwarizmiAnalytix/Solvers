@@ -41,7 +41,7 @@ api::least_squares_problem to_ls(const optimization_test_problem& tp)
     p.num_parameters = tp.num_parameters;
     p.num_residuals  = tp.num_residuals;
     p.residuals      = tp.residuals;
-    p.jacobian       = tp.jacobian;
+    p.set_jacobian(tp.jacobian);
     return p;
 }
 
@@ -55,14 +55,15 @@ api::optimization_problem to_obj(const optimization_test_problem& tp)
         tp.residuals(x, r);
         return 0.5 * r.squaredNorm();
     };
-    p.gradient = [&tp](const vector_type& x, vector_type& g)
-    {
-        vector_type r = make_vector(tp.num_residuals);
-        matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
-        tp.residuals(x, r);
-        tp.jacobian(x, J);
-        g = J.transpose() * r;
-    };
+    p.set_gradient(
+        [&tp](const vector_type& x, vector_type& g)
+        {
+            vector_type r = make_vector(tp.num_residuals);
+            matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
+            tp.residuals(x, r);
+            tp.jacobian(x, J);
+            g = J.transpose() * r;
+        });
     return p;
 }
 
@@ -226,7 +227,7 @@ TEST_P(SolverBackendTest, CeresWithInternalJacobian)
     ls_no_jac.num_parameters = tp.num_parameters;
     ls_no_jac.num_residuals  = tp.num_residuals;
     ls_no_jac.residuals      = tp.residuals;
-    ls_no_jac.jacobian       = nullptr;  // No user-provided jacobian
+    ls_no_jac.set_jacobian_provider(nullptr);  // No user-provided jacobian
 
     api::solve_options opts;
     opts.backend             = api::backend::ceres;
@@ -253,7 +254,7 @@ TEST(SolverBackendTest, CeresWithBoundedLeastSquares)
     ls.num_parameters = tp.num_parameters;
     ls.num_residuals  = tp.num_residuals;
     ls.residuals      = tp.residuals;
-    ls.jacobian       = tp.jacobian;
+    ls.set_jacobian(tp.jacobian);
 
     // Constrain first parameter to [0.5, 1.5] and second to [0.5, 1.5]
     ls.bounds.lower = {0.5, 0.5};
@@ -295,7 +296,7 @@ TEST(SolverBackendTest, CeresWithActiveBounds)
     ls.num_parameters = tp.num_parameters;
     ls.num_residuals  = tp.num_residuals;
     ls.residuals      = tp.residuals;
-    ls.jacobian       = tp.jacobian;
+    ls.set_jacobian(tp.jacobian);
 
     // Tight bounds that force solution near boundary
     ls.bounds.lower = {0.0, 0.0};
@@ -323,7 +324,6 @@ TEST(SolverBackendTest, CeresWithActiveBounds)
     EXPECT_GE(result.parameters[1], 0.0 - 1e-6);
     EXPECT_LE(result.parameters[1], 0.8 + 1e-6);
 }
-
 
 TEST(AutomaticDifferentiation, TemplatedResidualsMatchNumeric)
 {

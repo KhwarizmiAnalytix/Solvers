@@ -30,18 +30,19 @@ TEST(VerboseLogs, LMSolverVerboseOutput)
     {
         for (size_t i = 0; i < 3; ++i)
         {
-            r(static_cast<Eigen::Index>(i)) = p(0) * data_x[i] + p(1) - data_y[i];
+            r(static_cast<index_type>(i)) = p(0) * data_x[i] + p(1) - data_y[i];
         }
     };
 
-    ls.jacobian = [&](const vector_type& /*p*/, matrix_type& J)
-    {
-        for (size_t i = 0; i < 3; ++i)
+    ls.set_jacobian(
+        [&](const vector_type& /*p*/, matrix_type& J)
         {
-            J(static_cast<Eigen::Index>(i), 0) = data_x[i];
-            J(static_cast<Eigen::Index>(i), 1) = 1.0;
-        }
-    };
+            for (size_t i = 0; i < 3; ++i)
+            {
+                J(static_cast<index_type>(i), 0) = data_x[i];
+                J(static_cast<index_type>(i), 1) = 1.0;
+            }
+        });
 
     api::solve_options opts;
     opts.algorithm           = api::algorithm::levenberg_marquardt;
@@ -73,11 +74,12 @@ TEST(VerboseLogs, GaussNewtonVerboseOutput)
         r(1) = p(0) - 1.0;
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
-    {
-        J(0, 0) = 1.0;
-        J(1, 0) = 1.0;
-    };
+    ls.set_jacobian(
+        [](const vector_type& /*p*/, matrix_type& J)
+        {
+            J(0, 0) = 1.0;
+            J(1, 0) = 1.0;
+        });
 
     api::solve_options opts;
     opts.algorithm           = api::algorithm::gauss_newton;
@@ -125,7 +127,7 @@ TEST(CornerCases, ZeroInitialGuess)
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
     ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
-    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.set_jacobian([](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; });
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -148,7 +150,7 @@ TEST(CornerCases, NegativeInitialGuess)
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
     ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) + 3.0; };
-    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.set_jacobian([](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; });
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -181,19 +183,20 @@ TEST(CornerCases, MultipleEquationsUnderdetermined)
         r(4) = p(0) * p(0) + p(1) * p(1) - 13.0;
     };
 
-    ls.jacobian = [](const vector_type& p, matrix_type& J)
-    {
-        J(0, 0) = 1.0;
-        J(0, 1) = 1.0;
-        J(1, 0) = 1.0;
-        J(1, 1) = -1.0;
-        J(2, 0) = 2.0;
-        J(2, 1) = 1.0;
-        J(3, 0) = 1.0;
-        J(3, 1) = 2.0;
-        J(4, 0) = 2.0 * p(0);
-        J(4, 1) = 2.0 * p(1);
-    };
+    ls.set_jacobian(
+        [](const vector_type& p, matrix_type& J)
+        {
+            J(0, 0) = 1.0;
+            J(0, 1) = 1.0;
+            J(1, 0) = 1.0;
+            J(1, 1) = -1.0;
+            J(2, 0) = 2.0;
+            J(2, 1) = 1.0;
+            J(3, 0) = 1.0;
+            J(3, 1) = 2.0;
+            J(4, 0) = 2.0 * p(0);
+            J(4, 1) = 2.0 * p(1);
+        });
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -223,13 +226,14 @@ TEST(CornerCases, NearSingularJacobian)
         r(1) = p(0) + p(1) - 5.0;  // Almost linearly dependent
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
-    {
-        J(0, 0) = 1.0;
-        J(0, 1) = 1.001;
-        J(1, 0) = 1.0;
-        J(1, 1) = 1.0;
-    };
+    ls.set_jacobian(
+        [](const vector_type& /*p*/, matrix_type& J)
+        {
+            J(0, 0) = 1.0;
+            J(0, 1) = 1.001;
+            J(1, 0) = 1.0;
+            J(1, 1) = 1.0;
+        });
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -255,7 +259,7 @@ TEST(CornerCases, LargeScaleResiduals)
     // Residual with very large scale
     ls.residuals = [](const vector_type& p, vector_type& r) { r(0) = 1e8 * (p(0) - 0.5); };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1e8; };
+    ls.set_jacobian([](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1e8; });
 
     api::solve_options opts;
     opts.max_iterations      = 100;
@@ -285,11 +289,12 @@ TEST(CornerCases, IdenticalEquations)
         r(1) = p(0) - 3.0;  // Identical to r(0)
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
-    {
-        J(0, 0) = 1.0;
-        J(1, 0) = 1.0;  // Identical to J(0, 0)
-    };
+    ls.set_jacobian(
+        [](const vector_type& /*p*/, matrix_type& J)
+        {
+            J(0, 0) = 1.0;
+            J(1, 0) = 1.0;  // Identical to J(0, 0)
+        });
 
     api::solve_options opts;
     opts.max_iterations      = 50;
@@ -324,13 +329,14 @@ TEST(CornerCases, SingleParameterMultipleResiduals)
         }
     };
 
-    ls.jacobian = [](const vector_type& /*p*/, matrix_type& J)
-    {
-        for (int i = 0; i < 10; ++i)
+    ls.set_jacobian(
+        [](const vector_type& /*p*/, matrix_type& J)
         {
-            J(i, 0) = 1.0;
-        }
-    };
+            for (int i = 0; i < 10; ++i)
+            {
+                J(i, 0) = 1.0;
+            }
+        });
 
     api::solve_options opts;
     opts.max_iterations      = 50;
@@ -357,7 +363,7 @@ TEST(ErrorHandling, InvalidProblemZeroResiduals)
     ls.num_parameters = 1;
     ls.num_residuals  = 0;  // Invalid: no residuals
     ls.residuals      = nullptr;
-    ls.jacobian       = nullptr;
+    ls.set_jacobian_provider(nullptr);
 
     api::solve_options opts;
     vector_type        x0(1);
@@ -376,7 +382,7 @@ TEST(ErrorHandling, InvalidProblemZeroParameters)
     ls.num_parameters = 0;  // Invalid: no parameters
     ls.num_residuals  = 1;
     ls.residuals      = nullptr;
-    ls.jacobian       = nullptr;
+    ls.set_jacobian_provider(nullptr);
 
     api::solve_options opts;
     vector_type        x0(1);
@@ -395,7 +401,7 @@ TEST(ErrorHandling, ZeroIterationLimit)
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
     ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
-    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.set_jacobian([](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; });
 
     api::solve_options opts;
     opts.max_iterations = 0;  // No iterations allowed
@@ -416,7 +422,7 @@ TEST(ErrorHandling, NegativeTolerance)
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
     ls.residuals      = [](const vector_type& p, vector_type& r) { r(0) = p(0) - 5.0; };
-    ls.jacobian       = [](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.set_jacobian([](const vector_type& /*p*/, matrix_type& J) { J(0, 0) = 1.0; });
 
     api::solve_options opts;
     opts.max_iterations      = 100;

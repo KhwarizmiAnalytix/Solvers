@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "detail/eigen_support.h"
+#include "solvers/api/detail/routing.h"
 #include "solvers/api/solve.h"
 #include "solvers/ceres_solver.h"
 #include "solvers/ipopt_solver.h"
@@ -24,8 +25,8 @@ least_squares_problem make_linear_problem(bool with_jacobian)
     };
     if (with_jacobian)
     {
-        problem.jacobian = [](const vector_type&, matrix_type& j)
-        { j = matrix_type::Identity(2, 2); };
+        problem.set_jacobian(
+            [](const vector_type&, matrix_type& j) { j = matrix_type::Identity(2, 2); });
     }
     return problem;
 }
@@ -47,11 +48,61 @@ TEST(SolverApiDispatch, AutoSelectsLmForJacobianLeastSquares)
     EXPECT_EQ(select_backend(traits, {}), backend::native);
 }
 
-TEST(SolverApiDispatch, AutoSelectsPoundersWithoutJacobian)
+// D1: automatic mode must not pick a backend that is not built.
+TEST(SolverApiDispatch, ResidualOnlyUsesNativeLmWhenPetscMissing)
 {
     const problem_traits traits = inspect(make_linear_problem(false));
-    EXPECT_EQ(select_algorithm(traits, {}), algorithm::pounders);
-    EXPECT_EQ(select_backend(traits, {}), backend::pounders);
+    const auto route = detail::select_route(traits, {}, detail::backend_availability::none());
+    ASSERT_NE(route.chosen, nullptr);
+    EXPECT_EQ(route.chosen->backend, backend::native);
+    EXPECT_EQ(route.chosen->algorithm, algorithm::levenberg_marquardt);
+}
+
+TEST(SolverApiDispatch, ResidualOnlyUsesPoundersWhenPetscBuilt)
+{
+    const problem_traits traits = inspect(make_linear_problem(false));
+    const auto route = detail::select_route(traits, {}, detail::backend_availability::all());
+    ASSERT_NE(route.chosen, nullptr);
+    EXPECT_EQ(route.chosen->backend, backend::pounders);
+    EXPECT_EQ(route.chosen->algorithm, algorithm::pounders);
+}
+
+TEST(SolverApiDispatch, ResidualOnlySolvesWithFiniteDifferencesInThisBuild)
+{
+    const solver_result result = solve(make_linear_problem(false), vector_type::Zero(2));
+    EXPECT_TRUE(result.converged());
+    EXPECT_NEAR(result.parameters[0], 3.0, 1e-5);
+    EXPECT_NEAR(result.parameters[1], -1.0, 1e-5);
+    if (!solverslib::petsc_tao_solver::is_supported())
+    {
+        EXPECT_EQ(result.backend, backend::native);
+    }
+}
+
+// D2: a Ceres-native AD provider routes to Ceres when Ceres is built, even
+// though set_jacobian_provider() always also fills jacobian_provider.
+TEST(SolverApiDispatch, AutodiffProviderRoutesToCeresWhenBuilt)
+{
+    problem_traits traits        = inspect(make_linear_problem(false));
+    traits.has_jacobian          = true;
+    traits.has_jacobian_provider = true;
+    traits.has_autodiff_provider = true;
+
+    const auto with_ceres = detail::select_route(traits, {}, detail::backend_availability::all());
+    ASSERT_NE(with_ceres.chosen, nullptr);
+    EXPECT_EQ(with_ceres.chosen->backend, backend::ceres);
+
+    const auto without_ceres =
+        detail::select_route(traits, {}, detail::backend_availability::none());
+    ASSERT_NE(without_ceres.chosen, nullptr);
+    EXPECT_EQ(without_ceres.chosen->backend, backend::native);
+
+    // A caller that forces finite differences opts out of the AD preference.
+    solve_options options;
+    options.derivatives = derivative_mode::finite_difference;
+    const auto forced = detail::select_route(traits, options, detail::backend_availability::all());
+    ASSERT_NE(forced.chosen, nullptr);
+    EXPECT_EQ(forced.chosen->backend, backend::native);
 }
 
 TEST(SolverApiDispatch, LargeScaleRoutesToTao)
@@ -59,8 +110,78 @@ TEST(SolverApiDispatch, LargeScaleRoutesToTao)
     problem_traits traits = inspect(make_linear_problem(true));
     traits.num_residuals  = 100000;  // exceeds default residual threshold
     EXPECT_TRUE(is_large_scale(traits, {}));
-    EXPECT_EQ(select_algorithm(traits, {}), algorithm::newton_krylov);
-    EXPECT_EQ(select_backend(traits, {}), backend::petsc_tao);
+    const auto route = detail::select_route(traits, {}, detail::backend_availability::all());
+    ASSERT_NE(route.chosen, nullptr);
+    EXPECT_EQ(route.chosen->algorithm, algorithm::newton_krylov);
+    EXPECT_EQ(route.chosen->backend, backend::petsc_tao);
+    // Without PETSc the same problem stays on a built backend.
+    const auto fallback = detail::select_route(traits, {}, detail::backend_availability::none());
+    ASSERT_NE(fallback.chosen, nullptr);
+    EXPECT_EQ(fallback.chosen->backend, backend::native);
+}
+
+// Table-driven sweep over problem shape x availability.
+struct route_case
+{
+    const char*                  name;
+    bool                         least_squares;
+    bool                         has_derivative;
+    bool                         has_bounds;
+    detail::backend_availability availability;
+    // Expected outcome; backend::automatic means "no route".
+    backend expected;
+};
+
+TEST(SolverApiDispatch, RouteTableCrossProduct)
+{
+    using detail::backend_availability;
+    const backend_availability none = backend_availability::none();
+    const backend_availability all  = backend_availability::all();
+    const backend_availability ceres_only{true, false, false};
+    const backend_availability ipopt_only{false, false, true};
+    const backend_availability petsc_only{false, true, false};
+
+    const route_case cases[] = {
+        {"ls plain, nothing built", true, true, false, none, backend::native},
+        {"ls plain, all built", true, true, false, all, backend::native},
+        {"ls no-deriv, nothing built", true, false, false, none, backend::native},
+        {"ls no-deriv, petsc", true, false, false, petsc_only, backend::pounders},
+        {"ls bounds, ceres", true, true, true, ceres_only, backend::ceres},
+        {"ls bounds, petsc", true, true, true, petsc_only, backend::petsc_tao},
+        {"ls bounds, nothing built", true, true, true, none, backend::ceres},  // unbuilt fallback
+        {"ls bounds no-deriv, petsc", true, false, true, petsc_only, backend::pounders},
+        {"obj plain, nothing built", false, true, false, none, backend::native},
+        {"obj bounds, ipopt", false, true, true, ipopt_only, backend::ipopt},
+        {"obj bounds, petsc", false, true, true, petsc_only, backend::petsc_tao},
+        {"obj bounds, all", false, true, true, all, backend::ipopt},
+    };
+    for (const auto& c : cases)
+    {
+        SCOPED_TRACE(c.name);
+        problem_traits traits;
+        traits.is_least_squares = c.least_squares;
+        traits.has_jacobian     = c.least_squares && c.has_derivative;
+        traits.has_gradient     = !c.least_squares && c.has_derivative;
+        traits.has_bounds       = c.has_bounds;
+        traits.num_parameters   = 2;
+        traits.num_residuals    = 2;
+        const auto decision     = detail::select_route(traits, {}, c.availability);
+        ASSERT_NE(decision.chosen, nullptr) << decision.message;
+        EXPECT_EQ(decision.chosen->backend, c.expected);
+    }
+}
+
+TEST(SolverApiDispatch, NoRouteNamesTheMissingCapability)
+{
+    problem_traits traits;
+    traits.is_least_squares          = true;
+    traits.has_jacobian              = true;
+    traits.has_nonlinear_constraints = true;
+    const auto decision = detail::select_route(traits, {}, detail::backend_availability::all());
+    EXPECT_EQ(decision.chosen, nullptr);
+    EXPECT_EQ(decision.failure, solver_status::unsupported_capability);
+    EXPECT_NE(decision.message.find("nonlinear constraints"), std::string::npos)
+        << decision.message;
 }
 
 TEST(SolverApiDispatch, NativeLmSolvesLinearLeastSquares)
@@ -97,9 +218,26 @@ TEST(SolverApiDispatch, BoundsRejectedRatherThanDropped)
     auto problem         = make_linear_problem(true);
     problem.bounds.lower = {0.0, -10.0};  // one-sided is enough to trigger
 
-    const solver_result result = solve(problem, vector_type::Zero(2));
-    EXPECT_EQ(result.status, solver_status::unsupported_capability);
-    EXPECT_FALSE(result.has_usable_iterate());
+    // The native kernels cannot enforce bounds, so pinning them is an error.
+    solve_options options;
+    options.backend            = backend::native;
+    const solver_result native = solve(problem, vector_type::Zero(2), options);
+    EXPECT_EQ(native.status, solver_status::unsupported_capability);
+    EXPECT_FALSE(native.has_usable_iterate());
+    EXPECT_EQ(native.backend, backend::native);
+
+    // Automatic mode picks a bound-capable backend if one is built, and
+    // otherwise names the unbuilt one instead of dropping the bounds.
+    const solver_result automatic = solve(problem, vector_type::Zero(2));
+    if (solverslib::ceres_solver::is_supported())
+    {
+        EXPECT_TRUE(automatic.has_usable_iterate());
+        EXPECT_EQ(automatic.backend, backend::ceres);
+    }
+    else if (!solverslib::petsc_tao_solver::is_supported())
+    {
+        EXPECT_EQ(automatic.status, solver_status::backend_unavailable);
+    }
 }
 
 TEST(SolverApiDispatch, InvalidProblemRejectedBeforeSolving)
@@ -135,7 +273,7 @@ TEST(SolverApiDispatch, UnwiredBackendReportedUnavailable)
         optimization_problem opt;
         opt.num_parameters = 2;
         opt.objective      = [](const vector_type& x) { return x.squaredNorm(); };
-        opt.gradient       = [](const vector_type& x, vector_type& g) { g = 2.0 * x; };
+        opt.set_gradient([](const vector_type& x, vector_type& g) { g = 2.0 * x; });
         solve_options options;
         options.backend            = backend::ipopt;
         const solver_result result = solve(opt, vector_type::Zero(2), options);
@@ -232,7 +370,7 @@ optimization_problem make_quadratic_problem(const vector_type& c, bool with_grad
     problem.objective      = [c](const vector_type& x) { return (x - c).squaredNorm(); };
     if (with_gradient)
     {
-        problem.gradient = [c](const vector_type& x, vector_type& g) { g = 2.0 * (x - c); };
+        problem.set_gradient([c](const vector_type& x, vector_type& g) { g = 2.0 * (x - c); });
     }
     return problem;
 }
@@ -260,13 +398,15 @@ TEST(SolverApiDispatch, OptimizationHessianVectorRoutesToTao)
 }
 
 // -- POUNDERS (via PETSc/TAO) ------------------------------------------------
-TEST(SolverApiDispatch, PoundersRouteUsesTaoAdapter)
+TEST(SolverApiDispatch, PinnedPoundersUsesTaoAdapter)
 {
-    const auto    problem = make_linear_problem(false);  // no Jacobian -> pounders
-    solve_options options;                               // automatic
+    const auto    problem = make_linear_problem(false);
+    solve_options options;
+    options.backend = backend::pounders;
 
     const solver_result result = solve(problem, vector_type::Zero(2), options);
     EXPECT_EQ(result.backend, backend::pounders);
+    EXPECT_EQ(result.algorithm, algorithm::pounders);
     if (solverslib::petsc_tao_solver::is_supported())
     {
         EXPECT_TRUE(result.has_usable_iterate());
@@ -361,7 +501,9 @@ TEST(SolverApiDispatch, NativeObjectiveRejectsBounds)
     auto problem         = make_quadratic_problem(vector_type::Ones(2), true);
     problem.bounds.lower = {0.0, 0.0};
 
-    const solver_result result = solve(problem, vector_type::Zero(2));
+    solve_options options;
+    options.backend            = backend::native;
+    const solver_result result = solve(problem, vector_type::Zero(2), options);
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
     EXPECT_EQ(result.backend, backend::native);
 }
@@ -395,8 +537,8 @@ TEST(SolverApiDispatch, ObjectiveOffsetDoesNotPreventConvergence)
     auto problem      = make_quadratic_problem(vector_type::Constant(2, 2.0), true);
     problem.objective = [](const vector_type& x)
     { return 1000000.0 + (x - vector_type::Constant(2, 2.0)).squaredNorm(); };
-    problem.gradient = [](const vector_type& x, vector_type& g)
-    { g = 2.0 * (x - vector_type::Constant(2, 2.0)); };
+    problem.set_gradient([](const vector_type& x, vector_type& g)
+        { g = 2.0 * (x - vector_type::Constant(2, 2.0)); });
 
     const solver_result result = solve(problem, vector_type::Zero(2));
     EXPECT_TRUE(result.converged());
@@ -416,7 +558,7 @@ TEST(SolverApiDispatch, UnsupportedAlgorithmIsRejected)
 {
     auto          problem = make_linear_problem(true);
     solve_options options;
-    options.algorithm          = algorithm::bfgs;
+    options.algorithm          = algorithm::interior_point;  // Ipopt-only method
     options.backend            = backend::native;
     const solver_result result = solve(problem, vector_type::Zero(2), options);
     EXPECT_EQ(result.status, solver_status::unsupported_capability);

@@ -1,5 +1,6 @@
 #include "solvers/petsc_tao_solver.h"
 
+#include <string>
 #include <utility>
 
 #include "detail/support.h"
@@ -160,8 +161,14 @@ bool petsc_tao_solver::is_supported()
 #endif
 }
 
-bool petsc_tao_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
-    SOLVERS_UNUSED const solver_options_petsc&                   options)
+bool petsc_tao_solver::solve(std::vector<double>& parameters, const solver_options_petsc& options)
+{
+    return solve_with_status(parameters, options).converged();
+}
+
+backend_solve_status petsc_tao_solver::solve_with_status(
+    SOLVERS_UNUSED std::vector<double>&        parameters,
+    SOLVERS_UNUSED const solver_options_petsc& options)
 {
 #if SOLVERS_HAS_PETSC
     if (!PetscInitializeCalled)
@@ -249,6 +256,8 @@ bool petsc_tao_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
 
     TaoConvergedReason reason;
     TaoGetConvergedReason(tao, &reason);
+    PetscInt iteration_count = 0;
+    TaoGetIterationNumber(tao, &iteration_count);
 
     {
         const PetscScalar* xa = nullptr;
@@ -275,9 +284,44 @@ bool petsc_tao_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
         MatDestroy(&J);
     }
 
-    return reason > 0;  // positive TaoConvergedReason codes indicate convergence
+    backend_solve_status out;
+    out.native_code = static_cast<int>(reason);
+    out.iterations  = static_cast<std::size_t>(iteration_count);
+    if (reason > 0)  // positive TaoConvergedReason codes indicate convergence
+    {
+        out.outcome = backend_outcome::converged;
+        out.message = "PETSc/TAO converged";
+    }
+    else
+    {
+        switch (reason)
+        {
+        case TAO_DIVERGED_MAXITS:
+        case TAO_DIVERGED_MAXFCN:
+            out.outcome = backend_outcome::budget_exhausted;
+            out.message = "PETSc/TAO reached its iteration or evaluation limit";
+            break;
+        case TAO_DIVERGED_LS_FAILURE:
+        case TAO_DIVERGED_TR_REDUCTION:
+            out.outcome = backend_outcome::stalled;
+            out.message = "PETSc/TAO could not make further progress (line search or trust region)";
+            break;
+        case TAO_DIVERGED_USER:
+            out.outcome = backend_outcome::user_stopped;
+            out.message = "PETSc/TAO stopped at the user's request";
+            break;
+        default:
+            out.outcome = backend_outcome::failed;
+            out.message =
+                "PETSc/TAO failed (TaoConvergedReason " + std::to_string(out.native_code) + ")";
+            break;
+        }
+    }
+    return out;
 #else
-    return false;  // dispatcher gates on is_supported() before ever calling this
+    backend_solve_status out;  // dispatcher gates on is_supported() before ever calling this
+    out.message = "PETSc/TAO backend was not compiled in";
+    return out;
 #endif
 }
 }  // namespace solverslib

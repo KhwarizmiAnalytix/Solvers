@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 
+#include "detail/backend_status.h"
 #include "detail/eigen_support.h"
 #include "detail/support.h"
 
@@ -46,6 +47,11 @@ public:
 
     // Returns true when TAO reports a converged termination reason.
     SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_petsc& options);
+
+    // Same solve, reporting how it ended and the raw TaoConvergedReason in
+    // native_code.
+    SOLVER_API backend_solve_status solve_with_status(
+        std::vector<double>& parameters, const solver_options_petsc& options);
 
 private:
     bool                is_least_squares_;

@@ -10,3 +10,18 @@ unreadVariable:src/solvers/root_finding_algorithms.cpp
 // The Jacobian lambda parameter `dy_dx` is an output parameter that IS
 // assigned inside the loop; cppcheck's inter-lambda analysis misses the write.
 constParameterReference:src/solvers/lbfgs_solver.cpp
+
+// New problem-structure API entry points (dispatch hooks, structured root and
+// polynomial results) are exercised from Testing/, which cppcheck does not scan.
+unusedFunction:src/api/dispatch.cpp
+unusedFunction:src/api/roots.cpp
+unusedFunction:src/api/routing.cpp
+unusedFunction:src/api/evaluators.cpp
+
+// Plain loops in the polynomial/selection helpers read more clearly than
+// std::accumulate/any_of/copy_if with capturing lambdas.
+useStlAlgorithm:src/api/roots.cpp
+
+// `parameters` is the std::vector handed to the Ceres adapter; it is only read
+// inside the SOLVERS_HAS_CERES block, which cppcheck's default configuration skips.
+unreadVariable:src/api/dispatch.cpp

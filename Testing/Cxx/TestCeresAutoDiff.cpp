@@ -6,6 +6,7 @@
 
 #if SOLVERS_HAS_CERES
 
+#include "solvers/api/solve.h"
 #include "solvers/integrations/autodiff_provider.h"
 
 namespace solverslib
@@ -18,24 +19,42 @@ using testing::optimization_test_problem;
 TEST(CeresAutoDiffIntegration, ProblemCreation)
 {
     const auto& tp = testing::make_rosenbrock_problem();
-    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto        problem =
+        least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
     problem.derivatives(auto_diff());
 
     EXPECT_EQ(problem.num_parameters, tp.num_parameters);
     EXPECT_EQ(problem.num_residuals, tp.num_residuals);
-    EXPECT_TRUE(problem.provider_factory);
+    EXPECT_TRUE(problem.derivative_provider()->ceres_factory());
     EXPECT_TRUE(problem.has_jacobian_provider());
+}
+
+// D2: an AD provider with a Ceres factory reaches Ceres through automatic
+// dispatch, even though set_jacobian_provider() also fills jacobian_provider.
+TEST(CeresAutoDiffIntegration, AutomaticDispatchRoutesToCeres)
+{
+    const auto& tp = testing::make_rosenbrock_problem();
+    auto        problem =
+        least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    problem.derivatives(auto_diff());
+
+    const auto result = api::solve(problem, to_vector_type(std::vector<double>{-1.2, 1.0}));
+    EXPECT_EQ(result.backend, api::backend::ceres);
+    EXPECT_TRUE(result.converged()) << result.message;
+    ASSERT_TRUE(result.effective_derivative_source.has_value());
+    EXPECT_EQ(*result.effective_derivative_source, api::derivative_mode::automatic_differentiation);
 }
 
 // Test that the provider metadata is correct
 TEST(CeresAutoDiffIntegration, ProviderMetadata)
 {
     const auto& tp = testing::make_rosenbrock_problem();
-    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto        problem =
+        least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
     problem.derivatives(auto_diff());
 
-    ASSERT_TRUE(problem.provider_factory);
-    const auto& meta = problem.provider_factory->metadata();
+    ASSERT_TRUE(problem.derivative_provider()->ceres_factory());
+    const auto& meta = problem.derivative_provider()->ceres_factory()->metadata();
 
     EXPECT_EQ(meta.num_parameters, tp.num_parameters);
     EXPECT_EQ(meta.num_residuals, tp.num_residuals);
@@ -47,11 +66,12 @@ TEST(CeresAutoDiffIntegration, ProviderMetadata)
 TEST(CeresAutoDiffIntegration, EvaluatorCreation)
 {
     const auto& tp = testing::make_rosenbrock_problem();
-    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto        problem =
+        least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
     problem.derivatives(auto_diff());
 
-    ASSERT_TRUE(problem.provider_factory);
-    auto evaluator = problem.provider_factory->create_evaluator();
+    ASSERT_TRUE(problem.derivative_provider()->ceres_factory());
+    auto evaluator = problem.derivative_provider()->ceres_factory()->create_evaluator();
 
     EXPECT_TRUE(evaluator);
     EXPECT_EQ(evaluator->metadata().num_parameters, tp.num_parameters);
@@ -62,15 +82,16 @@ TEST(CeresAutoDiffIntegration, EvaluatorCreation)
 TEST(CeresAutoDiffIntegration, ResidualEvaluation)
 {
     const double x_vals[] = {1.5, 0.5};
-    const auto& tp = testing::make_rosenbrock_problem();
+    const auto&  tp       = testing::make_rosenbrock_problem();
 
-    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto problem =
+        least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
     problem.derivatives(auto_diff());
 
-    auto evaluator = problem.provider_factory->create_evaluator();
+    auto evaluator = problem.derivative_provider()->ceres_factory()->create_evaluator();
 
-    vector_type x = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
-    vector_type r = make_vector(2);
+    vector_type x          = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
+    vector_type r          = make_vector(2);
     vector_type r_expected = make_vector(2);
 
     // Get expected residuals from the test problem
@@ -88,16 +109,17 @@ TEST(CeresAutoDiffIntegration, ResidualEvaluation)
 TEST(CeresAutoDiffIntegration, JacobianEvaluation)
 {
     const double x_vals[] = {1.5, 0.5};
-    const auto& tp = testing::make_rosenbrock_problem();
+    const auto&  tp       = testing::make_rosenbrock_problem();
 
-    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto problem =
+        least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
     problem.derivatives(auto_diff());
 
-    auto evaluator = problem.provider_factory->create_evaluator();
+    auto evaluator = problem.derivative_provider()->ceres_factory()->create_evaluator();
 
-    vector_type x = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
-    vector_type r = make_vector(2);
-    matrix_type J = make_matrix(2, 2);
+    vector_type x          = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
+    vector_type r          = make_vector(2);
+    matrix_type J          = make_matrix(2, 2);
     matrix_type J_expected = make_matrix(2, 2);
 
     // Get expected Jacobian from the test problem
@@ -124,14 +146,15 @@ TEST(CeresAutoDiffIntegration, JacobianEvaluation)
 TEST(CeresAutoDiffIntegration, StrideMultiplePassesFourParams)
 {
     const auto& tp = testing::make_powell_singular_problem();
-    auto problem = least_squares(testing::PowellSingularResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto        problem =
+        least_squares(testing::PowellSingularResiduals{}, tp.num_parameters, tp.num_residuals);
     problem.derivatives(auto_diff());
 
-    auto evaluator = problem.provider_factory->create_evaluator();
+    auto evaluator = problem.derivative_provider()->ceres_factory()->create_evaluator();
 
-    vector_type x = to_vector_type(std::vector<double>{3.0, -1.0, 0.0, 1.0});
-    vector_type r = make_vector(tp.num_residuals);
-    matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
+    vector_type x          = to_vector_type(std::vector<double>{3.0, -1.0, 0.0, 1.0});
+    vector_type r          = make_vector(tp.num_residuals);
+    matrix_type J          = make_matrix(tp.num_residuals, tp.num_parameters);
     matrix_type J_expected = make_matrix(tp.num_residuals, tp.num_parameters);
 
     // Get expected Jacobian
@@ -158,15 +181,16 @@ TEST(CeresAutoDiffIntegration, StrideMultiplePassesFourParams)
 TEST(CeresAutoDiffIntegration, ResidualOnlyEvaluation)
 {
     const double x_vals[] = {1.5, 0.5};
-    const auto& tp = testing::make_rosenbrock_problem();
+    const auto&  tp       = testing::make_rosenbrock_problem();
 
-    auto problem = least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
+    auto problem =
+        least_squares(testing::RosenbrocResiduals{}, tp.num_parameters, tp.num_residuals);
     problem.derivatives(auto_diff());
 
-    auto evaluator = problem.provider_factory->create_evaluator();
+    auto evaluator = problem.derivative_provider()->ceres_factory()->create_evaluator();
 
-    vector_type x = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
-    vector_type r = make_vector(2);
+    vector_type x          = to_vector_type(std::vector<double>(x_vals, x_vals + 2));
+    vector_type r          = make_vector(2);
     vector_type r_expected = make_vector(2);
 
     tp.residuals(x, r_expected);

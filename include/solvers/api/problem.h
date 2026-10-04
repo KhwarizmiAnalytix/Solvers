@@ -61,51 +61,48 @@ struct constraints
     bool empty() const noexcept { return num_equality == 0 && num_inequality == 0; }
 };
 
+// Legacy public fields are kept for one release so existing callers keep
+// compiling; they are inputs only and are folded into the single derivative
+// provider by derivative_provider() below. New code uses the setters.
+#if defined(__clang__) || defined(__GNUC__)
+#define SOLVERS_LEGACY_FIELD(message) [[deprecated(message)]]
+#else
+#define SOLVERS_LEGACY_FIELD(message)
+#endif
+
 // F(x) = 0.5 * ||r(x)||^2, J(i,j) = d r_i / d x_j, g = J^T r.
+//
+// A problem carries exactly one derivative slot: a JacobianProvider, which
+// advertises its capabilities (source(), ceres_factory(), curve_derivatives()).
+// A plain Jacobian callback, Ceres-native AD and RNC curve derivatives are all
+// providers. In PyTorch a tensor likewise carries one grad_fn and capabilities
+// are discovered from it rather than from parallel fields.
 struct least_squares_problem
 {
     std::size_t num_parameters = 0;
     std::size_t num_residuals  = 0;
 
-    residual_function                residuals;
+    residual_function residuals;
+    api::bounds       bounds;
+
+    // -- Deprecated inputs (folded into the provider slot when read) ---------
+    SOLVERS_LEGACY_FIELD("use set_jacobian(); the field is read only for compatibility")
     std::optional<jacobian_function> jacobian;
-
-    // Derivative provider (preferred path). Set via set_jacobian_provider() or
-    // derivatives(). Accepted by all backends; Ceres uses its native AD path
-    // when the provider wraps an AutoDiffJacobianProvider.
+    SOLVERS_LEGACY_FIELD("use set_jacobian_provider()")
     std::shared_ptr<JacobianProvider> jacobian_provider;
-
-    // Stored model factory for use with the no-arg auto_diff() sentinel.
-    // Populated by the least_squares(model, n, m) convenience factory.
-    // Calling derivatives(auto_diff()) invokes this factory.
-    std::function<std::shared_ptr<JacobianProvider>()> model_provider_factory;
-
-    // Ceres-capable backend factory (set alongside jacobian_provider when
-    // the provider supports native Ceres AD). Used by the Ceres backend to
-    // bypass the generic JacobianProvider interface for better efficiency.
+    SOLVERS_LEGACY_FIELD("derive from derivative_provider()->ceres_factory()")
     std::shared_ptr<const detail::provider_factory> provider_factory;
-
-    // Required by RNC-LM; analytic or Taylor-mode derivatives along a curve.
+    SOLVERS_LEGACY_FIELD("use set_curve_derivatives()")
     rnc_derivative_function rnc_derivatives;
-    derivative_mode         rnc_derivative_source = derivative_mode::supplied;
+    SOLVERS_LEGACY_FIELD("use set_curve_derivatives()")
+    derivative_mode rnc_derivative_source = derivative_mode::supplied;
 
-    api::bounds bounds;
-
-    // -- Setters -------------------------------------------------------------
+    // -- Derivative slot ------------------------------------------------------
 
     // Attach a derivative provider. Replaces any previously set provider.
-    // This is the recommended way to configure derivatives.
     void set_jacobian_provider(const std::shared_ptr<JacobianProvider>& provider)
     {
-        jacobian_provider = provider;
-        if (provider)
-        {
-            provider_factory = provider->ceres_factory();
-        }
-        else
-        {
-            provider_factory = nullptr;
-        }
+        provider_ = provider;
     }
 
     // Fluent alias for set_jacobian_provider.
@@ -115,50 +112,122 @@ struct least_squares_problem
     }
 
     // Overload for the no-arg auto_diff() sentinel.
-    // Requires model_provider_factory to be set (e.g. via least_squares()).
+    // Requires a model factory (set by least_squares(model, n, m)).
     void derivatives(api::auto_diff_tag)
     {
-        if (!model_provider_factory)
+        if (!model_provider_factory_)
         {
             throw std::invalid_argument(
                 "derivatives(auto_diff()) requires a templated model. "
                 "Create the problem with least_squares(model, n, m), "
                 "or call set_jacobian_provider(auto_diff(model, n, m)) explicitly.");
         }
-        set_jacobian_provider(model_provider_factory());
+        set_jacobian_provider(model_provider_factory_());
     }
 
-    // -- Queries -------------------------------------------------------------
-
-    bool has_callable_jacobian() const noexcept
+    // Sugar for analytic_jacobian(residuals, jacobian, n, m). `residuals` must
+    // already be set, because the provider evaluates both together.
+    void set_jacobian(jacobian_function jacobian_callback)
     {
-        return jacobian.has_value() && static_cast<bool>(*jacobian);
+        if (!residuals)
+        {
+            throw std::invalid_argument("set_jacobian() requires the residuals to be set first");
+        }
+        set_jacobian_provider(analytic_jacobian(
+            residuals, std::move(jacobian_callback), num_parameters, num_residuals));
     }
 
-    bool has_jacobian_provider() const noexcept { return jacobian_provider != nullptr; }
+    // Derivatives along a curve for RNC-LM (analytic, or Taylor-mode AD with
+    // `source == automatic_differentiation`). Also serves as an ordinary
+    // Jacobian source for every other backend.
+    void set_curve_derivatives(
+        rnc_derivative_function derivatives, derivative_mode source = derivative_mode::supplied)
+    {
+        set_jacobian_provider(
+            curve_derivatives(std::move(derivatives), source, num_parameters, num_residuals));
+    }
+
+    // Internal: installed by least_squares(model, n, m) for derivatives(auto_diff()).
+    void set_model_provider_factory(std::function<std::shared_ptr<JacobianProvider>()> factory)
+    {
+        model_provider_factory_ = std::move(factory);
+    }
+
+    // The effective provider: the one set through the setters, else one built
+    // from the deprecated fields, else null.
+    std::shared_ptr<JacobianProvider> derivative_provider() const
+    {
+        if (provider_)
+        {
+            return provider_;
+        }
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+        if (jacobian_provider)
+        {
+            return jacobian_provider;
+        }
+        if (rnc_derivatives)
+        {
+            return curve_derivatives(
+                rnc_derivatives, rnc_derivative_source, num_parameters, num_residuals);
+        }
+        if (jacobian.has_value() && static_cast<bool>(*jacobian) && residuals)
+        {
+            return analytic_jacobian(residuals, *jacobian, num_parameters, num_residuals);
+        }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+        return nullptr;
+    }
+
+    // -- Queries ----------------------------------------------------------------
+
+    bool has_jacobian_provider() const { return derivative_provider() != nullptr; }
+
+    // True when the Jacobian comes from user-supplied code (callback or analytic
+    // provider) rather than AD or finite differences.
+    bool has_callable_jacobian() const
+    {
+        const auto provider = derivative_provider();
+        return provider && provider->source() == derivative_mode::supplied;
+    }
+
+private:
+    std::shared_ptr<JacobianProvider>                  provider_;
+    std::function<std::shared_ptr<JacobianProvider>()> model_provider_factory_;
 };
 
-// General objective min f(x).
+// General objective min f(x). One gradient slot, like least_squares_problem.
 struct optimization_problem
 {
     std::size_t num_parameters = 0;
 
     objective_function                     objective;
-    std::optional<gradient_function>       gradient;
     std::optional<hessian_function>        hessian;
     std::optional<hessian_vector_function> hessian_vector;
-
-    // Gradient provider (preferred path). Solvers use this when set.
-    // Overrides the gradient callback if both are present.
-    std::shared_ptr<GradientProvider> gradient_provider;
 
     api::bounds      bounds;
     api::constraints constraints;
 
-    // Attach a gradient provider.
+    // -- Deprecated inputs (folded into the provider slot when read) ---------
+    SOLVERS_LEGACY_FIELD("use set_gradient(); the field is read only for compatibility")
+    std::optional<gradient_function> gradient;
+    SOLVERS_LEGACY_FIELD("use set_gradient_provider()")
+    std::shared_ptr<GradientProvider> gradient_provider;
+
+    // Attach a gradient provider. Replaces any previously set provider.
     void set_gradient_provider(std::shared_ptr<GradientProvider> provider)
     {
-        gradient_provider = std::move(provider);
+        provider_ = std::move(provider);
     }
 
     // Fluent alias for set_gradient_provider.
@@ -166,6 +235,46 @@ struct optimization_problem
     {
         set_gradient_provider(std::move(provider));
     }
+
+    // Sugar for analytic_gradient(gradient, n).
+    void set_gradient(gradient_function gradient_callback)
+    {
+        set_gradient_provider(analytic_gradient(std::move(gradient_callback), num_parameters));
+    }
+
+    // The effective provider: set through the setters, else built from the
+    // deprecated fields, else null.
+    std::shared_ptr<GradientProvider> derivative_provider() const
+    {
+        if (provider_)
+        {
+            return provider_;
+        }
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+        if (gradient_provider)
+        {
+            return gradient_provider;
+        }
+        if (gradient.has_value() && static_cast<bool>(*gradient))
+        {
+            return analytic_gradient(*gradient, num_parameters);
+        }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+        return nullptr;
+    }
+
+private:
+    std::shared_ptr<GradientProvider> provider_;
 };
 
 // Structural summary derived from a problem. Drives backend selection so the

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <type_traits>
 
@@ -46,38 +47,18 @@ public:
     {
     }
 
+    // One Ceres cost function is built lazily and reused; evaluation is
+    // serialized by a mutex, so a provider shared between concurrent solves is
+    // safe but not parallel. For parallel use, give each solve its own evaluator
+    // through ceres_factory()->create_evaluator().
     void compute(const vector_type& x, vector_type& residuals, matrix_type& jacobian) const override
     {
-        auto evaluator = factory_->create_evaluator();
-        auto status    = evaluator->evaluate(x, residuals, &jacobian);
-        if (status == api::detail::evaluation_status::fatal_error)
-        {
-            auto err = evaluator->last_error();
-            throw std::runtime_error(
-                err.value_or("AutoDiffJacobianProvider: fatal error in evaluation"));
-        }
-        if (status == api::detail::evaluation_status::invalid_trial)
-        {
-            throw std::runtime_error(
-                "AutoDiffJacobianProvider: functor returned false (invalid trial point)");
-        }
+        evaluate_locked(x, residuals, &jacobian, "fatal error in evaluation");
     }
 
     void residuals_only(const vector_type& x, vector_type& residuals) const override
     {
-        auto evaluator = factory_->create_evaluator();
-        auto status    = evaluator->evaluate(x, residuals, nullptr);
-        if (status == api::detail::evaluation_status::fatal_error)
-        {
-            auto err = evaluator->last_error();
-            throw std::runtime_error(
-                err.value_or("AutoDiffJacobianProvider: fatal error in residual-only evaluation"));
-        }
-        if (status == api::detail::evaluation_status::invalid_trial)
-        {
-            throw std::runtime_error(
-                "AutoDiffJacobianProvider: functor returned false (invalid trial point)");
-        }
+        evaluate_locked(x, residuals, nullptr, "fatal error in residual-only evaluation");
     }
 
     std::size_t num_parameters() const override { return n_; }
@@ -96,9 +77,32 @@ public:
     }
 
 private:
-    Functor                                                functor_;
-    std::size_t                                            n_, m_;
-    std::shared_ptr<detail::CeresAutoDiffFactory<Functor>> factory_;
+    void evaluate_locked(
+        const vector_type& x, vector_type& residuals, matrix_type* jacobian, const char* what) const
+    {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        if (!evaluator_)
+        {
+            evaluator_ = factory_->create_evaluator();
+        }
+        const auto status = evaluator_->evaluate(x, residuals, jacobian);
+        if (status == api::detail::evaluation_status::fatal_error)
+        {
+            throw std::runtime_error(evaluator_->last_error().value_or(
+                std::string("AutoDiffJacobianProvider: ") + what));
+        }
+        if (status == api::detail::evaluation_status::invalid_trial)
+        {
+            throw std::runtime_error(
+                "AutoDiffJacobianProvider: functor returned false (invalid trial point)");
+        }
+    }
+
+    Functor                                                  functor_;
+    std::size_t                                              n_, m_;
+    std::shared_ptr<detail::CeresAutoDiffFactory<Functor>>   factory_;
+    mutable std::mutex                                       mutex_;
+    mutable std::unique_ptr<api::detail::residual_evaluator> evaluator_;
 };
 
 // Factory function: create an AutoDiffJacobianProvider from a templated functor.
@@ -116,10 +120,9 @@ std::shared_ptr<AutoDiffJacobianProvider<Functor>> auto_diff(
 // Zero-arg sentinel for use with least_squares(model, n, m):
 //   auto problem = least_squares(MyModel{}, n, m);
 //   problem.derivatives(auto_diff());
-inline api::auto_diff_tag auto_diff()
-{
-    return {};
-}
+// The sentinel itself lives in solverslib::api; this re-exports it so both the
+// 3-argument factory above and auto_diff() resolve in solverslib.
+using api::auto_diff;
 
 // Convenience factory: create a least_squares_problem from a templated functor,
 // with the model stored for use with the no-arg auto_diff() sentinel.
@@ -150,8 +153,8 @@ api::least_squares_problem least_squares(const Functor& functor, std::size_t n, 
     // the AutoDiffJacobianProvider later without knowing the Functor type.
     // Allocation failures intentionally propagate to the caller.
     // NOLINTNEXTLINE(bugprone-exception-escape)
-    p.model_provider_factory = [functor, n, m]() -> std::shared_ptr<api::JacobianProvider>
-    { return std::make_shared<AutoDiffJacobianProvider<Functor>>(functor, n, m); };
+    p.set_model_provider_factory([functor, n, m]() -> std::shared_ptr<api::JacobianProvider>
+        { return std::make_shared<AutoDiffJacobianProvider<Functor>>(functor, n, m); });
 
     return p;
 }
@@ -186,10 +189,7 @@ std::shared_ptr<AutoDiffJacobianProvider<Functor>> auto_diff(
     return nullptr;
 }
 
-inline api::auto_diff_tag auto_diff()
-{
-    return {};
-}
+using api::auto_diff;
 
 template <class Functor>
 api::least_squares_problem least_squares(const Functor&, std::size_t, std::size_t)

@@ -77,23 +77,19 @@ template <class Model> rnc_derivative_function make_rnc_derivatives(Model model,
 template <class Model> api::least_squares_problem rnc_least_squares(Model model, size_t n, size_t m)
 {
     api::least_squares_problem problem;
-    problem.num_parameters        = n;
-    problem.num_residuals         = m;
-    problem.rnc_derivatives       = make_rnc_derivatives(model, n, m);
-    problem.rnc_derivative_source = api::derivative_mode::automatic_differentiation;
-    problem.residuals = [model = std::move(model), n, m](const vector_type& x, vector_type& r)
+    problem.num_parameters = n;
+    problem.num_residuals  = m;
+    problem.residuals      = [model = model, n, m](const vector_type& x, vector_type& r)
     {
         if (x.size() != static_cast<index_type>(n))
             throw std::invalid_argument("RNC parameter dimension mismatch");
         r.resize(m);
         detail::evaluate_rnc_model(model, x.data(), r.data());
     };
-    problem.jacobian = [derivatives = problem.rnc_derivatives](const vector_type& x, matrix_type& j)
-    {
-        rnc_curve_derivatives out;
-        derivatives(x, {}, 1, out);
-        j = out.jacobian[0];
-    };
+    // One provider serves RNC-LM (curve derivatives) and, through its order-1
+    // evaluation, every other backend's ordinary Jacobian.
+    problem.set_curve_derivatives(make_rnc_derivatives(std::move(model), n, m),
+        api::derivative_mode::automatic_differentiation);
     return problem;
 }
 }  // namespace solverslib

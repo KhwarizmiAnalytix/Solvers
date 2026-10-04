@@ -105,7 +105,7 @@ Nonsmooth branch boundaries have no well-defined higher derivatives; callbacks
 must be smooth in the region being explored. `sqrt` and noninteger powers
 require their usual differentiable domains.
 
-For an existing residual callback, set `problem.rnc_derivatives` with signature
+For an existing residual callback, call `problem.set_curve_derivatives(function, source)` with a function of signature
 
 ```cpp
 void(const vector_type& base,
@@ -120,7 +120,9 @@ Supply `out.residual[0..order]` and
 coefficient list requests the residual and Jacobian at the current point.
 The residual callback and derivative callback must represent the same function.
 The default source label is `supplied`; the Taylor factory sets
-`automatic_differentiation`. Explicit incompatible derivative modes are rejected.
+`automatic_differentiation`. The curve derivatives live in the problem's single
+derivative slot (a `JacobianProvider` whose `curve_derivatives()` returns them),
+so the same provider also serves as the ordinary Jacobian for other algorithms. Explicit incompatible derivative modes are rejected.
 There is no numerical finite-difference fallback for missing curve derivatives.
 
 ## Options

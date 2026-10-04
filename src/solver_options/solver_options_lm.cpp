@@ -67,6 +67,11 @@ double solver_options_lm::roundoff_noise_factor() const
 {
     return roundoff_noise_factor_;
 }
+levenberg_marquardt_linear_solver_enum solver_options_lm::linear_solver() const
+{
+    return linear_solver_;
+}
+
 double solver_options_lm::finite_difference_step() const
 {
     return finite_difference_step_;
@@ -194,6 +199,12 @@ solver_options_lm_builder& solver_options_lm_builder::with_type(levenberg_marqua
     options_->type_ = val;
     return *this;
 }
+solver_options_lm_builder& solver_options_lm_builder::with_linear_solver(
+    levenberg_marquardt_linear_solver_enum val)
+{
+    options_->linear_solver_ = val;
+    return *this;
+}
 solver_options_lm_builder& solver_options_lm_builder::with_log_file(const std::string& val)
 {
     options_->log_file_ = val;
@@ -224,7 +235,9 @@ std::shared_ptr<const solver_options_lm> solver_options_lm_builder::build() cons
         options_->damping_floor_ >= options_->damping_ceiling_ ||
         options_->nielsen_damping_floor_ >= options_->damping_ceiling_ ||
         options_->damping_floor_ >= options_->levenberg_marquardt_damping_ceiling_ ||
-        static_cast<int>(options_->type_) < 0 || static_cast<int>(options_->type_) > 2)
+        static_cast<int>(options_->type_) < 0 || static_cast<int>(options_->type_) > 2 ||
+        static_cast<int>(options_->linear_solver_) < 0 ||
+        static_cast<int>(options_->linear_solver_) > 1)
     {
         throw std::invalid_argument("Invalid Levenberg-Marquardt options");
     }

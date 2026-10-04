@@ -114,7 +114,7 @@ least_squares_problem make_ls(const testing::optimization_test_problem& tp, bool
     p.num_residuals  = tp.num_residuals;
     p.residuals      = tp.residuals;
     if (with_jacobian)
-        p.jacobian = tp.jacobian;
+        p.set_jacobian(tp.jacobian);
     return p;
 }
 
@@ -128,14 +128,15 @@ optimization_problem make_obj(const testing::optimization_test_problem& tp)
         tp.residuals(x, r);
         return 0.5 * r.squaredNorm();
     };
-    p.gradient = [&tp](const vector_type& x, vector_type& g)
-    {
-        vector_type r = make_vector(tp.num_residuals);
-        matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
-        tp.residuals(x, r);
-        tp.jacobian(x, J);
-        g = J.transpose() * r;
-    };
+    p.set_gradient(
+        [&tp](const vector_type& x, vector_type& g)
+        {
+            vector_type r = make_vector(tp.num_residuals);
+            matrix_type J = make_matrix(tp.num_residuals, tp.num_parameters);
+            tp.residuals(x, r);
+            tp.jacobian(x, J);
+            g = J.transpose() * r;
+        });
     return p;
 }
 

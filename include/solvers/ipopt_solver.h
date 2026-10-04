@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 
+#include "detail/backend_status.h"
 #include "detail/eigen_support.h"
 #include "detail/support.h"
 
@@ -36,6 +37,11 @@ public:
 
     // Returns true when Ipopt reports Solve_Succeeded or an acceptable point.
     SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_ipopt& options);
+
+    // Same solve, reporting how it ended (budget vs. failure vs. infeasible) and
+    // the raw Ipopt::ApplicationReturnStatus in native_code.
+    SOLVER_API backend_solve_status solve_with_status(
+        std::vector<double>& parameters, const solver_options_ipopt& options);
 
 private:
     size_t              num_parameters_;

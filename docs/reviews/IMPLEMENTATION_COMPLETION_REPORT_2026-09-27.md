@@ -1,8 +1,8 @@
 # Derivative-Provider Implementation Completion Report
 
-**Date:** 2026-09-27  
-**Baseline:** commit 443186e  
-**Completion:** commit 66f8d57  
+**Date:** 2026-09-27
+**Baseline:** commit 443186e
+**Completion:** commit 66f8d57
 **Scope:** Derivative-provider design, 11 design defects, 7 milestones
 
 ---
@@ -11,7 +11,7 @@
 
 This work implements the first phase of the derivative-provider design review, focusing on resolving fractured architecture, fixing critical correctness defects, and establishing a unified execution contract. Key achievements:
 
-- ✅ **Milestone 1 (Resolver):** Unified derivative resolution across all backends with truthful source reporting
+- ⚠️ **Milestone 1 (Resolver): PARTIAL.** Ceres and native LM use the resolver; TAO least squares ignores its result, and native L-BFGS, Ipopt and TAO-objective each choose derivatives on their own. See finding D3 in [design-review-phased-plan-2026-10-04.md](design-review-phased-plan-2026-10-04.md); closed by Phase 2 (implemented 2026-10-04).
 - ✅ **Defect Fixes:** Critical issues #5 and #7 (bounds handling, NaN detection)
 - ✅ **Provider Support:** TAO path now uses `jacobian_provider` (defect #4)
 - ✅ **Test Coverage:** All 159 existing tests pass, including derivative provider suite
@@ -26,7 +26,7 @@ Remaining work spans Milestones 2-7, deferred to follow-up phases.
 
 **What changed:** Consolidated derivative policy resolution into a single path used by native, Ceres, and TAO backends.
 
-**Rationale:**  
+**Rationale:**
 - Previous design had fragmented resolution: Ceres used `resolve_derivatives()`, native/TAO ignored it entirely
 - Every provider was mislabeled as `supplied` regardless of its actual `source()`
 - Made it impossible to report and enforce explicit derivative policies consistently
@@ -53,10 +53,10 @@ Remaining work spans Milestones 2-7, deferred to follow-up phases.
 
 **What changed:** Fixed zero-step division at exact bounds by implementing directional stencils.
 
-**Rationale:**  
+**Rationale:**
 At exact bounds, central differences cannot be used safely. The fix:
 - At upper bound: use backward difference `(f(x) - f(x-h))/h`
-- At lower bound: use forward difference `(f(x+h) - f(x))/h`  
+- At lower bound: use forward difference `(f(x+h) - f(x))/h`
 - Interior: use central difference `(f(x+h) - f(x-h))/(2h)`
 - Enforce minimum step size `1e-12` to prevent division by zero
 
@@ -67,7 +67,7 @@ At exact bounds, central differences cannot be used safely. The fix:
 
 **What changed:** `check_jacobian()` and `check_gradient()` now fail immediately on NaN/Inf.
 
-**Rationale:**  
+**Rationale:**
 Previous implementation could not detect NaN because comparisons like `NaN > max` always return false. This allowed NaN outputs to pass checks undetected.
 
 **Fix:**
@@ -222,11 +222,11 @@ To complete the full design delivery:
 
 ## Verification Checklist
 
-- [x] Milestone 1 fully implemented and tested
+- [ ] Milestone 1 partially implemented (see D3 in the 2026-10-04 plan)
 - [x] Defects #1-5 and #7 addressed with evidence
 - [x] All existing tests pass (159/159)
 - [x] No regression in provider API
-- [x] Resolver logic consistent across backends
+- [ ] Resolver logic consistent across backends (not yet: D3)
 - [x] Derivative source accurately reported in results
 - [ ] Milestones 2-7 regression tests added (deferred)
 - [ ] Package/documentation updated (deferred)

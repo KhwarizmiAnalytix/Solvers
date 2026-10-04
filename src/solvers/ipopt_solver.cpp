@@ -1,5 +1,7 @@
 #include "solvers/ipopt_solver.h"
 
+#include <string>
+
 #include <utility>
 
 #include "detail/support.h"
@@ -7,6 +9,7 @@
 
 #if SOLVERS_HAS_IPOPT
 #include <IpIpoptApplication.hpp>
+#include <IpSolveStatistics.hpp>
 #include <IpTNLP.hpp>
 #endif
 
@@ -219,8 +222,58 @@ private:
 }  // namespace
 #endif  // SOLVERS_HAS_IPOPT
 
-bool ipopt_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
-    SOLVERS_UNUSED const solver_options_ipopt&               options)
+bool ipopt_solver::solve(std::vector<double>& parameters, const solver_options_ipopt& options)
+{
+    return solve_with_status(parameters, options).converged();
+}
+
+#if SOLVERS_HAS_IPOPT
+namespace
+{
+backend_solve_status classify(Ipopt::ApplicationReturnStatus status)
+{
+    backend_solve_status out;
+    out.native_code = static_cast<int>(status);
+    switch (status)
+    {
+    case Ipopt::Solve_Succeeded:
+    case Ipopt::Solved_To_Acceptable_Level:
+        out.outcome = backend_outcome::converged;
+        out.message = "Ipopt reached an (acceptable) solution";
+        break;
+    case Ipopt::Maximum_Iterations_Exceeded:
+    case Ipopt::Maximum_CpuTime_Exceeded:
+    case Ipopt::Maximum_WallTime_Exceeded:
+        out.outcome = backend_outcome::budget_exhausted;
+        out.message = "Ipopt stopped at its iteration or time limit";
+        break;
+    case Ipopt::Infeasible_Problem_Detected:
+        out.outcome = backend_outcome::infeasible;
+        out.message = "Ipopt detected an infeasible problem";
+        break;
+    case Ipopt::User_Requested_Stop:
+        out.outcome = backend_outcome::user_stopped;
+        out.message = "Ipopt stopped at the user's request";
+        break;
+    case Ipopt::Search_Direction_Becomes_Too_Small:
+    case Ipopt::Restoration_Failed:
+    case Ipopt::Error_In_Step_Computation:
+        out.outcome = backend_outcome::stalled;
+        out.message = "Ipopt could not make further progress";
+        break;
+    default:
+        out.outcome = backend_outcome::failed;
+        out.message =
+            "Ipopt failed (ApplicationReturnStatus " + std::to_string(out.native_code) + ")";
+        break;
+    }
+    return out;
+}
+}  // namespace
+#endif
+
+backend_solve_status ipopt_solver::solve_with_status(SOLVERS_UNUSED std::vector<double>& parameters,
+    SOLVERS_UNUSED const solver_options_ipopt&                                           options)
 {
 #if SOLVERS_HAS_IPOPT
     const bool use_exact_hessian =
@@ -249,14 +302,26 @@ bool ipopt_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
     }
     app->Options()->SetIntegerValue("print_level", options.verbose() ? 5 : 0);
 
-    if (app->Initialize() != Ipopt::Solve_Succeeded)
+    const Ipopt::ApplicationReturnStatus init = app->Initialize();
+    if (init != Ipopt::Solve_Succeeded)
     {
-        return false;
+        backend_solve_status out;
+        out.outcome     = backend_outcome::failed;
+        out.native_code = static_cast<int>(init);
+        out.message     = "Ipopt initialization failed (check options)";
+        return out;
     }
     const Ipopt::ApplicationReturnStatus status = app->OptimizeTNLP(nlp);
-    return status == Ipopt::Solve_Succeeded || status == Ipopt::Solved_To_Acceptable_Level;
+    backend_solve_status                 out    = classify(status);
+    if (Ipopt::SmartPtr<Ipopt::SolveStatistics> statistics = app->Statistics(); IsValid(statistics))
+    {
+        out.iterations = static_cast<std::size_t>(statistics->IterationCount());
+    }
+    return out;
 #else
-    return false;  // dispatcher gates on is_supported() before ever calling this
+    backend_solve_status out;  // dispatcher gates on is_supported() before ever calling this
+    out.message = "Ipopt backend was not compiled in";
+    return out;
 #endif
 }
 }  // namespace solverslib

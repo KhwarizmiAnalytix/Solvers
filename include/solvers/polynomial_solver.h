@@ -9,6 +9,10 @@
 
 namespace solverslib
 {
+// Single-double convenience forms. They return one root chosen by a fixed rule
+// (and, for the quartic, clamp it to a threshold) and report no failure. To get
+// every real root with a status, then pick one with an explicit policy, use
+// solverslib::api::real_roots and the selection functions in solvers/api/roots.h.
 class polynomial_solver
 {
     SOLVERS_DELETE_CLASS(polynomial_solver);
@@ -18,7 +22,11 @@ public:
     /*
     //tex:
     //fourth degree polynomial solve of the equation: $$x^4 + a_3x^3 + a_2x^2 + a_1x + a_0=0$$
-    // return the minimum positive root.
+    // Returns the LARGEST real root, raised to `threshold` if it is smaller. (This
+    // comment used to say "minimum positive root"; the implementation has always
+    // returned the largest.) Equivalent to
+    // api::at_least(api::largest_root(api::real_roots_quartic(...).roots), threshold)
+    // when a real root exists.
     */
     SOLVER_API static double fourth_degree_polynomial_solver(
         double a3, double a2, double a1, double a0, double threshold = 0.0000);

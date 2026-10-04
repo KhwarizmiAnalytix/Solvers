@@ -1,5 +1,9 @@
 #include "solvers/lbfgs_solver.h"
 
+#include <optional>
+#include <string>
+
+#include "detail/native_evaluation.h"
 #include "solver_options/solver_options_bfgs.h"
 
 namespace solverslib
@@ -10,6 +14,13 @@ template <typename T> inline double l2_norm(T const& h)
 {
     return h.norm();
 }
+
+// Thrown from inside the line-search callback to unwind to solve() when an
+// evaluation fails fatally; never escapes the kernel.
+struct evaluation_failure
+{
+    std::string message;
+};
 
 }  // namespace
 
@@ -320,9 +331,38 @@ lbfgs_solver::lbfgs_solver(
     : num_parameters_(num_parameters), num_residuals_(0), objective_(std::move(objective)),
       gradient_(std::move(gradient)), scalar_mode_(true) {};
 
+lbfgs_solver::lbfgs_solver(api::detail::residual_evaluator& evaluator)
+    : num_parameters_(evaluator.metadata().num_parameters),
+      num_residuals_(evaluator.metadata().num_residuals), evaluator_(&evaluator)
+{
+}
+
+lbfgs_solver::lbfgs_solver(api::detail::gradient_evaluator& evaluator)
+    : num_parameters_(evaluator.num_parameters()), num_residuals_(0), scalar_mode_(true),
+      gradient_evaluator_(&evaluator)
+{
+}
+
 native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
 {
+    try
+    {
+        return run(parameters, options);
+    }
+    catch (const evaluation_failure& failure)
+    {
+        native_result result;
+        result.status        = native_convergence::numerical_failure;
+        result.residual_norm = std::numeric_limits<double>::quiet_NaN();
+        result.message       = failure.message;
+        return result;
+    }
+}
+
+native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bfgs& options) const
+{
     SOLVERS_CHECK(num_parameters_ == parameters.size());
+    using api::detail::evaluation_status;
 
     // Scalar-objective mode: the caller supplied f(x) and ∇f(x) directly,
     // so the L-BFGS loop operates on the true objective without a residual
@@ -334,62 +374,59 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
     vector_type y_p;
     matrix_type J;
 
+    // Wrappers built from raw callbacks live for this call only.
+    std::unique_ptr<api::detail::gradient_evaluator> owned_gradient;
+    native_evaluator_binding                         binding;
+
     if (scalar_mode_)
     {
-        lbfg_function = [this](vector_type const& x, vector_type& grad)
+        api::detail::gradient_evaluator* evaluator = gradient_evaluator_;
+        if (evaluator == nullptr)
         {
-            double fx = objective_(x);
-            gradient_(x, grad);
+            owned_gradient = std::make_unique<api::detail::callback_gradient_evaluator>(
+                num_parameters_, objective_, gradient_, api::derivative_mode::supplied);
+            evaluator = owned_gradient.get();
+        }
+        lbfg_function = [evaluator](vector_type const& x, vector_type& grad)
+        {
+            double     fx     = 0.0;
+            const auto status = evaluator->evaluate(x, fx, &grad);
+            if (status == evaluation_status::fatal_error)
+            {
+                throw evaluation_failure{"objective/gradient evaluation: " +
+                                         evaluator->last_error().value_or("evaluation failed")};
+            }
+            // invalid_trial passes the (non-finite) value on so the line search
+            // shortens its step, as it always has.
             return fx;
         };
     }
     else
     {
-        auto jacobian = jacobian_;
-        if (jacobian == nullptr)
-        {
-            auto bump = options.bump();
-
-            jacobian = [this, bump](vector_type const& x, matrix_type& dy_dx)
-            {
-                auto number_of_targets    = num_residuals_;
-                auto number_of_parameters = num_parameters_;
-
-                vector_type y_plus(number_of_targets);
-                vector_type y_minus(number_of_targets);
-
-                vector_type x_tmp(number_of_parameters);
-                x_tmp = x;
-
-                for (size_t i = 0; i < number_of_parameters; ++i)
-                {
-                    x_tmp[i] += bump;
-
-                    function_(x_tmp, y_plus);
-
-                    x_tmp[i] -= 2 * bump;
-                    function_(x_tmp, y_minus);
-
-                    for (size_t j = 0; j < y_plus.size(); ++j)
-                    {
-                        dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
-                    }
-
-                    x_tmp[i] = x[i];
-                }
-            };
-        }
+        binding = bind_native_evaluator(
+            evaluator_, num_parameters_, num_residuals_, function_, jacobian_, options.bump());
+        api::detail::residual_evaluator* evaluator = binding.evaluator;
 
         y_p.resize(num_residuals_);
         J.resize(num_residuals_, num_parameters_);
 
-        lbfg_function = [this, &y_p, &J, &jacobian](vector_type const& x, vector_type& grad)
+        lbfg_function = [evaluator, &y_p, &J](vector_type const& x, vector_type& grad)
         {
-            function_(x, y_p);
+            auto status = evaluator->evaluate(x, y_p);
+            if (status == evaluation_status::fatal_error)
+            {
+                throw evaluation_failure{
+                    evaluation_failure_message(*evaluator, status, "residual evaluation")};
+            }
             double fx = l2_norm(y_p);
             fx *= fx;
 
-            jacobian(x, J);
+            status = evaluator->jacobian(x, y_p, J);
+            if (status == evaluation_status::fatal_error)
+            {
+                throw evaluation_failure{
+                    evaluation_failure_message(*evaluator, status, "Jacobian evaluation")};
+            }
             grad = 2. * (J.transpose() * y_p);
 
             return fx;
@@ -406,7 +443,7 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
     // A scalar objective may be shifted by an arbitrary constant.  Its
     // absolute value is therefore not a valid convergence test; use step and
     // gradient criteria below.  Residual mode retains the historical norm test.
-    auto x2_converged         = !scalar_mode_ && x2_p < options.function_tolerance();
+    auto x2_converged         = !scalar_mode_ && 0.5 * x2_p < options.function_tolerance();
     bool gradient_converged   = false;
     bool parameters_converged = false;
 
@@ -422,31 +459,52 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
     matrix_type r(options.tau(), dim);
     vector_type alpha(options.tau());
 
-    size_type iter     = 0;
-    size_type iter_tau = 0;
+    size_type             iter           = 0;
+    size_type             iter_tau       = 0;
+    std::size_t           accepted_steps = 0;
+    bool                  stalled        = false;
+    std::string           stall_message;
+    std::optional<double> last_step_norm;
 
     for (; !x2_converged && iter < options.max_num_iterations(); ++iter)
     {
         const scalar_type previous_fx = fx;
         scalar_type       step        = 0.5;
 
-        switch (options.type())
+        try
         {
-        case lbfgs_line_search_type::NOCEDAL_WRIGHT:
-            line_search<lbfgs_line_search_type::NOCEDAL_WRIGHT>::search(
-                lbfg_function, fx, p_new, grad, step, direction, parameters, options);
-            break;
-        case lbfgs_line_search_type::BACKTRACKING:
-            line_search<lbfgs_line_search_type::BACKTRACKING>::search(
-                lbfg_function, fx, p_new, grad, step, direction, parameters, options);
-            break;
-        case lbfgs_line_search_type::BRACKETING:
-            line_search<lbfgs_line_search_type::BRACKETING>::search(
-                lbfg_function, fx, p_new, grad, step, direction, parameters, options);
+            switch (options.type())
+            {
+            case lbfgs_line_search_type::NOCEDAL_WRIGHT:
+                line_search<lbfgs_line_search_type::NOCEDAL_WRIGHT>::search(
+                    lbfg_function, fx, p_new, grad, step, direction, parameters, options);
+                break;
+            case lbfgs_line_search_type::BACKTRACKING:
+                line_search<lbfgs_line_search_type::BACKTRACKING>::search(
+                    lbfg_function, fx, p_new, grad, step, direction, parameters, options);
+                break;
+            case lbfgs_line_search_type::BRACKETING:
+                line_search<lbfgs_line_search_type::BRACKETING>::search(
+                    lbfg_function, fx, p_new, grad, step, direction, parameters, options);
+                break;
+            }
+        }
+        catch (const evaluation_failure&)
+        {
+            throw;  // reported by solve() as a numerical failure
+        }
+        catch (const std::exception& e)
+        {
+            // The line search gave up (no step satisfies its conditions); the
+            // last accepted iterate is still valid.
+            stalled       = true;
+            stall_message = e.what();
             break;
         }
+        ++accepted_steps;
+        last_step_norm = l2_norm(p_new - parameters);
 
-        if (!scalar_mode_ && std::fabs(fx) < options.function_tolerance())
+        if (!scalar_mode_ && 0.5 * std::fabs(fx) < options.function_tolerance())
         {
             parameters   = p_new;
             x2_converged = true;
@@ -520,10 +578,25 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
         }
     }
 
+    if (stalled)
+    {
+        // The failed search left trial values in fx/grad/y_p; restore them to
+        // the last accepted point.
+        fx = lbfg_function(parameters, grad);
+    }
+
     native_result result;
-    result.iterations    = iter;
-    result.residual_norm = scalar_mode_ ? std::sqrt(std::fabs(fx)) : l2_norm(y_p);
-    if (x2_converged)
+    result.iterations     = iter;
+    result.residual_norm  = scalar_mode_ ? std::sqrt(std::fabs(fx)) : l2_norm(y_p);
+    result.accepted_steps = accepted_steps;
+    result.step_norm      = last_step_norm;
+    result.gradient_norm  = l2_norm(grad);
+    if (stalled)
+    {
+        result.status  = native_convergence::stalled;
+        result.message = "line search failed: " + stall_message;
+    }
+    else if (x2_converged)
     {
         result.status = native_convergence::function_converged;
     }

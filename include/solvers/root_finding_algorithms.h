@@ -19,6 +19,13 @@ namespace solverslib
  * require x1/x2 to bracket a sign change and are guaranteed to converge.
  * Open methods (newton_raphson, secant) only need one or two starting
  * points and converge faster when they converge, but are not guaranteed to.
+ *
+ * These bool/out-parameter forms are convenience wrappers: they return false
+ * without touching `root` when the method does not converge, and throw on an
+ * unusable bracket or a vanishing derivative. For iteration and evaluation
+ * counts, the residual, the best estimate when the budget runs out, and
+ * failures reported as a status instead of an exception, use
+ * solverslib::api::find_root (solvers/api/roots.h).
  */
 class root_finding_algorithms
 {

@@ -12,6 +12,10 @@
 
 namespace solverslib
 {
+namespace api::detail
+{
+class residual_evaluator;
+}
 class solver_options_gn;
 
 /**
@@ -42,11 +46,17 @@ class gauss_newton_solver
     size_t        num_parameters_;
     size_t        num_residuals_;
 
+    // Non-owning; when set, takes precedence over function_/jacobian_.
+    api::detail::residual_evaluator* evaluator_ = nullptr;
+
 public:
     SOLVER_API gauss_newton_solver(size_t num_parameters,
         size_t                            num_residuals,
         function_type                     function,
         jacobian_type                     jacobian = nullptr);
+
+    // Evaluator-driven form; the evaluator must outlive the solver.
+    SOLVER_API explicit gauss_newton_solver(api::detail::residual_evaluator& evaluator);
 
     SOLVER_API native_result solve(vector_type& parameters, const solver_options_gn& options) const;
 };

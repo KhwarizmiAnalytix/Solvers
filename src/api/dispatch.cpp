@@ -3,8 +3,10 @@
 #include <cmath>
 #include <exception>
 #include <string>
+#include <variant>
 #include <vector>
 
+#include "detail/backend_status.h"
 #include "detail/native_result.h"
 #include "solver_options/solver_options_bfgs.h"
 #include "solver_options/solver_options_ceres.h"
@@ -12,6 +14,8 @@
 #include "solver_options/solver_options_ipopt.h"
 #include "solver_options/solver_options_lm.h"
 #include "solver_options/solver_options_petsc.h"
+#include "solvers/api/detail/evaluators.h"
+#include "solvers/api/detail/routing.h"
 #include "solvers/ceres_solver.h"
 
 #if SOLVERS_HAS_CERES
@@ -34,38 +38,6 @@ namespace solverslib::api
 {
 namespace
 {
-// Map a resolved algorithm to the backend that realizes it, when the caller
-// left the backend on automatic.
-backend backend_for(algorithm value, const problem_traits& traits)
-{
-    switch (value)
-    {
-    case algorithm::levenberg_marquardt:
-    case algorithm::gauss_newton:
-    case algorithm::bfgs:
-    case algorithm::lbfgs:
-        // Route to Ceres only when the provider is Ceres-native AD and no
-        // other Jacobian (callable or generic provider) is available.
-        if (traits.has_autodiff_provider && !traits.has_callable_jacobian &&
-            !traits.has_jacobian_provider)
-        {
-            return backend::ceres;
-        }
-        return backend::native;
-    case algorithm::riemann_normal_coordinate_lm:
-        return backend::native;
-    case algorithm::pounders:
-        return backend::pounders;
-    case algorithm::interior_point:
-        return backend::ipopt;
-    case algorithm::newton_krylov:
-        return backend::petsc_tao;
-    case algorithm::automatic:
-        return backend::automatic;
-    }
-    return backend::automatic;
-}
-
 solver_status translate_native(native_convergence status)
 {
     switch (status)
@@ -76,6 +48,67 @@ solver_status translate_native(native_convergence status)
         return solver_status::converged;
     case native_convergence::not_converged:
         return solver_status::max_iterations;
+    case native_convergence::numerical_failure:
+        return solver_status::numerical_failure;
+    case native_convergence::stalled:
+        return solver_status::stalled;
+    }
+    return solver_status::numerical_failure;
+}
+
+levenberg_marquardt_solver_enum map_lm_variant(lm_variant value)
+{
+    switch (value)
+    {
+    case lm_variant::levenberg_marquardt:
+        return levenberg_marquardt_solver_enum::LEVENBERG_MARQUARDT;
+    case lm_variant::quadratic_interpolation:
+        return levenberg_marquardt_solver_enum::QUADRATIC_INTERPOLATION;
+    case lm_variant::nielsen:
+        return levenberg_marquardt_solver_enum::NIELSEN;
+    }
+    return levenberg_marquardt_solver_enum::NIELSEN;
+}
+
+void apply_lm_options(const lm_options& lm, solver_options_lm_builder& builder)
+{
+    builder.with_type(map_lm_variant(lm.variant))
+        .with_linear_solver(lm.linear_solver == lm_linear_solver::augmented_qr
+                                ? levenberg_marquardt_linear_solver_enum::AUGMENTED_QR
+                                : levenberg_marquardt_linear_solver_enum::NORMAL_LDLT)
+        .with_bold_acceptance(lm.bold_acceptance)
+        .with_bold_acceptance_exponent(lm.bold_acceptance_exponent)
+        .with_geodesic_acceleration(lm.geodesic_acceleration)
+        .with_geodesic_acceleration_threshold(lm.geodesic_acceleration_threshold)
+        .with_geodesic_acceleration_step(lm.geodesic_acceleration_step)
+        .with_initial_damping(lm.initial_damping)
+        .with_initial_rejection_multiplier(lm.initial_rejection_multiplier)
+        .with_damping_decrease_factor(lm.damping_decrease_factor)
+        .with_damping_increase_factor(lm.damping_increase_factor)
+        .with_damping_floor(lm.damping_floor)
+        .with_nielsen_damping_floor(lm.nielsen_damping_floor)
+        .with_damping_ceiling(lm.damping_ceiling)
+        .with_levenberg_marquardt_damping_ceiling(lm.levenberg_marquardt_damping_ceiling)
+        .with_diagonal_scaling_floor(lm.diagonal_scaling_floor)
+        .with_roundoff_noise_factor(lm.roundoff_noise_factor);
+}
+
+solver_status translate_outcome(backend_outcome outcome)
+{
+    switch (outcome)
+    {
+    case backend_outcome::converged:
+        return solver_status::converged;
+    case backend_outcome::budget_exhausted:
+        return solver_status::max_iterations;
+    case backend_outcome::stalled:
+        return solver_status::stalled;
+    case backend_outcome::infeasible:
+        return solver_status::infeasible;
+    case backend_outcome::user_stopped:
+        return solver_status::user_stopped;
+    case backend_outcome::failed:
+        return solver_status::numerical_failure;
     }
     return solver_status::numerical_failure;
 }
@@ -92,7 +125,8 @@ solver_result failed(solver_status status, const std::string& message, const vec
 solver_result from_native(const native_result& out,
     const vector_type&                         x,
     api::algorithm                             alg,
-    api::derivative_mode                       deriv_mode = api::derivative_mode::automatic)
+    api::derivative_mode                       deriv_mode,
+    const detail::evaluation_counters&         counters)
 {
     solver_result result;
     result.status                      = translate_native(out.status);
@@ -104,22 +138,42 @@ solver_result from_native(const native_result& out,
     result.algorithm                   = alg;
     result.backend_status              = static_cast<int>(out.status);
     result.effective_derivative_source = deriv_mode;
-    result.message = (result.status == solver_status::converged) ? "native converged"
-                                                                 : "native reached iteration limit";
+    result.residual_evaluations        = counters.residual_evaluations;
+    result.jacobian_evaluations        = counters.jacobian_evaluations;
+    result.gradient_norm               = out.gradient_norm;
+    result.step_norm                   = out.step_norm;
+    result.accepted_steps              = out.accepted_steps;
+    result.rejected_steps              = out.rejected_steps;
+    switch (result.status)
+    {
+    case solver_status::converged:
+        result.message = "native converged";
+        break;
+    case solver_status::numerical_failure:
+        result.message = out.message.empty() ? "native solver failed" : out.message;
+        break;
+    case solver_status::stalled:
+        result.message = "native solver stalled: " + out.message;
+        break;
+    default:
+        result.message = "native reached iteration limit";
+        break;
+    }
     return result;
 }
 }  // namespace
 
 problem_traits inspect(const least_squares_problem& problem)
 {
+    const auto provider = problem.derivative_provider();
+
     problem_traits traits;
     traits.is_least_squares      = true;
-    traits.has_callable_jacobian = problem.has_callable_jacobian();
-    traits.has_jacobian_provider = !!problem.jacobian_provider;
-    traits.has_autodiff_provider = !!problem.provider_factory;
+    traits.has_callable_jacobian = provider && provider->source() == derivative_mode::supplied;
+    traits.has_jacobian_provider = !!provider;
+    traits.has_autodiff_provider = provider && provider->ceres_factory() != nullptr;
     // has_jacobian is true when any derivative source is available
-    traits.has_jacobian = traits.has_callable_jacobian || traits.has_jacobian_provider ||
-                          problem.jacobian.has_value();
+    traits.has_jacobian   = !!provider;
     traits.has_bounds     = !problem.bounds.empty();
     traits.num_parameters = problem.num_parameters;
     traits.num_residuals  = problem.num_residuals;
@@ -128,157 +182,18 @@ problem_traits inspect(const least_squares_problem& problem)
 
 problem_traits inspect(const optimization_problem& problem)
 {
+    const auto provider = problem.derivative_provider();
+
     problem_traits traits;
     traits.is_least_squares           = false;
-    traits.has_gradient_provider      = !!problem.gradient_provider;
-    traits.has_gradient               = problem.gradient.has_value() || !!problem.gradient_provider;
+    traits.has_gradient_provider      = !!provider;
+    traits.has_gradient               = !!provider;
     traits.has_hessian                = problem.hessian.has_value();
     traits.has_hessian_vector_product = problem.hessian_vector.has_value();
     traits.has_bounds                 = !problem.bounds.empty();
     traits.has_nonlinear_constraints  = !problem.constraints.empty();
     traits.num_parameters             = problem.num_parameters;
     return traits;
-}
-
-// Return a structured error before any user callback is evaluated when a
-// request asks an executor to silently drop a capability it cannot enforce.
-std::optional<solver_result> validate_request(const problem_traits& traits,
-    const solve_options&                                            options,
-    backend                                                         chosen,
-    algorithm                                                       selected,
-    const vector_type&                                              x)
-{
-    if (selected == algorithm::riemann_normal_coordinate_lm &&
-        (!traits.is_least_squares || chosen != backend::native))
-    {
-        return failed(solver_status::unsupported_capability,
-            "RNC-LM requires native residual least squares",
-            x);
-    }
-
-    if (options.max_iterations <= 0 || options.max_function_evaluations < 0 ||
-        options.function_tolerance < 0.0 || options.gradient_tolerance < 0.0 ||
-        options.parameter_tolerance < 0.0)
-    {
-        return failed(solver_status::invalid_problem,
-            "iteration/evaluation budgets and tolerances must be non-negative; max_iterations must "
-            "be positive",
-            x);
-    }
-    if (options.max_function_evaluations > 0)
-    {
-        return failed(solver_status::unsupported_capability,
-            "max_function_evaluations is not yet enforceable across all native and external "
-            "adapters",
-            x);
-    }
-    if (!x.allFinite())
-    {
-        return failed(
-            solver_status::invalid_problem, "initial_guess must contain only finite values", x);
-    }
-    if (traits.has_bounds && chosen == backend::native)
-    {
-        return failed(solver_status::unsupported_capability,
-            "native backend does not enforce bounds; use a bound-capable backend",
-            x);
-    }
-    if (traits.has_nonlinear_constraints && chosen != backend::ipopt)
-    {
-        return failed(solver_status::unsupported_capability,
-            "the selected backend cannot enforce nonlinear constraints",
-            x);
-    }
-    if (traits.is_least_squares && traits.has_nonlinear_constraints)
-    {
-        return failed(solver_status::unsupported_capability,
-            "nonlinear constraints are only modeled for general objective problems",
-            x);
-    }
-    if (traits.has_hessian_vector_product && chosen != backend::petsc_tao)
-    {
-        return failed(solver_status::unsupported_capability,
-            "the Hessian-vector product requires the PETSc/TAO matrix-free backend",
-            x);
-    }
-    if (traits.is_least_squares)
-    {
-        if (options.algorithm != algorithm::automatic && chosen == backend::native &&
-            selected != algorithm::levenberg_marquardt && selected != algorithm::gauss_newton &&
-            selected != algorithm::lbfgs && selected != algorithm::riemann_normal_coordinate_lm)
-        {
-            return failed(solver_status::unsupported_capability,
-                "the selected algorithm is not implemented by the native least-squares backend",
-                x);
-        }
-        if (options.algorithm != algorithm::automatic && chosen == backend::ceres &&
-            selected != algorithm::levenberg_marquardt)
-        {
-            return failed(solver_status::unsupported_capability,
-                "the Ceres adapter currently exposes only Levenberg-Marquardt",
-                x);
-        }
-        if (options.algorithm != algorithm::automatic &&
-            ((chosen == backend::ipopt) ||
-                (chosen == backend::pounders && selected != algorithm::pounders) ||
-                (chosen == backend::petsc_tao && selected != algorithm::newton_krylov &&
-                    selected != algorithm::pounders)))
-        {
-            return failed(solver_status::unsupported_capability,
-                "the selected algorithm is incompatible with the requested backend",
-                x);
-        }
-        if ((selected == algorithm::bfgs || selected == algorithm::interior_point) &&
-            chosen == backend::native)
-        {
-            return failed(solver_status::unsupported_capability,
-                "the requested algorithm is not implemented for native least squares",
-                x);
-        }
-        if (selected == algorithm::newton_krylov && chosen != backend::petsc_tao)
-        {
-            return failed(
-                solver_status::unsupported_capability, "Newton-Krylov requires PETSc/TAO", x);
-        }
-    }
-    else
-    {
-        if (options.algorithm != algorithm::automatic && chosen == backend::native &&
-            selected != algorithm::lbfgs)
-        {
-            return failed(solver_status::unsupported_capability,
-                "the native objective backend currently implements L-BFGS only",
-                x);
-        }
-        if (options.algorithm != algorithm::automatic && chosen == backend::ipopt &&
-            selected != algorithm::interior_point)
-        {
-            return failed(solver_status::unsupported_capability,
-                "Ipopt requires the interior-point algorithm",
-                x);
-        }
-        if (options.algorithm != algorithm::automatic && chosen == backend::petsc_tao &&
-            selected != algorithm::newton_krylov)
-        {
-            return failed(solver_status::unsupported_capability,
-                "PETSc/TAO objective execution requires Newton-Krylov",
-                x);
-        }
-        if ((selected == algorithm::levenberg_marquardt || selected == algorithm::gauss_newton ||
-                selected == algorithm::pounders) &&
-            chosen == backend::native)
-        {
-            return failed(solver_status::unsupported_capability,
-                "the requested least-squares algorithm cannot solve a scalar objective",
-                x);
-        }
-        if (selected == algorithm::newton_krylov && chosen != backend::petsc_tao)
-        {
-            return failed(
-                solver_status::unsupported_capability, "Newton-Krylov requires PETSc/TAO", x);
-        }
-    }
-    return std::nullopt;
 }
 
 bool is_large_scale(const problem_traits& traits, const dispatch_policy& policy)
@@ -293,150 +208,18 @@ bool is_large_scale(const problem_traits& traits, const dispatch_policy& policy)
 
 algorithm select_algorithm(const problem_traits& traits, const solve_options& options)
 {
-    if (options.algorithm != algorithm::automatic)
-    {
-        return options.algorithm;
-    }
-
-    // When the caller pins an executor but leaves the mathematical method
-    // automatic, choose that executor's supported default instead of deriving
-    // an algorithm that the executor cannot run.
-    if (options.backend != backend::automatic)
-    {
-        switch (options.backend)
-        {
-        case backend::native:
-            return traits.is_least_squares ? algorithm::levenberg_marquardt : algorithm::lbfgs;
-        case backend::ceres:
-            return algorithm::levenberg_marquardt;
-        case backend::ipopt:
-            return algorithm::interior_point;
-        case backend::pounders:
-            return algorithm::pounders;
-        case backend::petsc_tao:
-            return algorithm::newton_krylov;
-        case backend::automatic:
-            break;
-        }
-    }
-
-    if (traits.is_least_squares)
-    {
-        if (!traits.has_jacobian)
-        {
-            return algorithm::pounders;  // derivative-free least squares
-        }
-        if (is_large_scale(traits, options.policy))
-        {
-            return algorithm::newton_krylov;  // matrix-free / large scale -> TAO
-        }
-        return algorithm::levenberg_marquardt;
-    }
-
-    // General objective.
-    if (traits.has_nonlinear_constraints)
-    {
-        return algorithm::interior_point;  // IPOPT
-    }
-    if (is_large_scale(traits, options.policy))
-    {
-        return algorithm::newton_krylov;  // large scale -> TAO
-    }
-    return algorithm::lbfgs;
+    const auto decision = detail::select_route(traits, options);
+    return decision.chosen != nullptr ? decision.chosen->algorithm : options.algorithm;
 }
 
 backend select_backend(const problem_traits& traits, const solve_options& options)
 {
-    if (options.backend != backend::automatic)
-    {
-        return options.backend;
-    }
-    return backend_for(select_algorithm(traits, options), traits);
+    const auto decision = detail::select_route(traits, options);
+    return decision.chosen != nullptr ? decision.chosen->backend : options.backend;
 }
 
 namespace
 {
-// Result of derivative policy resolution
-struct derivative_resolution
-{
-    derivative_mode resolved;
-    solver_result*  error;  // nullptr if OK; otherwise result explaining incompatibility
-};
-
-// Resolve derivative policy to a concrete implementation.
-// Uses provider source() instead of conflating all providers as "supplied".
-// Applied to all backends for consistency.
-derivative_resolution resolve_derivatives(
-    const least_squares_problem& problem, const solve_options& options, const vector_type& x)
-{
-    auto policy = options.derivatives;
-
-    // Rule 1: explicit request takes precedence, with strict validation
-    if (policy != derivative_mode::automatic)
-    {
-        if (policy == derivative_mode::supplied)
-        {
-            // Accept either an explicit jacobian callback or a generic provider
-            // Crucially: a provider is only "supplied" if its source() says so
-            const bool has_supplied_source =
-                problem.has_callable_jacobian() ||
-                (problem.jacobian_provider &&
-                    problem.jacobian_provider->source() == derivative_mode::supplied);
-
-            if (!has_supplied_source)
-            {
-                auto err = new solver_result();
-                *err     = failed(solver_status::invalid_problem,
-                    "supplied Jacobian required but not provided",
-                    x);
-                return {policy, err};
-            }
-        }
-        else if (policy == derivative_mode::automatic_differentiation)
-        {
-            // Require an executable AD provider
-            if (!problem.provider_factory &&
-                (!problem.jacobian_provider || problem.jacobian_provider->source() !=
-                                                   derivative_mode::automatic_differentiation))
-            {
-                auto err = new solver_result();
-                *err     = failed(solver_status::unsupported_capability,
-                    "automatic differentiation required but no compatible AD provider available",
-                    x);
-                return {policy, err};
-            }
-        }
-        else if (policy == derivative_mode::finite_difference)
-        {
-            // Explicit finite differences: use them even if other sources exist
-            // Validation happens at solver boundary (e.g., reject if no residuals callable)
-        }
-        return {policy, nullptr};
-    }
-
-    // Rule 2: automatic cascade with truthful source reporting
-    // Supplied (explicit Jacobian) > Provider with its actual source > Fallback
-    if (problem.has_callable_jacobian())
-    {
-        return {derivative_mode::supplied, nullptr};
-    }
-
-    if (problem.jacobian_provider)
-    {
-        // Use the provider's actual reported source, not "supplied"
-        return {problem.jacobian_provider->source(), nullptr};
-    }
-
-    if (problem.provider_factory)
-    {
-        // Ceres-native AD factory present; will use Ceres if that backend is selected
-        return {derivative_mode::automatic_differentiation, nullptr};
-    }
-
-    // Otherwise fall through to backend's default (Ceres numeric, native finite-diff, etc.)
-    return {derivative_mode::automatic, nullptr};
-}
-
 // Shared native least-squares execution once validation has passed.
 solver_result run_native_least_squares(const least_squares_problem& problem,
     const vector_type&                                              initial_guess,
@@ -448,90 +231,79 @@ solver_result run_native_least_squares(const least_squares_problem& problem,
         return solve_rnc_lm(problem, initial_guess, options);
     }
 
+    auto resolution = detail::resolve_derivatives(problem, options, initial_guess);
+    if (auto* error = std::get_if<solver_result>(&resolution))
+    {
+        error->backend   = backend::native;
+        error->algorithm = alg;
+        return std::move(*error);
+    }
+    auto& resolved = std::get<detail::resolved_derivatives>(resolution);
+
     vector_type x = initial_guess;
-
-    // Resolve derivative policy for native backend
-    auto res = resolve_derivatives(problem, options, initial_guess);
-    if (res.error)
+    try
     {
-        solver_result error_result = *res.error;
-        delete res.error;
-        return error_result;
-    }
-    auto resolved_derivatives = res.resolved;
-
-    // Build the Jacobian callback for native kernels.
-    // Use the resolved derivative source to guide construction.
-    jacobian_function jac;
-
-    if (resolved_derivatives != derivative_mode::finite_difference && problem.jacobian_provider &&
-        !(resolved_derivatives == derivative_mode::supplied && problem.has_callable_jacobian()))
-    {
-        // Wrap the provider so native solvers see a standard jacobian_function.
-        auto provider_ptr = problem.jacobian_provider;
-        jac               = [provider_ptr](const vector_type& x_, matrix_type& J_)
+        auto& evaluator = *resolved.evaluator;
+        switch (alg)
         {
-            vector_type r_tmp = make_vector(provider_ptr->num_residuals());
-            provider_ptr->compute(x_, r_tmp, J_);
-        };
-    }
-    else if (resolved_derivatives == derivative_mode::supplied && problem.has_callable_jacobian())
-    {
-        jac = problem.jacobian.value_or(jacobian_function{});
-    }
-    else
-    {
-        // Explicit callback, or null so the native solver uses finite differences.
-        // A null Jacobian deliberately selects the native kernel's finite
-        // difference implementation, including when finite_difference was
-        // explicitly requested.
-        jac = jacobian_function{};
-    }
-
-    switch (alg)
-    {
-    case algorithm::gauss_newton:
-    {
-        auto native_opts = solver_options_gn_builder()
+        case algorithm::gauss_newton:
+        {
+            auto native_opts = solver_options_gn_builder()
+                                   .with_max_iterations(options.max_iterations)
+                                   .with_function_tolerance(options.function_tolerance)
+                                   .with_gradient_tolerance(options.gradient_tolerance)
+                                   .with_parameter_tolerance(options.parameter_tolerance)
+                                   .with_verbose(options.verbose)
+                                   .build();
+            gauss_newton_solver solver(evaluator);
+            const auto          out = solver.solve(x, *native_opts);
+            return from_native(out, x, alg, resolved.source, evaluator.counters());
+        }
+        case algorithm::lbfgs:
+        {
+            auto native_opts = solver_options_bfgs_builder()
+                                   .with_max_iterations(options.max_iterations)
+                                   .with_function_tolerance(options.function_tolerance)
+                                   .with_gradient_tolerance(options.gradient_tolerance)
+                                   .with_parameter_tolerance(options.parameter_tolerance)
+                                   .with_verbose(options.verbose)
+                                   .build();
+            lbfgs_solver solver(evaluator);
+            const auto   out = solver.solve(x, *native_opts);
+            return from_native(out, x, algorithm::lbfgs, resolved.source, evaluator.counters());
+        }
+        case algorithm::levenberg_marquardt:
+        default:
+        {
+            auto builder = solver_options_lm_builder()
                                .with_max_iterations(options.max_iterations)
                                .with_function_tolerance(options.function_tolerance)
                                .with_gradient_tolerance(options.gradient_tolerance)
                                .with_parameter_tolerance(options.parameter_tolerance)
-                               .with_verbose(options.verbose)
-                               .build();
-        gauss_newton_solver solver(
-            problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(solver.solve(x, *native_opts), x, alg, resolved_derivatives);
+                               .with_verbose(options.verbose);
+            if (options.lm)
+            {
+                apply_lm_options(*options.lm, builder);
+            }
+            auto                       native_opts = builder.build();
+            levenberg_marquardt_solver solver(evaluator);
+            const auto                 out = solver.solve(x, *native_opts);
+            return from_native(
+                out, x, algorithm::levenberg_marquardt, resolved.source, evaluator.counters());
+        }
+        }
     }
-    case algorithm::bfgs:
-    case algorithm::lbfgs:
+    catch (const std::exception& e)
     {
-        auto native_opts = solver_options_bfgs_builder()
-                               .with_max_iterations(options.max_iterations)
-                               .with_function_tolerance(options.function_tolerance)
-                               .with_gradient_tolerance(options.gradient_tolerance)
-                               .with_parameter_tolerance(options.parameter_tolerance)
-                               .with_verbose(options.verbose)
-                               .build();
-        lbfgs_solver solver(problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(
-            solver.solve(x, *native_opts), x, algorithm::lbfgs, resolved_derivatives);
-    }
-    case algorithm::levenberg_marquardt:
-    default:
-    {
-        auto native_opts = solver_options_lm_builder()
-                               .with_max_iterations(options.max_iterations)
-                               .with_function_tolerance(options.function_tolerance)
-                               .with_gradient_tolerance(options.gradient_tolerance)
-                               .with_parameter_tolerance(options.parameter_tolerance)
-                               .with_verbose(options.verbose)
-                               .build();
-        levenberg_marquardt_solver solver(
-            problem.num_parameters, problem.num_residuals, problem.residuals, jac);
-        return from_native(
-            solver.solve(x, *native_opts), x, algorithm::levenberg_marquardt, resolved_derivatives);
-    }
+        // Kernels report evaluation failures through native_result; anything
+        // else (a failed line search, an invalid option) must not escape the API.
+        auto result                        = failed(solver_status::numerical_failure,
+            std::string("native solver threw: ") + e.what(),
+            initial_guess);
+        result.backend                     = backend::native;
+        result.algorithm                   = alg;
+        result.effective_derivative_source = resolved.source;
+        return result;
     }
 }
 
@@ -596,16 +368,15 @@ solver_result run_ceres(const least_squares_problem& problem,
         return result;
     }
 
-    // Resolve derivative policy
-    auto res = resolve_derivatives(problem, options, initial_guess);
-    if (res.error)
+    auto resolution = detail::resolve_derivatives(problem, options, initial_guess);
+    if (auto* error = std::get_if<solver_result>(&resolution))
     {
-        // Error occurred during resolution
-        solver_result error_result = *res.error;
-        delete res.error;
-        return error_result;
+        error->backend   = backend::ceres;
+        error->algorithm = result.algorithm;
+        return std::move(*error);
     }
-    auto resolved_derivatives = res.resolved;
+    const auto& resolved             = std::get<detail::resolved_derivatives>(resolution);
+    const auto resolved_derivatives = resolved.source;
 
     // Default to DENSE_QR: a native-parity dense least-squares path rather than
     // Ceres' sparse default, unless the caller asked otherwise.
@@ -629,66 +400,33 @@ solver_result run_ceres(const least_squares_problem& problem,
     std::vector<double> parameters(
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
-    // Select the derivative source for the Ceres backend.
-    std::shared_ptr<const api::detail::provider_factory>  provider_to_use;
-    std::function<void(const vector_type&, matrix_type&)> jacobian_to_use;
-
-    if (resolved_derivatives == api::derivative_mode::automatic_differentiation)
+    // Ceres-native AD takes the factory; an analytic or provider Jacobian goes
+    // in as a callback; finite differences are left to Ceres' own numeric
+    // differentiation.
+    std::shared_ptr<const api::detail::provider_factory> provider_to_use;
+    jacobian_function                                    jacobian_to_use;
+    if (resolved.ad_factory)
     {
-        if (problem.provider_factory)
-        {
-            // Ceres-native AD: the factory produces a CostFunction using Jet.
-            provider_to_use = problem.provider_factory;
-        }
-        else if (problem.jacobian_provider && problem.jacobian_provider->source() ==
-                                                  api::derivative_mode::automatic_differentiation)
-        {
-            // AD provider without a Ceres factory: wrap compute() as a Jacobian callback.
-            auto jp         = problem.jacobian_provider;
-            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_)
-            {
-                vector_type r_tmp = make_vector(jp->num_residuals());
-                jp->compute(x_, r_tmp, J_);
-            };
-        }
+        provider_to_use = resolved.ad_factory;
     }
-    else if (resolved_derivatives == api::derivative_mode::supplied)
+    else if (resolved_derivatives != derivative_mode::finite_difference)
     {
-        // Only use a provider whose source() is actually "supplied"; otherwise
-        // fall through to the explicit Jacobian callback so the resolved mode is honoured.
-        if (problem.jacobian_provider &&
-            problem.jacobian_provider->source() == api::derivative_mode::supplied)
-        {
-            auto jp         = problem.jacobian_provider;
-            jacobian_to_use = [jp](const vector_type& x_, matrix_type& J_)
-            {
-                vector_type r_tmp = make_vector(jp->num_residuals());
-                jp->compute(x_, r_tmp, J_);
-            };
-        }
-        else if (problem.jacobian)
-        {
-            jacobian_to_use = *problem.jacobian;
-        }
+        jacobian_to_use = resolved.jacobian_callback;
     }
-    // Otherwise: no explicit derivative source; Ceres falls back to finite differences.
 
-    ceres_solver solver(problem.num_parameters,
-        problem.num_residuals,
-        problem.residuals,
-        provider_to_use,
-        problem.bounds.lower,
-        problem.bounds.upper);
-
-    if (jacobian_to_use && !provider_to_use)
-    {
-        solver = ceres_solver(problem.num_parameters,
-            problem.num_residuals,
-            problem.residuals,
-            jacobian_to_use,
-            problem.bounds.lower,
-            problem.bounds.upper);
-    }
+    ceres_solver solver = (jacobian_to_use && !provider_to_use)
+                              ? ceres_solver(problem.num_parameters,
+                                    problem.num_residuals,
+                                    problem.residuals,
+                                    jacobian_to_use,
+                                    problem.bounds.lower,
+                                    problem.bounds.upper)
+                              : ceres_solver(problem.num_parameters,
+                                    problem.num_residuals,
+                                    problem.residuals,
+                                    provider_to_use,
+                                    problem.bounds.lower,
+                                    problem.bounds.upper);
 
 #if SOLVERS_HAS_CERES
     ceres::Solver::Summary summary;
@@ -710,30 +448,50 @@ solver_result run_ceres(const least_squares_problem& problem,
     result.residual_norm = rnorm;
     result.objective     = 0.5 * rnorm * rnorm;
 
-    // Map Ceres termination to solver status truthfully
-    if (summary.termination_type == ceres::TerminationType::CONVERGENCE)
+    // Map Ceres termination to solver status truthfully; the raw type is kept.
+    result.backend_status = static_cast<int>(summary.termination_type);
+    switch (summary.termination_type)
     {
+    case ceres::TerminationType::CONVERGENCE:
         result.status  = solver_status::converged;
         result.message = "Ceres converged";
-    }
-    else if (summary.termination_type == ceres::TerminationType::NO_CONVERGENCE)
-    {
-        // Distinguish: hit iteration limit vs. failure
-        if (summary.IsSolutionUsable() && summary.iterations.size() > 0)
+        break;
+    case ceres::TerminationType::NO_CONVERGENCE:
+        // Budget exhausted: the iterate is the best point found, so it is usable.
+        if (summary.IsSolutionUsable() && !summary.iterations.empty())
         {
             result.status  = solver_status::max_iterations;
-            result.message = "Ceres reached maximum iterations (solution usable)";
+            result.message = "Ceres reached its iteration or time limit (solution usable)";
         }
         else
         {
             result.status  = solver_status::numerical_failure;
             result.message = "Ceres did not converge";
         }
-    }
-    else
-    {
+        break;
+    case ceres::TerminationType::USER_SUCCESS:
+        result.status  = solver_status::user_stopped;
+        result.message = "Ceres stopped by a user callback that reported success";
+        break;
+    case ceres::TerminationType::USER_FAILURE:
+        result.status  = solver_status::user_stopped;
+        result.message = "Ceres stopped by a user callback that reported failure";
+        break;
+    case ceres::TerminationType::FAILURE:
+    default:
         result.status  = solver_status::numerical_failure;
-        result.message = "Ceres failed";
+        result.message = "Ceres failed: " + summary.message;
+        break;
+    }
+
+    result.residual_evaluations = static_cast<std::size_t>(summary.num_residual_evaluations);
+    result.jacobian_evaluations = static_cast<std::size_t>(summary.num_jacobian_evaluations);
+    result.accepted_steps       = static_cast<std::size_t>(summary.num_successful_steps);
+    result.rejected_steps       = static_cast<std::size_t>(summary.num_unsuccessful_steps);
+    if (!summary.iterations.empty())
+    {
+        result.gradient_norm = summary.iterations.back().gradient_norm;
+        result.step_norm     = summary.iterations.back().step_norm;
     }
 
     result.iterations                  = static_cast<int>(summary.iterations.size());
@@ -779,14 +537,15 @@ tao_algorithm_enum map_tao_algorithm(tao_algorithm value, bool least_squares)
 solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
     const vector_type&                                                 initial_guess,
     const solve_options&                                               options,
-    backend                                                            chosen)
+    backend                                                            chosen,
+    algorithm                                                          alg)
 {
     const petsc_tao_options cfg = options.petsc_tao.value_or(petsc_tao_options{});
 
     solver_result result;
     result.parameters = initial_guess;
     result.backend    = chosen;
-    result.algorithm = chosen == backend::pounders ? algorithm::pounders : algorithm::newton_krylov;
+    result.algorithm  = alg;
 
     if (!petsc_tao_solver::is_supported())
     {
@@ -795,22 +554,22 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
         return result;
     }
 
-    // Resolve derivative policy for TAO backend
-    auto res = resolve_derivatives(problem, options, initial_guess);
-    if (res.error)
+    auto resolution = detail::resolve_derivatives(problem, options, initial_guess);
+    if (auto* error = std::get_if<solver_result>(&resolution))
     {
-        solver_result error_result = *res.error;
-        delete res.error;
-        return error_result;
+        error->backend   = chosen;
+        error->algorithm = alg;
+        return std::move(*error);
     }
-    auto resolved_derivatives = res.resolved;
+    const auto& resolved             = std::get<detail::resolved_derivatives>(resolution);
+    const auto resolved_derivatives = resolved.source;
 
     // POUNDERS by default on the pounders route; BRGN default on the general
     // TAO route (Gauss-Newton for large residuals with a Jacobian).
     tao_algorithm requested = cfg.algorithm;
     if (requested == tao_algorithm::automatic)
     {
-        requested = chosen == backend::pounders ? tao_algorithm::pounders : tao_algorithm::brgn;
+        requested = alg == algorithm::pounders ? tao_algorithm::pounders : tao_algorithm::brgn;
     }
 
     auto petsc_opts = solver_options_petsc_builder()
@@ -824,20 +583,14 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
     std::vector<double> parameters(
         initial_guess.data(), initial_guess.data() + initial_guess.size());
 
-    // Build Jacobian callback, preferring provider over callback
+    // POUNDERS is derivative-free: it only gets a Jacobian that already exists.
+    // The Gauss-Newton style TAO algorithms get one always (numeric if needed).
     petsc_tao_solver::jacobian_type jac;
-    if (problem.jacobian_provider)
+    if (resolved.jacobian_callback &&
+        !(requested == tao_algorithm::pounders &&
+            resolved_derivatives == derivative_mode::finite_difference))
     {
-        auto provider_ptr = problem.jacobian_provider;
-        jac               = [provider_ptr](const vector_type& x_, matrix_type& J_)
-        {
-            vector_type r_tmp = make_vector(provider_ptr->num_residuals());
-            provider_ptr->compute(x_, r_tmp, J_);
-        };
-    }
-    else
-    {
-        jac = problem.jacobian ? *problem.jacobian : petsc_tao_solver::jacobian_type{};
+        jac = resolved.jacobian_callback;
     }
 
     petsc_tao_solver solver(problem.num_parameters,
@@ -847,10 +600,10 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
         problem.bounds.lower,
         problem.bounds.upper);
 
-    bool converged = false;
+    backend_solve_status outcome;
     try
     {
-        converged = solver.solve(parameters, *petsc_opts);
+        outcome = solver.solve_with_status(parameters, *petsc_opts);
     }
     catch (const std::exception& e)
     {
@@ -861,12 +614,17 @@ solver_result run_petsc_tao_least_squares(const least_squares_problem& problem,
 
     result.parameters =
         to_vector_type(parameters.data(), static_cast<std::size_t>(parameters.size()));
-    const double rnorm   = residual_norm_at(problem, result.parameters);
-    result.residual_norm = rnorm;
-    result.objective     = 0.5 * rnorm * rnorm;
-    result.status        = converged ? solver_status::converged : solver_status::max_iterations;
+    const double rnorm                 = residual_norm_at(problem, result.parameters);
+    result.residual_norm               = rnorm;
+    result.objective                   = 0.5 * rnorm * rnorm;
+    result.status                      = translate_outcome(outcome.outcome);
+    result.backend_status              = outcome.native_code;
     result.effective_derivative_source = resolved_derivatives;
-    result.message = converged ? "PETSc/TAO converged" : "PETSc/TAO stopped without convergence";
+    if (outcome.iterations)
+    {
+        result.iterations = *outcome.iterations;
+    }
+    result.message = outcome.message;
     return result;
 }
 
@@ -876,36 +634,15 @@ solver_result run_native_optimization(const optimization_problem& problem,
     const solve_options&                                          options,
     algorithm                                                     alg)
 {
-    // Build gradient callback: gradient_provider > gradient callback > error.
-    gradient_function grad;
-    derivative_mode   effective = derivative_mode::automatic;
-    if (options.derivatives == derivative_mode::finite_difference)
+    auto resolution = detail::resolve_gradient(problem, options, initial_guess);
+    if (auto* error = std::get_if<solver_result>(&resolution))
     {
-        auto finite = std::make_shared<FiniteDifferenceGradientProvider>(
-            problem.objective, problem.num_parameters);
-        grad      = [finite](const vector_type& x_, vector_type& g_) { finite->compute(x_, g_); };
-        effective = derivative_mode::finite_difference;
+        error->backend   = backend::native;
+        error->algorithm = alg;
+        return std::move(*error);
     }
-    else if (problem.gradient_provider && options.derivatives != derivative_mode::supplied)
-    {
-        auto gp   = problem.gradient_provider;
-        grad      = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
-        effective = gp->source();
-    }
-    else if (problem.gradient && options.derivatives != derivative_mode::automatic_differentiation)
-    {
-        grad      = *problem.gradient;
-        effective = derivative_mode::supplied;
-    }
-    else
-    {
-        solver_result result = failed(solver_status::unsupported_capability,
-            "native L-BFGS requires a gradient callback or gradient provider",
-            initial_guess);
-        result.backend       = backend::native;
-        result.algorithm     = alg;
-        return result;
-    }
+    auto& resolved  = std::get<detail::resolved_gradient>(resolution);
+    auto& evaluator = *resolved.evaluator;
 
     vector_type x = initial_guess;
 
@@ -917,20 +654,46 @@ solver_result run_native_optimization(const optimization_problem& problem,
                            .with_verbose(options.verbose)
                            .build();
 
-    lbfgs_solver solver(problem.num_parameters, problem.objective, grad);
-    auto         out = solver.solve(x, *native_opts);
-
     solver_result result;
-    result.status                      = translate_native(out.status);
     result.parameters                  = x;
-    result.objective                   = problem.objective(x);
-    result.iterations                  = out.iterations;
     result.backend                     = backend::native;
     result.algorithm                   = algorithm::lbfgs;
-    result.effective_derivative_source = effective;
-    result.message                     = (result.status == solver_status::converged)
-                                             ? "native L-BFGS converged"
-                                             : "native L-BFGS reached iteration limit";
+    result.effective_derivative_source = resolved.source;
+    try
+    {
+        lbfgs_solver solver(evaluator);
+        const auto   out      = solver.solve(x, *native_opts);
+        result.status         = translate_native(out.status);
+        result.iterations     = out.iterations;
+        result.parameters     = x;
+        result.objective      = resolved.objective(x);
+        result.gradient_norm  = out.gradient_norm;
+        result.step_norm      = out.step_norm;
+        result.accepted_steps = out.accepted_steps;
+        result.rejected_steps = out.rejected_steps;
+        switch (result.status)
+        {
+        case solver_status::converged:
+            result.message = "native L-BFGS converged";
+            break;
+        case solver_status::numerical_failure:
+            result.message = out.message.empty() ? "native L-BFGS failed" : out.message;
+            break;
+        case solver_status::stalled:
+            result.message = "native L-BFGS stalled: " + out.message;
+            break;
+        default:
+            result.message = "native L-BFGS reached iteration limit";
+            break;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        result.status  = solver_status::numerical_failure;
+        result.message = std::string("native L-BFGS threw: ") + e.what();
+    }
+    result.objective_evaluations = evaluator.counters().objective_evaluations;
+    result.gradient_evaluations  = evaluator.counters().gradient_evaluations;
     return result;
 }
 
@@ -975,23 +738,15 @@ solver_result run_ipopt(const optimization_problem& problem,
                           .with_verbose(options.verbose)
                           .build();
 
-    // Build gradient for Ipopt: gradient_provider > gradient callback > error.
-    gradient_function grad_for_ipopt;
-    if (problem.gradient_provider)
+    auto resolution = detail::resolve_gradient(problem, options, initial_guess);
+    if (auto* error = std::get_if<solver_result>(&resolution))
     {
-        auto gp        = problem.gradient_provider;
-        grad_for_ipopt = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+        error->backend   = backend::ipopt;
+        error->algorithm = algorithm::interior_point;
+        return std::move(*error);
     }
-    else if (problem.gradient)
-    {
-        grad_for_ipopt = *problem.gradient;
-    }
-    else
-    {
-        result.status  = solver_status::unsupported_capability;
-        result.message = "Ipopt path requires a gradient callback or gradient provider";
-        return result;
-    }
+    auto& resolved                     = std::get<detail::resolved_gradient>(resolution);
+    result.effective_derivative_source = resolved.source;
 
     std::vector<double> parameters(
         initial_guess.data(), initial_guess.data() + initial_guess.size());
@@ -1000,16 +755,16 @@ solver_result run_ipopt(const optimization_problem& problem,
         problem.hessian ? *problem.hessian : ipopt_solver::hessian_type{};
 
     ipopt_solver solver(problem.num_parameters,
-        problem.objective,
-        grad_for_ipopt,
+        resolved.objective,
+        resolved.gradient,
         hess,
         problem.bounds.lower,
         problem.bounds.upper);
 
-    bool ok = false;
+    backend_solve_status outcome;
     try
     {
-        ok = solver.solve(parameters, *ipopt_opts);
+        outcome = solver.solve_with_status(parameters, *ipopt_opts);
     }
     catch (const std::exception& e)
     {
@@ -1020,9 +775,16 @@ solver_result run_ipopt(const optimization_problem& problem,
 
     result.parameters =
         to_vector_type(parameters.data(), static_cast<std::size_t>(parameters.size()));
-    result.objective = problem.objective(result.parameters);
-    result.status    = ok ? solver_status::converged : solver_status::numerical_failure;
-    result.message   = ok ? "Ipopt reached an (acceptable) solution" : "Ipopt did not converge";
+    result.objective      = resolved.objective(result.parameters);
+    result.status         = translate_outcome(outcome.outcome);
+    result.backend_status = outcome.native_code;
+    result.message        = outcome.message;
+    if (outcome.iterations)
+    {
+        result.iterations = *outcome.iterations;
+    }
+    result.objective_evaluations = resolved.evaluator->counters().objective_evaluations;
+    result.gradient_evaluations  = resolved.evaluator->counters().gradient_evaluations;
     return result;
 }
 
@@ -1053,23 +815,15 @@ solver_result run_petsc_tao_objective(const optimization_problem& problem,
         return result;
     }
 
-    // Build gradient for TAO: gradient_provider > gradient callback > error.
-    gradient_function grad_for_tao;
-    if (problem.gradient_provider)
+    auto resolution = detail::resolve_gradient(problem, options, initial_guess);
+    if (auto* error = std::get_if<solver_result>(&resolution))
     {
-        auto gp      = problem.gradient_provider;
-        grad_for_tao = [gp](const vector_type& x_, vector_type& g_) { gp->compute(x_, g_); };
+        error->backend   = backend::petsc_tao;
+        error->algorithm = algorithm::newton_krylov;
+        return std::move(*error);
     }
-    else if (problem.gradient)
-    {
-        grad_for_tao = *problem.gradient;
-    }
-    else
-    {
-        result.status  = solver_status::unsupported_capability;
-        result.message = "PETSc/TAO path requires a gradient callback or gradient provider";
-        return result;
-    }
+    auto& resolved                     = std::get<detail::resolved_gradient>(resolution);
+    result.effective_derivative_source = resolved.source;
 
     auto petsc_opts = solver_options_petsc_builder()
                           .with_tao_type(map_tao_algorithm(cfg.algorithm, /*least_squares=*/false))
@@ -1087,16 +841,16 @@ solver_result run_petsc_tao_objective(const optimization_problem& problem,
         problem.hessian ? *problem.hessian : petsc_tao_solver::hessian_type{};
 
     petsc_tao_solver solver(problem.num_parameters,
-        problem.objective,
-        grad_for_tao,
+        resolved.objective,
+        resolved.gradient,
         hess,
         problem.bounds.lower,
         problem.bounds.upper);
 
-    bool converged = false;
+    backend_solve_status outcome;
     try
     {
-        converged = solver.solve(parameters, *petsc_opts);
+        outcome = solver.solve_with_status(parameters, *petsc_opts);
     }
     catch (const std::exception& e)
     {
@@ -1107,9 +861,16 @@ solver_result run_petsc_tao_objective(const optimization_problem& problem,
 
     result.parameters =
         to_vector_type(parameters.data(), static_cast<std::size_t>(parameters.size()));
-    result.objective = problem.objective(result.parameters);
-    result.status    = converged ? solver_status::converged : solver_status::max_iterations;
-    result.message   = converged ? "PETSc/TAO converged" : "PETSc/TAO stopped without convergence";
+    result.objective      = resolved.objective(result.parameters);
+    result.status         = translate_outcome(outcome.outcome);
+    result.backend_status = outcome.native_code;
+    result.message        = outcome.message;
+    if (outcome.iterations)
+    {
+        result.iterations = *outcome.iterations;
+    }
+    result.objective_evaluations = resolved.evaluator->counters().objective_evaluations;
+    result.gradient_evaluations  = resolved.evaluator->counters().gradient_evaluations;
     return result;
 }
 }  // namespace
@@ -1131,79 +892,46 @@ solver_result solve(const least_squares_problem& problem,
             "initial_guess size does not match num_parameters",
             initial_guess);
     }
-    if ((!problem.bounds.lower.empty() && problem.bounds.lower.size() != problem.num_parameters) ||
-        (!problem.bounds.upper.empty() && problem.bounds.upper.size() != problem.num_parameters))
+    if (const auto message = detail::validate_bounds(problem.bounds, problem.num_parameters))
     {
-        return failed(solver_status::invalid_problem,
-            "bound vectors must be empty or match num_parameters",
-            initial_guess);
+        return failed(solver_status::invalid_problem, *message, initial_guess);
     }
-    if (!problem.bounds.lower.empty() || !problem.bounds.upper.empty())
+    if (const auto error = detail::validate_options(options, initial_guess))
     {
-        for (std::size_t i = 0; i < problem.num_parameters; ++i)
-        {
-            const bool bad_lower =
-                !problem.bounds.lower.empty() && !std::isfinite(problem.bounds.lower[i]);
-            const bool bad_upper =
-                !problem.bounds.upper.empty() && !std::isfinite(problem.bounds.upper[i]);
-            const bool inverted = !problem.bounds.lower.empty() && !problem.bounds.upper.empty() &&
-                                  problem.bounds.lower[i] > problem.bounds.upper[i];
-            if (bad_lower || bad_upper || inverted)
-            {
-                return failed(solver_status::invalid_problem,
-                    "bounds must be finite and lower <= upper",
-                    initial_guess);
-            }
-        }
+        return failed(error->status, error->message, initial_guess);
     }
 
-    const problem_traits traits = inspect(problem);
-    const api::backend   chosen = select_backend(traits, options);
-    const api::algorithm alg    = select_algorithm(traits, options);
-
-    if (const auto error = validate_request(traits, options, chosen, alg, initial_guess))
+    const problem_traits traits   = inspect(problem);
+    const auto           decision = detail::select_route(traits, options);
+    if (decision.chosen == nullptr)
     {
-        auto result      = *error;
-        result.backend   = chosen;
-        result.algorithm = alg;
+        auto result      = failed(decision.failure, decision.message, initial_guess);
+        result.backend   = options.backend;
+        result.algorithm = options.algorithm;
         return result;
     }
+    const api::backend   chosen = decision.chosen->backend;
+    const api::algorithm alg    = decision.chosen->algorithm;
 
     switch (chosen)
     {
     case backend::native:
-    {
-        // Native kernels do not enforce bounds; reject rather than solve the
-        // unconstrained relaxation (review F01).
-        if (traits.has_bounds)
-        {
-            solver_result result = failed(solver_status::unsupported_capability,
-                "native backend does not enforce bounds; use a bound-capable backend",
-                initial_guess);
-            result.backend       = backend::native;
-            result.algorithm     = alg;
-            return result;
-        }
         return run_native_least_squares(problem, initial_guess, options, alg);
-    }
     case backend::ceres:
         return run_ceres(problem, initial_guess, options);
     case backend::pounders:
     case backend::petsc_tao:
-        return run_petsc_tao_least_squares(problem, initial_guess, options, chosen);
+        return run_petsc_tao_least_squares(problem, initial_guess, options, chosen, alg);
     default:
-    {
-        // Ipopt is a general-NLP solver; it does not serve the least-squares
-        // residual API directly.
-        solver_result result = failed(solver_status::unsupported_capability,
-            std::string("backend '") + to_string(chosen) +
-                "' does not serve the least-squares residual API",
-            initial_guess);
-        result.backend       = chosen;
-        result.algorithm     = alg;
-        return result;
+        break;
     }
-    }
+    // Unreachable while the route table only lists the backends above.
+    auto result      = failed(solver_status::unsupported_capability,
+        std::string("backend '") + to_string(chosen) + "' does not serve the residual API",
+        initial_guess);
+    result.backend   = chosen;
+    result.algorithm = alg;
+    return result;
 }
 
 solver_result solve(const optimization_problem& problem,
@@ -1222,40 +950,26 @@ solver_result solve(const optimization_problem& problem,
             "initial_guess size does not match num_parameters",
             initial_guess);
     }
-    if ((!problem.bounds.lower.empty() && problem.bounds.lower.size() != problem.num_parameters) ||
-        (!problem.bounds.upper.empty() && problem.bounds.upper.size() != problem.num_parameters))
+    if (const auto message = detail::validate_bounds(problem.bounds, problem.num_parameters))
     {
-        return failed(solver_status::invalid_problem,
-            "bound vectors must be empty or match num_parameters",
-            initial_guess);
+        return failed(solver_status::invalid_problem, *message, initial_guess);
     }
-    for (std::size_t i = 0; i < problem.num_parameters; ++i)
+    if (const auto error = detail::validate_options(options, initial_guess))
     {
-        const bool bad_lower =
-            !problem.bounds.lower.empty() && !std::isfinite(problem.bounds.lower[i]);
-        const bool bad_upper =
-            !problem.bounds.upper.empty() && !std::isfinite(problem.bounds.upper[i]);
-        const bool inverted = !problem.bounds.lower.empty() && !problem.bounds.upper.empty() &&
-                              problem.bounds.lower[i] > problem.bounds.upper[i];
-        if (bad_lower || bad_upper || inverted)
-        {
-            return failed(solver_status::invalid_problem,
-                "bounds must be finite and lower <= upper",
-                initial_guess);
-        }
+        return failed(error->status, error->message, initial_guess);
     }
 
-    const problem_traits traits = inspect(problem);
-    const api::backend   chosen = select_backend(traits, options);
-    const api::algorithm alg    = select_algorithm(traits, options);
-
-    if (const auto error = validate_request(traits, options, chosen, alg, initial_guess))
+    const problem_traits traits   = inspect(problem);
+    const auto           decision = detail::select_route(traits, options);
+    if (decision.chosen == nullptr)
     {
-        auto result      = *error;
-        result.backend   = chosen;
-        result.algorithm = alg;
+        auto result      = failed(decision.failure, decision.message, initial_guess);
+        result.backend   = options.backend;
+        result.algorithm = options.algorithm;
         return result;
     }
+    const api::backend   chosen = decision.chosen->backend;
+    const api::algorithm alg    = decision.chosen->algorithm;
 
     switch (chosen)
     {
@@ -1264,28 +978,15 @@ solver_result solve(const optimization_problem& problem,
     case backend::petsc_tao:
         return run_petsc_tao_objective(problem, initial_guess, options);
     case backend::native:
-    {
-        if (traits.has_bounds)
-        {
-            solver_result result = failed(solver_status::unsupported_capability,
-                "native backend does not enforce bounds; use a bound-capable backend",
-                initial_guess);
-            result.backend       = backend::native;
-            result.algorithm     = alg;
-            return result;
-        }
         return run_native_optimization(problem, initial_guess, options, alg);
-    }
     default:
-    {
-        solver_result result = failed(solver_status::unsupported_capability,
-            std::string("backend '") + to_string(chosen) +
-                "' does not serve general objective optimization",
-            initial_guess);
-        result.backend       = chosen;
-        result.algorithm     = alg;
-        return result;
+        break;
     }
-    }
+    auto result      = failed(solver_status::unsupported_capability,
+        std::string("backend '") + to_string(chosen) + "' does not serve general objectives",
+        initial_guess);
+    result.backend   = chosen;
+    result.algorithm = alg;
+    return result;
 }
 }  // namespace solverslib::api

@@ -13,8 +13,8 @@ TEST(OptimizationAlgorithm, LevenbergMarquardtSolvesScalarResidual)
     api::least_squares_problem ls;
     ls.num_parameters = 1;
     ls.num_residuals  = 1;
-    ls.residuals = [](const vector_type& x, vector_type& r) { r(0) = x(0) - 3.0; };
-    ls.jacobian  = [](const vector_type&, matrix_type& J) { J(0, 0) = 1.0; };
+    ls.residuals      = [](const vector_type& x, vector_type& r) { r(0) = x(0) - 3.0; };
+    ls.set_jacobian([](const vector_type&, matrix_type& J) { J(0, 0) = 1.0; });
 
     api::solve_options opts;
     opts.algorithm           = api::algorithm::levenberg_marquardt;
@@ -35,13 +35,13 @@ TEST(OptimizationAlgorithm, LevenbergMarquardtSolvesScalarResidual)
 
 TEST(OptimizationAlgorithm, BrentFindsRoot)
 {
-    double     root      = 0.0;
-    const bool converged = root_finding_algorithms::brent(
-        [](double value) { return value * value - 4.0; },
-        0.0,
-        3.0,
-        root,
-        root_finding_options_builder().with_tolerance_function(1e-12).build());
+    double     root = 0.0;
+    const bool converged =
+        root_finding_algorithms::brent([](double value) { return value * value - 4.0; },
+            0.0,
+            3.0,
+            root,
+            root_finding_options_builder().with_tolerance_function(1e-12).build());
 
     EXPECT_TRUE(converged);
     EXPECT_NEAR(root, 2.0, 1e-10);

@@ -13,7 +13,7 @@ TEST(SolveApi, SolvesSimpleLeastSquares)
     problem.num_parameters = 1;
     problem.num_residuals  = 1;
     problem.residuals      = [](const vector_type& x, vector_type& r) { r[0] = x[0] - 2.0; };
-    problem.jacobian       = [](const vector_type&, matrix_type& J) { J(0, 0) = 1.0; };
+    problem.set_jacobian([](const vector_type&, matrix_type& J) { J(0, 0) = 1.0; });
 
     vector_type x0(1);
     x0 << 0.0;

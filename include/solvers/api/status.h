@@ -20,7 +20,8 @@ enum class solver_status : std::uint8_t
     infeasible,              // a supplied point/constraint set is infeasible
     unsupported_capability,  // the chosen backend cannot honor a requested capability
     backend_unavailable,     // the requested backend was not compiled in
-    user_stopped             // a caller callback requested a stop
+    user_stopped,            // a caller callback requested a stop
+    stalled                  // no acceptable step exists; the last accepted iterate is valid
 };
 
 // Which algorithm was actually run. Kept independent of the backend that ran
@@ -31,7 +32,6 @@ enum class algorithm : std::uint8_t
     automatic = 0,
     levenberg_marquardt,
     gauss_newton,
-    bfgs,
     lbfgs,
     pounders,
     interior_point,
@@ -79,6 +79,8 @@ inline const char* to_string(solver_status status)
         return "backend_unavailable";
     case solver_status::user_stopped:
         return "user_stopped";
+    case solver_status::stalled:
+        return "stalled";
     }
     return "unknown";
 }
@@ -93,8 +95,6 @@ inline const char* to_string(algorithm value)
         return "levenberg_marquardt";
     case algorithm::gauss_newton:
         return "gauss_newton";
-    case algorithm::bfgs:
-        return "bfgs";
     case algorithm::lbfgs:
         return "lbfgs";
     case algorithm::pounders:

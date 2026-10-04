@@ -3,18 +3,18 @@
 #include <cmath>
 #include <limits>
 
+#include "detail/root_finding_core.h"
 #include "detail/support.h"
 
 namespace solverslib
 {
+namespace detail
+{
 // ---------------------------------------------------------------------------
 // bisection
 // ---------------------------------------------------------------------------
-bool root_finding_algorithms::bisection(function_type const& func,
-    double                                                    x1,
-    double                                                    x2,
-    double&                                                   root,
-    const root_finding_options&                               options)
+root_run run_bisection(
+    const scalar_function& func, double x1, double x2, const root_finding_options& options)
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
@@ -22,13 +22,11 @@ bool root_finding_algorithms::bisection(function_type const& func,
 
     if (std::fabs(f1) < options.tolerance_function())
     {
-        root = x1;
-        return true;
+        return {root_outcome::converged, x1, 0};
     }
     if (std::fabs(f2) < options.tolerance_function())
     {
-        root = x2;
-        return true;
+        return {root_outcome::converged, x2, 0};
     }
 
     double lo = x1, hi = x2, f_lo = f1;
@@ -41,8 +39,7 @@ bool root_finding_algorithms::bisection(function_type const& func,
         if (std::fabs(f_mid) < options.tolerance_function() ||
             0.5 * std::fabs(hi - lo) < options.tolerance_parameter())
         {
-            root = mid;
-            return true;
+            return {root_outcome::converged, mid, iter + 1};
         }
 
         if (f_lo * f_mid <= 0.)
@@ -55,17 +52,14 @@ bool root_finding_algorithms::bisection(function_type const& func,
             f_lo = f_mid;
         }
     }
-    return false;
+    return {root_outcome::iteration_limit, 0.5 * (lo + hi), options.max_iterations()};
 }
 
 // ---------------------------------------------------------------------------
 // false_position (regula falsi, with the Illinois anti-stalling modification)
 // ---------------------------------------------------------------------------
-bool root_finding_algorithms::false_position(function_type const& func,
-    double                                                        x1,
-    double                                                        x2,
-    double&                                                       root,
-    const root_finding_options&                                  options)
+root_run run_false_position(
+    const scalar_function& func, double x1, double x2, const root_finding_options& options)
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
@@ -73,28 +67,27 @@ bool root_finding_algorithms::false_position(function_type const& func,
 
     if (std::fabs(f1) < options.tolerance_function())
     {
-        root = x1;
-        return true;
+        return {root_outcome::converged, x1, 0};
     }
     if (std::fabs(f2) < options.tolerance_function())
     {
-        root = x2;
-        return true;
+        return {root_outcome::converged, x2, 0};
     }
 
     double lo = x1, hi = x2, f_lo = f1, f_hi = f2;
     int    stagnant_side = 0;  // -1: hi retained last, +1: lo retained last
+    double last_estimate = 0.5 * (x1 + x2);
 
     for (size_t iter = 0; iter < options.max_iterations(); ++iter)
     {
         const double x_new = (f_lo * hi - f_hi * lo) / (f_lo - f_hi);
         const double f_new = func(x_new) - options.function_offset();
+        last_estimate      = x_new;
 
         if (std::fabs(f_new) < options.tolerance_function() ||
             std::fabs(hi - lo) < options.tolerance_parameter())
         {
-            root = x_new;
-            return true;
+            return {root_outcome::converged, x_new, iter + 1};
         }
 
         if (f_lo * f_new < 0.)
@@ -118,17 +111,14 @@ bool root_finding_algorithms::false_position(function_type const& func,
             stagnant_side = 1;
         }
     }
-    return false;
+    return {root_outcome::iteration_limit, last_estimate, options.max_iterations()};
 }
 
 // ---------------------------------------------------------------------------
 // ridders
 // ---------------------------------------------------------------------------
-bool root_finding_algorithms::ridders(function_type const& func,
-    double                                                 x1,
-    double                                                 x2,
-    double&                                                root,
-    const root_finding_options&                            options)
+root_run run_ridders(
+    const scalar_function& func, double x1, double x2, const root_finding_options& options)
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
@@ -136,13 +126,11 @@ bool root_finding_algorithms::ridders(function_type const& func,
 
     if (std::fabs(f1) < options.tolerance_function())
     {
-        root = x1;
-        return true;
+        return {root_outcome::converged, x1, 0};
     }
     if (std::fabs(f2) < options.tolerance_function())
     {
-        root = x2;
-        return true;
+        return {root_outcome::converged, x2, 0};
     }
 
     double previous_estimate = std::numeric_limits<double>::quiet_NaN();
@@ -154,14 +142,13 @@ bool root_finding_algorithms::ridders(function_type const& func,
 
         if (std::fabs(f_mid) < options.tolerance_function())
         {
-            root = mid;
-            return true;
+            return {root_outcome::converged, mid, iter + 1};
         }
 
         const double s = std::sqrt(f_mid * f_mid - f1 * f2);
         if (s == 0.)
         {
-            return false;
+            return {root_outcome::degenerate, mid, iter + 1};
         }
 
         const double dx       = (mid - x1) * f_mid / s;
@@ -170,16 +157,14 @@ bool root_finding_algorithms::ridders(function_type const& func,
         if (!std::isnan(previous_estimate) &&
             std::fabs(estimate - previous_estimate) < options.tolerance_parameter())
         {
-            root = estimate;
-            return true;
+            return {root_outcome::converged, estimate, iter + 1};
         }
         previous_estimate = estimate;
 
         const double f_estimate = func(estimate) - options.function_offset();
         if (std::fabs(f_estimate) < options.tolerance_function())
         {
-            root = estimate;
-            return true;
+            return {root_outcome::converged, estimate, iter + 1};
         }
 
         if (std::copysign(1.0, f_mid) != std::copysign(1.0, f_estimate))
@@ -202,21 +187,19 @@ bool root_finding_algorithms::ridders(function_type const& func,
 
         if (std::fabs(x2 - x1) < options.tolerance_parameter())
         {
-            root = previous_estimate;
-            return true;
+            return {root_outcome::converged, previous_estimate, iter + 1};
         }
     }
-    return false;
+    return {root_outcome::iteration_limit,
+        std::isnan(previous_estimate) ? 0.5 * (x1 + x2) : previous_estimate,
+        options.max_iterations()};
 }
 
 // ---------------------------------------------------------------------------
 // dekker
 // ---------------------------------------------------------------------------
-bool root_finding_algorithms::dekker(const function_gradient_type& func,
-    double                                                         x1,
-    double                                                         x2,
-    double&                                                        result,
-    const root_finding_options&                                    options)
+root_run run_dekker(
+    const scalar_function_gradient& func, double x1, double x2, const root_finding_options& options)
 {
     const double tolerance_function  = options.tolerance_function();
     const double tolerance_parametes = options.tolerance_parameter();
@@ -224,20 +207,20 @@ bool root_finding_algorithms::dekker(const function_gradient_type& func,
 
     double df_dx;
 
-    auto f1 = func(x1, df_dx);
-    auto f2 = func(x2, df_dx);
+    // The offset shifts the equation to f(x) = offset, like every other method.
+    const double f_offset = options.function_offset();
+    auto         f1       = func(x1, df_dx) - f_offset;
+    auto         f2       = func(x2, df_dx) - f_offset;
 
     SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
 
     if (std::abs(f1) < tolerance_function)
     {
-        result = x1;
-        return true;
+        return {root_outcome::converged, x1, 0};
     }
     if (std::abs(f2) < tolerance_function)
     {
-        result = x2;
-        return true;
+        return {root_outcome::converged, x2, 0};
     }
 
     auto x_plus  = f1 > 0. ? x1 : x2;
@@ -245,7 +228,7 @@ bool root_finding_algorithms::dekker(const function_gradient_type& func,
 
     auto root = 0.5 * (x1 + x2);
     auto dx   = std::fabs(x2 - x1);
-    auto f    = func(root, df_dx);
+    auto f    = func(root, df_dx) - f_offset;
 
     for (size_t j = 0; j < max_iterations; j++)
     {
@@ -263,16 +246,14 @@ bool root_finding_algorithms::dekker(const function_gradient_type& func,
 
         if (std::fabs(dx) < tolerance_parametes)
         {
-            result = root;
-            return true;
+            return {root_outcome::converged, root, j + 1};
         }
 
-        f = func(root, df_dx);
+        f = func(root, df_dx) - f_offset;
 
         if (std::fabs(f) < tolerance_function)
         {
-            result = root;
-            return true;
+            return {root_outcome::converged, root, j + 1};
         }
 
         if (f < 0.)
@@ -285,18 +266,17 @@ bool root_finding_algorithms::dekker(const function_gradient_type& func,
         }
     }
 
-    return false;
+    return {root_outcome::iteration_limit, root, max_iterations};
 }
 
 // ---------------------------------------------------------------------------
 // brent
 // ---------------------------------------------------------------------------
-bool root_finding_algorithms::brent(  // NOLINT
-    root_finding_algorithms::function_type const& func,
-    double                                        x1,
-    double                                        x2,
-    double&                                       root,
-    const root_finding_options&                   options)
+root_run run_brent(  // NOLINT
+    const scalar_function&      func,
+    double                      x1,
+    double                      x2,
+    const root_finding_options& options)
 {
     const double tolerance_function  = options.tolerance_function();
     const double tolerance_parametes = options.tolerance_parameter();
@@ -316,8 +296,7 @@ bool root_finding_algorithms::brent(  // NOLINT
     {
         if (std::fabs(f2) < tolerance_function)
         {
-            root = x2;
-            return true;
+            return {root_outcome::converged, x2, iter};
         }
         if (f2 * fc > 0.)
         {
@@ -342,8 +321,7 @@ bool root_finding_algorithms::brent(  // NOLINT
         if (std::fabs(xm) <= epsilon || is_almost_zero(std::fabs(xm) - epsilon) ||
             std::fabs(f2) < tolerance_function)
         {
-            root = x2;
-            return true;
+            return {root_outcome::converged, x2, iter};
         }
 
         if (std::fabs(e) >= epsilon && std::fabs(f1) > std::fabs(f2))
@@ -388,16 +366,14 @@ bool root_finding_algorithms::brent(  // NOLINT
 
         f2 = func(x2) - f_0;
     }
-    return false;
+    return {root_outcome::iteration_limit, x2, max_iterations};
 }
 
 // ---------------------------------------------------------------------------
 // newton_raphson
 // ---------------------------------------------------------------------------
-bool root_finding_algorithms::newton_raphson(function_gradient_type const& func,
-    double                                                                 x0,
-    double&                                                                root,
-    const root_finding_options&                                            options)
+root_run run_newton_raphson(
+    const scalar_function_gradient& func, double x0, const root_finding_options& options)
 {
     double x = x0;
 
@@ -408,8 +384,7 @@ bool root_finding_algorithms::newton_raphson(function_gradient_type const& func,
 
         if (std::fabs(f) < options.tolerance_function())
         {
-            root = x;
-            return true;
+            return {root_outcome::converged, x, iter};
         }
 
         SOLVERS_CHECK(!is_almost_zero(df_dx), "newton_raphson: derivative vanished at x = {}", x);
@@ -419,21 +394,17 @@ bool root_finding_algorithms::newton_raphson(function_gradient_type const& func,
 
         if (std::fabs(dx) < options.tolerance_parameter())
         {
-            root = x;
-            return true;
+            return {root_outcome::converged, x, iter + 1};
         }
     }
-    return false;
+    return {root_outcome::iteration_limit, x, options.max_iterations()};
 }
 
 // ---------------------------------------------------------------------------
 // secant
 // ---------------------------------------------------------------------------
-bool root_finding_algorithms::secant(function_type const& func,
-    double                                                x0,
-    double                                                x1,
-    double&                                               root,
-    const root_finding_options&                           options)
+root_run run_secant(
+    const scalar_function& func, double x0, double x1, const root_finding_options& options)
 {
     double f0 = func(x0) - options.function_offset();
     double f1 = func(x1) - options.function_offset();
@@ -442,8 +413,7 @@ bool root_finding_algorithms::secant(function_type const& func,
     {
         if (std::fabs(f1) < options.tolerance_function())
         {
-            root = x1;
-            return true;
+            return {root_outcome::converged, x1, iter};
         }
 
         const double denominator = f1 - f0;
@@ -454,8 +424,7 @@ bool root_finding_algorithms::secant(function_type const& func,
 
         if (std::fabs(x2 - x1) < options.tolerance_parameter())
         {
-            root = x2;
-            return true;
+            return {root_outcome::converged, x2, iter + 1};
         }
 
         x0 = x1;
@@ -463,7 +432,87 @@ bool root_finding_algorithms::secant(function_type const& func,
         x1 = x2;
         f1 = func(x2) - options.function_offset();
     }
-    return false;
+    return {root_outcome::iteration_limit, x1, options.max_iterations()};
+}
+}  // namespace detail
+
+// ---------------------------------------------------------------------------
+// Public bool/out-parameter forms: thin wrappers over the cores above. On a
+// false return `root` is left untouched, as it always was.
+// ---------------------------------------------------------------------------
+namespace
+{
+bool publish(const detail::root_run& run, double& root)
+{
+    if (run.outcome != detail::root_outcome::converged)
+    {
+        return false;
+    }
+    root = run.root;
+    return true;
+}
+}  // namespace
+
+bool root_finding_algorithms::bisection(function_type const& func,
+    double                                                   x1,
+    double                                                   x2,
+    double&                                                  root,
+    const root_finding_options&                              options)
+{
+    return publish(detail::run_bisection(func, x1, x2, options), root);
+}
+
+bool root_finding_algorithms::false_position(function_type const& func,
+    double                                                        x1,
+    double                                                        x2,
+    double&                                                       root,
+    const root_finding_options&                                   options)
+{
+    return publish(detail::run_false_position(func, x1, x2, options), root);
+}
+
+bool root_finding_algorithms::ridders(function_type const& func,
+    double                                                 x1,
+    double                                                 x2,
+    double&                                                root,
+    const root_finding_options&                            options)
+{
+    return publish(detail::run_ridders(func, x1, x2, options), root);
+}
+
+bool root_finding_algorithms::dekker(const function_gradient_type& func,
+    double                                                         x1,
+    double                                                         x2,
+    double&                                                        result,
+    const root_finding_options&                                    options)
+{
+    return publish(detail::run_dekker(func, x1, x2, options), result);
+}
+
+bool root_finding_algorithms::brent(function_type const& func,
+    double                                               x1,
+    double                                               x2,
+    double&                                              root,
+    const root_finding_options&                          options)
+{
+    return publish(detail::run_brent(func, x1, x2, options), root);
+}
+
+bool root_finding_algorithms::newton_raphson(function_gradient_type const& func,
+    double                                                                 x0,
+    double&                                                                root,
+    const root_finding_options&                                            options)
+{
+    return publish(detail::run_newton_raphson(func, x0, options), root);
+}
+
+bool root_finding_algorithms::secant(function_type const& func,
+    double                                                x0,
+    double                                                x1,
+    double&                                               root,
+    const root_finding_options&                           options)
+{
+    return publish(detail::run_secant(func, x0, x1, options), root);
 }
 
 }  // namespace solverslib

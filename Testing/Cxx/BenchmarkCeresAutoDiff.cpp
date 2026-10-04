@@ -25,6 +25,7 @@ namespace
 constexpr std::size_t kWarmupRounds = 3;
 constexpr std::size_t kSamples      = 21;
 constexpr std::size_t kBatchSize    = 50;
+constexpr std::size_t kNumCases     = 4;
 
 struct BenchmarkCase
 {
@@ -63,8 +64,8 @@ struct BenchmarkResult
     }
 };
 
-using Cases   = std::array<BenchmarkCase, 3>;
-using Results = std::array<BenchmarkResult, 3>;
+using Cases   = std::array<BenchmarkCase, kNumCases>;
+using Results = std::array<BenchmarkResult, kNumCases>;
 
 struct DenseNonlinearResiduals
 {
@@ -161,8 +162,8 @@ Results measure(Cases& cases)
 {
     using clock = std::chrono::steady_clock;
 
-    std::array<std::vector<double>, 3> samples;
-    std::array<api::solver_result, 3>  latest;
+    std::array<std::vector<double>, kNumCases> samples;
+    std::array<api::solver_result, kNumCases>  latest;
     for (auto& values : samples)
     {
         values.reserve(kSamples);
@@ -228,7 +229,7 @@ void benchmark_problem(const std::string&     heading,
     analytical_problem.num_parameters = test_problem.num_parameters;
     analytical_problem.num_residuals  = test_problem.num_residuals;
     analytical_problem.residuals      = test_problem.residuals;
-    analytical_problem.jacobian       = test_problem.jacobian;
+    analytical_problem.set_jacobian(test_problem.jacobian);
 
     const vector_type x0 = to_vector_type(test_problem.initial_guess);
 
@@ -245,6 +246,11 @@ void benchmark_problem(const std::string&     heading,
     auto finite_difference_options        = common_options;
     finite_difference_options.derivatives = api::derivative_mode::finite_difference;
 
+    // Native LM consuming the AD provider: measures the per-call cost of the
+    // provider path (cost function built once per solve, not per Jacobian).
+    auto native_ad_options    = ad_options;
+    native_ad_options.backend = api::backend::native;
+
     Cases cases{{
         {"Analytical Jacobian",
             api::derivative_mode::supplied,
@@ -255,6 +261,9 @@ void benchmark_problem(const std::string&     heading,
         {"Finite Differences",
             api::derivative_mode::finite_difference,
             [&]() { return api::solve(ad_problem, x0, finite_difference_options); }},
+        {"Native LM + AD provider",
+            api::derivative_mode::automatic_differentiation,
+            [&]() { return api::solve(ad_problem, x0, native_ad_options); }},
     }};
 
     const Results results = measure(cases);

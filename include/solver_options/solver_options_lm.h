@@ -15,6 +15,13 @@ enum class levenberg_marquardt_solver_enum : int
     NIELSEN                 = 2
 };
 
+// How each damped step is computed; see damped_step_solver in eigen_support.h.
+enum class levenberg_marquardt_linear_solver_enum : int
+{
+    NORMAL_LDLT  = 0,  // LDLT of J^T J + damping (default; fastest for m >> n)
+    AUGMENTED_QR = 1   // QR of [J; sqrt(damping)]; robust for ill-conditioned J
+};
+
 class SOLVER_VISIBILITY solver_options_lm : public solver_options
 {
     friend class solver_options_lm_builder;
@@ -26,20 +33,21 @@ public:
     SOLVER_API double bold_acceptance_exponent() const;
     SOLVER_API bool   geodesic_acceleration() const;
     // alpha bounds ||a||/||v|| = 2||delta_theta_2||/||delta_theta_1||.
-    SOLVER_API double                          geodesic_acceleration_threshold() const;
-    SOLVER_API double                          geodesic_acceleration_step() const;
-    SOLVER_API double                          initial_damping() const;
-    SOLVER_API double                          initial_rejection_multiplier() const;
-    SOLVER_API double                          damping_decrease_factor() const;
-    SOLVER_API double                          damping_increase_factor() const;
-    SOLVER_API double                          damping_floor() const;
-    SOLVER_API double                          nielsen_damping_floor() const;
-    SOLVER_API double                          damping_ceiling() const;
-    SOLVER_API double                          levenberg_marquardt_damping_ceiling() const;
-    SOLVER_API double                          diagonal_scaling_floor() const;
-    SOLVER_API double                          roundoff_noise_factor() const;
-    SOLVER_API double                          finite_difference_step() const;
-    SOLVER_API levenberg_marquardt_solver_enum type() const;
+    SOLVER_API double                                 geodesic_acceleration_threshold() const;
+    SOLVER_API double                                 geodesic_acceleration_step() const;
+    SOLVER_API double                                 initial_damping() const;
+    SOLVER_API double                                 initial_rejection_multiplier() const;
+    SOLVER_API double                                 damping_decrease_factor() const;
+    SOLVER_API double                                 damping_increase_factor() const;
+    SOLVER_API double                                 damping_floor() const;
+    SOLVER_API double                                 nielsen_damping_floor() const;
+    SOLVER_API double                                 damping_ceiling() const;
+    SOLVER_API double                                 levenberg_marquardt_damping_ceiling() const;
+    SOLVER_API double                                 diagonal_scaling_floor() const;
+    SOLVER_API double                                 roundoff_noise_factor() const;
+    SOLVER_API double                                 finite_difference_step() const;
+    SOLVER_API levenberg_marquardt_solver_enum        type() const;
+    SOLVER_API levenberg_marquardt_linear_solver_enum linear_solver() const;
 
 private:
     solver_options_lm();
@@ -61,7 +69,9 @@ private:
     double geodesic_acceleration_step_          = 0.05;
     double finite_difference_step_              = 0.00001;
 
-    levenberg_marquardt_solver_enum type_ = levenberg_marquardt_solver_enum::NIELSEN;
+    levenberg_marquardt_solver_enum        type_ = levenberg_marquardt_solver_enum::NIELSEN;
+    levenberg_marquardt_linear_solver_enum linear_solver_ =
+        levenberg_marquardt_linear_solver_enum::NORMAL_LDLT;
 };
 
 class SOLVER_VISIBILITY solver_options_lm_builder
@@ -91,6 +101,8 @@ public:
     SOLVER_API solver_options_lm_builder& with_roundoff_noise_factor(double val);
     SOLVER_API solver_options_lm_builder& with_finite_difference_step(double val);
     SOLVER_API solver_options_lm_builder& with_type(levenberg_marquardt_solver_enum val);
+    SOLVER_API solver_options_lm_builder& with_linear_solver(
+        levenberg_marquardt_linear_solver_enum val);
     SOLVER_API solver_options_lm_builder& with_log_file(const std::string& val);
     SOLVER_API std::shared_ptr<const solver_options_lm> build() const;
 

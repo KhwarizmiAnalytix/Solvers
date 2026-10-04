@@ -155,14 +155,17 @@ public:
         // Equation 3.17: (min(w_market)/2, 0.1, -0.5, 0.1, 0.1) in the raw SVI parameter
         // space. Use the dynamic Eigen vector factory to avoid static-size initialization issues.
         vector_type x = make_vector(kNumParameters);
-        x << 0.5 * *std::min_element(market_variance_.begin(), market_variance_.end()), 0.1,
-            -0.5, 0.1, 0.1;
+        x << 0.5 * *std::min_element(market_variance_.begin(), market_variance_.end()), 0.1, -0.5,
+            0.1, 0.1;
         return x;
     }
 
     svi_parameters decode(const vector_type& unconstrained) const
     {
-        return {unconstrained[0], unconstrained[1], unconstrained[2], unconstrained[3],
+        return {unconstrained[0],
+            unconstrained[1],
+            unconstrained[2],
+            unconstrained[3],
             unconstrained[4]};
     }
 
@@ -260,7 +263,7 @@ public:
         {
             const double k = lower_k + (upper_k - lower_k) * static_cast<double>(i) /
                                            static_cast<double>(intervals);
-            minimum        = std::min(minimum, density_factor(k, parameters));
+            minimum = std::min(minimum, density_factor(k, parameters));
         }
         return minimum;
     }
@@ -355,12 +358,12 @@ least_squares_problem make_least_squares_problem(
     problem.num_residuals  = calibration->num_quotes();
     problem.residuals      = [calibration](const vector_type& x, vector_type& residuals)
     { calibration->residuals(x, residuals); };
-    problem.bounds.lower   = calibration->lower_bounds();
-    problem.bounds.upper   = calibration->upper_bounds();
+    problem.bounds.lower = calibration->lower_bounds();
+    problem.bounds.upper = calibration->upper_bounds();
     if (with_jacobian)
     {
-        problem.jacobian = [calibration](const vector_type& x, matrix_type& jacobian)
-        { calibration->jacobian(x, jacobian); };
+        problem.set_jacobian([calibration](const vector_type& x, matrix_type& jacobian)
+            { calibration->jacobian(x, jacobian); });
     }
     return problem;
 }
@@ -370,11 +373,11 @@ optimization_problem make_objective_problem(
 {
     optimization_problem problem;
     problem.num_parameters = kNumParameters;
-    problem.objective      = [calibration](const vector_type& x) { return calibration->objective(x); };
-    problem.gradient       = [calibration](const vector_type& x, vector_type& gradient)
-    { calibration->gradient(x, gradient); };
-    problem.bounds.lower   = calibration->lower_bounds();
-    problem.bounds.upper   = calibration->upper_bounds();
+    problem.objective = [calibration](const vector_type& x) { return calibration->objective(x); };
+    problem.set_gradient([calibration](const vector_type& x, vector_type& gradient)
+        { calibration->gradient(x, gradient); });
+    problem.bounds.lower = calibration->lower_bounds();
+    problem.bounds.upper = calibration->upper_bounds();
     return problem;
 }
 
@@ -440,6 +443,25 @@ std::vector<benchmark_case> make_cases(
         return [objective, initial, options]() { return solve(objective, initial, options); };
     };
 
+    // Native LM cannot enforce bounds; the raw box only guards the encoded
+    // variables, so the native rows solve the same residuals without it.
+    least_squares_problem unbounded_ls = analytical_ls;
+    unbounded_ls.bounds                = {};
+    auto native_lm_case                = [unbounded_ls, initial](lm_linear_solver linear_solver)
+    {
+        solve_options options;
+        options.backend             = backend::native;
+        options.algorithm           = algorithm::levenberg_marquardt;
+        options.derivatives         = derivative_mode::supplied;
+        options.max_iterations      = 1000;
+        options.function_tolerance  = 1e-12;
+        options.gradient_tolerance  = 1e-3;
+        options.parameter_tolerance = 1e-12;
+        options.lm                  = lm_options{};
+        options.lm->linear_solver   = linear_solver;
+        return [unbounded_ls, initial, options]() { return solve(unbounded_ls, initial, options); };
+    };
+
     solve_options pounders_options;
     pounders_options.backend        = backend::pounders;
     pounders_options.algorithm      = algorithm::pounders;
@@ -448,6 +470,8 @@ std::vector<benchmark_case> make_cases(
         petsc_tao_options{.algorithm = tao_algorithm::pounders, .gatol = 1e-8, .grtol = 1e-8};
 
     return {
+        {"Native LM (LDLT)", "native", native_lm_case(lm_linear_solver::normal_ldlt)},
+        {"Native LM (QR)", "native", native_lm_case(lm_linear_solver::augmented_qr)},
         {"Ceres LM", "ceres", least_squares_case(backend::ceres, algorithm::automatic)},
         {"Ipopt L-BFGS",
             "ipopt",
