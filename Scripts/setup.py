@@ -1331,9 +1331,7 @@ def main():
         print_status(f"Starting build configuration for {platform.system()}", "INFO")
         compilation_calc = SolversConfiguration(arg_list)
 
-        # Get source path relative to this script's location (handles both direct invocation and from Scripts folder)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        source_path = os.path.dirname(script_dir)
+        source_path = os.path.dirname(os.getcwd())
         build_path = compilation_calc.move_to_build_folder()
 
         print_status(f"Build directory: {build_path}", "INFO")
