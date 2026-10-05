@@ -1,8 +1,8 @@
 #pragma once
 
 #include "solver_options/solver_options.h"
-#include "solvers/api/problem.h"
 #include "solvers/api/result.h"
+#include "solvers/api/solve.h"
 
 namespace solverslib::api
 {
