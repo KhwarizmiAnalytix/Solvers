@@ -8,23 +8,22 @@
 #include "detail/backend_status.h"
 #include "detail/native_result.h"
 #include "solver_options/solver_options_bfgs.h"
-#include "solver_options/solver_options_ceres.h"
 #include "solver_options/solver_options_gn.h"
-#include "solver_options/solver_options_ipopt.h"
 #include "solver_options/solver_options_lm.h"
-#include "solver_options/solver_options_petsc.h"
+#include "solver_options/solver_options_rnc_lm.h"
 #include "solvers/gauss_newton_solver.h"
-#include "solvers/ipopt_solver.h"
 #include "solvers/lbfgs_solver.h"
 #include "solvers/levenberg_marquardt_solver.h"
-#include "solvers/petsc_tao_solver.h"
 #include "solvers/rnc_lm_solver.h"
 
 namespace solverslib::api
 {
+// ---------------------------------------------------------------------------
+// Status translation helpers
+// ---------------------------------------------------------------------------
+
 namespace
 {
-// Status translation helpers
 solver_status translate_native(native_convergence status)
 {
     switch (status)
@@ -43,27 +42,6 @@ solver_status translate_native(native_convergence status)
     return solver_status::numerical_failure;
 }
 
-solver_status translate_outcome(backend_outcome outcome)
-{
-    switch (outcome)
-    {
-    case backend_outcome::converged:
-        return solver_status::converged;
-    case backend_outcome::budget_exhausted:
-        return solver_status::max_iterations;
-    case backend_outcome::stalled:
-        return solver_status::stalled;
-    case backend_outcome::infeasible:
-        return solver_status::infeasible;
-    case backend_outcome::user_stopped:
-        return solver_status::user_stopped;
-    case backend_outcome::failed:
-        return solver_status::numerical_failure;
-    }
-    return solver_status::numerical_failure;
-}
-
-// Helper to create a failed result
 solver_result failed(solver_status status, const std::string& message, const vector_type& x)
 {
     solver_result result;
@@ -73,44 +51,31 @@ solver_result failed(solver_status status, const std::string& message, const vec
     return result;
 }
 
-// Residual L2 norm at a point
 double residual_norm_at(const least_squares_problem& problem, const vector_type& x)
 {
     vector_type r = make_vector(problem.num_residuals);
     problem.residuals(x, r);
     return r.norm();
 }
-}  // namespace
 
-// Inspect least-squares problem structure
-problem_traits inspect(const least_squares_problem& problem)
+// Resolve algorithm choice based on problem and options
+algorithm resolve_algorithm(const least_squares_problem& problem, const solve_options& options)
 {
-    problem_traits traits;
-    traits.is_least_squares = true;
-    traits.has_jacobian     = problem.jacobian.has_value();
-    traits.has_bounds       = !problem.bounds.empty();
-    traits.num_parameters   = problem.num_parameters;
-    traits.num_residuals    = problem.num_residuals;
-    return traits;
+    if (options.algorithm != algorithm::automatic)
+    {
+        return options.algorithm;
+    }
+
+    // Automatic selection: prefer LM for standard least squares
+    if (problem.curve_derivatives)
+    {
+        return algorithm::riemann_normal_coordinate_lm;
+    }
+
+    return algorithm::levenberg_marquardt;
 }
 
-// Inspect optimization problem structure
-problem_traits inspect(const optimization_problem& problem)
-{
-    problem_traits traits;
-    traits.is_least_squares           = false;
-    traits.has_gradient               = problem.gradient.has_value();
-    traits.has_hessian                = problem.hessian.has_value();
-    traits.has_hessian_vector_product = problem.hessian_vector.has_value();
-    traits.has_bounds                 = !problem.bounds.empty();
-    traits.has_nonlinear_constraints  = !problem.constraints.empty();
-    traits.num_parameters             = problem.num_parameters;
-    return traits;
-}
-
-namespace
-{
-// Native least-squares solver
+// Native least-squares solver dispatcher
 solver_result solve_native_least_squares(
     const least_squares_problem& problem,
     const vector_type&           initial_guess,
@@ -128,7 +93,6 @@ solver_result solve_native_least_squares(
         switch (alg)
         {
         case algorithm::levenberg_marquardt:
-        case algorithm::automatic:
         {
             auto native_opts = solver_options_lm_builder()
                                    .with_max_iterations(options.max_iterations)
@@ -151,9 +115,10 @@ solver_result solve_native_least_squares(
             result.step_norm     = out.step_norm;
             result.accepted_steps = out.accepted_steps;
             result.rejected_steps = out.rejected_steps;
-            result.message       = out.message.empty() ? "native converged" : out.message;
+            result.message       = out.message.empty() ? "converged" : out.message;
             return result;
         }
+
         case algorithm::gauss_newton:
         {
             auto native_opts = solver_options_gn_builder()
@@ -177,9 +142,10 @@ solver_result solve_native_least_squares(
             result.step_norm     = out.step_norm;
             result.accepted_steps = out.accepted_steps;
             result.rejected_steps = out.rejected_steps;
-            result.message       = out.message.empty() ? "native converged" : out.message;
+            result.message       = out.message.empty() ? "converged" : out.message;
             return result;
         }
+
         case algorithm::lbfgs:
         {
             auto native_opts = solver_options_bfgs_builder()
@@ -203,28 +169,30 @@ solver_result solve_native_least_squares(
             result.step_norm     = out.step_norm;
             result.accepted_steps = out.accepted_steps;
             result.rejected_steps = out.rejected_steps;
-            result.message       = out.message.empty() ? "native converged" : out.message;
+            result.message       = out.message.empty() ? "converged" : out.message;
             return result;
         }
+
         case algorithm::riemann_normal_coordinate_lm:
         {
             return solve_rnc_lm(problem, initial_guess, options);
         }
+
         default:
             result.status  = solver_status::unsupported_capability;
-            result.message = "algorithm not supported";
+            result.message = "algorithm not supported by native backend";
             return result;
         }
     }
     catch (const std::exception& e)
     {
         result.status  = solver_status::numerical_failure;
-        result.message = std::string("native solver threw: ") + e.what();
+        result.message = std::string("solver threw: ") + e.what();
         return result;
     }
 }
 
-// Native optimization solver
+// Native optimization solver (L-BFGS only)
 solver_result solve_native_optimization(
     const optimization_problem& problem,
     const vector_type&          initial_guess,
@@ -258,19 +226,50 @@ solver_result solve_native_optimization(
         result.step_norm     = out.step_norm;
         result.accepted_steps = out.accepted_steps;
         result.rejected_steps = out.rejected_steps;
-        result.message       = out.message.empty() ? "native converged" : out.message;
+        result.message       = out.message.empty() ? "converged" : out.message;
         return result;
     }
     catch (const std::exception& e)
     {
         result.status  = solver_status::numerical_failure;
-        result.message = std::string("native L-BFGS threw: ") + e.what();
+        result.message = std::string("solver threw: ") + e.what();
         return result;
     }
 }
 }  // namespace
 
-// Least-squares solve entry point
+// ---------------------------------------------------------------------------
+// Problem inspection
+// ---------------------------------------------------------------------------
+
+problem_traits inspect(const least_squares_problem& problem)
+{
+    problem_traits traits;
+    traits.is_least_squares = true;
+    traits.has_jacobian     = problem.jacobian.has_value();
+    traits.has_bounds       = !problem.bounds.empty();
+    traits.num_parameters   = problem.num_parameters;
+    traits.num_residuals    = problem.num_residuals;
+    return traits;
+}
+
+problem_traits inspect(const optimization_problem& problem)
+{
+    problem_traits traits;
+    traits.is_least_squares           = false;
+    traits.has_gradient               = problem.gradient.has_value();
+    traits.has_hessian                = problem.hessian.has_value();
+    traits.has_hessian_vector_product = problem.hessian_vector.has_value();
+    traits.has_bounds                 = !problem.bounds.empty();
+    traits.has_nonlinear_constraints  = !problem.constraints.empty();
+    traits.num_parameters             = problem.num_parameters;
+    return traits;
+}
+
+// ---------------------------------------------------------------------------
+// Public API: solve least-squares problem
+// ---------------------------------------------------------------------------
+
 solver_result solve(
     const least_squares_problem& problem,
     const vector_type&           initial_guess,
@@ -281,9 +280,10 @@ solver_result solve(
     {
         return failed(
             solver_status::invalid_problem,
-            "least_squares_problem requires positive dimensions and a residual callback",
+            "least_squares_problem requires positive dimensions and residual callback",
             initial_guess);
     }
+
     if (static_cast<std::size_t>(initial_guess.size()) != problem.num_parameters)
     {
         return failed(
@@ -291,36 +291,52 @@ solver_result solve(
             "initial_guess size does not match num_parameters",
             initial_guess);
     }
-    if (!problem.bounds.empty() && problem.bounds.lower.size() != problem.num_parameters &&
-        problem.bounds.upper.size() != problem.num_parameters)
+
+    if (!problem.bounds.empty())
     {
+        if ((problem.bounds.has_lower() &&
+             problem.bounds.lower.size() != problem.num_parameters) ||
+            (problem.bounds.has_upper() &&
+             problem.bounds.upper.size() != problem.num_parameters))
+        {
+            return failed(
+                solver_status::invalid_problem,
+                "bounds size does not match num_parameters",
+                initial_guess);
+        }
+    }
+
+    // Resolve algorithm from options
+    auto chosen_algorithm = resolve_algorithm(problem, options);
+
+    // Route based on solve_options backend choice
+    switch (options.backend)
+    {
+    case backend::automatic:
+    case backend::native:
+        return solve_native_least_squares(problem, initial_guess, options, chosen_algorithm);
+
+    case backend::ceres:
+    case backend::ipopt:
+    case backend::petsc_tao:
+    case backend::pounders:
         return failed(
-            solver_status::invalid_problem,
-            "bounds dimensions do not match num_parameters",
+            solver_status::backend_unavailable,
+            "backend not yet implemented; use backend::native or backend::automatic",
+            initial_guess);
+
+    default:
+        return failed(
+            solver_status::unsupported_capability,
+            "unknown backend",
             initial_guess);
     }
-
-    // Determine algorithm: automatic defaults to LM
-    auto chosen_algorithm = options.algorithm;
-    if (chosen_algorithm == algorithm::automatic)
-    {
-        chosen_algorithm = algorithm::levenberg_marquardt;
-    }
-
-    // Route to native solver
-    if (options.backend == backend::automatic || options.backend == backend::native)
-    {
-        return solve_native_least_squares(problem, initial_guess, options, chosen_algorithm);
-    }
-
-    // Other backends not yet implemented
-    return failed(
-        solver_status::backend_unavailable,
-        "only native backend is currently implemented",
-        initial_guess);
 }
 
-// Optimization solve entry point
+// ---------------------------------------------------------------------------
+// Public API: solve optimization problem
+// ---------------------------------------------------------------------------
+
 solver_result solve(
     const optimization_problem& problem,
     const vector_type&          initial_guess,
@@ -331,9 +347,10 @@ solver_result solve(
     {
         return failed(
             solver_status::invalid_problem,
-            "optimization_problem requires positive dimensions and an objective callback",
+            "optimization_problem requires positive dimensions and objective callback",
             initial_guess);
     }
+
     if (static_cast<std::size_t>(initial_guess.size()) != problem.num_parameters)
     {
         return failed(
@@ -341,25 +358,51 @@ solver_result solve(
             "initial_guess size does not match num_parameters",
             initial_guess);
     }
-    if (!problem.bounds.empty() && problem.bounds.lower.size() != problem.num_parameters &&
-        problem.bounds.upper.size() != problem.num_parameters)
+
+    if (!problem.bounds.empty())
+    {
+        if ((problem.bounds.has_lower() &&
+             problem.bounds.lower.size() != problem.num_parameters) ||
+            (problem.bounds.has_upper() &&
+             problem.bounds.upper.size() != problem.num_parameters))
+        {
+            return failed(
+                solver_status::invalid_problem,
+                "bounds size does not match num_parameters",
+                initial_guess);
+        }
+    }
+
+    if (!problem.constraints.empty())
     {
         return failed(
-            solver_status::invalid_problem,
-            "bounds dimensions do not match num_parameters",
+            solver_status::unsupported_capability,
+            "nonlinear constraints not yet implemented",
             initial_guess);
     }
 
-    // Route to native solver
-    if (options.backend == backend::automatic || options.backend == backend::native)
+    // Route based on solve_options backend choice
+    switch (options.backend)
     {
+    case backend::automatic:
+    case backend::native:
         return solve_native_optimization(problem, initial_guess, options);
-    }
 
-    // Other backends not yet implemented
-    return failed(
-        solver_status::backend_unavailable,
-        "only native backend is currently implemented",
-        initial_guess);
+    case backend::ceres:
+    case backend::ipopt:
+    case backend::petsc_tao:
+    case backend::pounders:
+        return failed(
+            solver_status::backend_unavailable,
+            "backend not yet implemented; use backend::native or backend::automatic",
+            initial_guess);
+
+    default:
+        return failed(
+            solver_status::unsupported_capability,
+            "unknown backend",
+            initial_guess);
+    }
 }
+
 }  // namespace solverslib::api
