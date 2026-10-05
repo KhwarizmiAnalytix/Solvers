@@ -68,7 +68,7 @@ uphill-acceptance option or acceleration-ratio rejection test.
 ## Usage
 
 ```cpp
-#include "solvers/api/solve.h"
+#include "api/dispatch.h"
 #include "solvers/integrations/rnc_autodiff.h"
 
 struct Rosenbrock {
@@ -81,7 +81,7 @@ struct Rosenbrock {
 };
 
 auto problem = solverslib::rnc_least_squares(Rosenbrock{}, 2, 2);
-solverslib::api::solve_options options;
+solverslib::api::solver_options options;
 options.algorithm = solverslib::api::algorithm::riemann_normal_coordinate_lm;
 options.rnc_lm = solverslib::api::rnc_lm_options{};
 options.rnc_lm->order = 4;
@@ -141,7 +141,7 @@ There is no numerical finite-difference fallback for missing curve derivatives.
 | `damping_ceiling` | 1e12 | Exhaustion reports numerical failure |
 | `diagonal_scaling_floor` | 1e-12 | Positive floor for `D` |
 
-Common iteration limits, tolerances, and verbosity are in `solve_options`.
+Common iteration limits, tolerances, and verbosity are in `solver_options`.
 Function tolerance measures `||r||`; gradient tolerance measures `||Jᵀr||`;
 parameter tolerance measures the accepted displacement relative to the new
 parameter norm, with an absolute tolerance-squared term near zero.

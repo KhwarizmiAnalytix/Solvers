@@ -11,7 +11,7 @@ namespace solverslib::api
 {
 namespace
 {
-bool valid_options(const solver_options_rnc_lm& cfg, const solve_options& options)
+bool valid_options(const solver_options_rnc_lm& cfg)
 {
     const auto positive  = [](double v) { return std::isfinite(v) && v > 0.; };
     const auto tolerance = [](double v) { return std::isfinite(v) && v >= 0.; };
@@ -23,9 +23,9 @@ bool valid_options(const solver_options_rnc_lm& cfg, const solve_options& option
            cfg.damping_floor() <= cfg.initial_damping() &&
            cfg.initial_damping() <= cfg.damping_ceiling() &&
            cfg.damping_floor() < cfg.damping_ceiling() &&
-           positive(cfg.diagonal_scaling_floor()) && options.max_iterations > 0 &&
-           tolerance(options.function_tolerance) && tolerance(options.gradient_tolerance) &&
-           tolerance(options.parameter_tolerance);
+           positive(cfg.diagonal_scaling_floor()) && cfg.max_num_iterations() > 0 &&
+           tolerance(cfg.function_tolerance()) && tolerance(cfg.gradient_tolerance()) &&
+           tolerance(cfg.parameter_tolerance());
 }
 
 bool valid_derivatives(const rnc_curve_derivatives& d, int order, index_type m, index_type n)
@@ -49,10 +49,8 @@ bool valid_derivatives(const rnc_curve_derivatives& d, int order, index_type m, 
 solver_result solve_rnc_lm(
     const least_squares_problem& problem,
     const vector_type&           initial_guess,
-    const solve_options&         options)
+    const solver_options_rnc_lm& cfg)
 {
-    auto cfg_ptr = options.rnc_lm.value_or(solver_options_rnc_lm_builder().build());
-    const auto& cfg = *cfg_ptr;
 
     solver_result result;
     result.parameters = initial_guess;
@@ -79,17 +77,17 @@ solver_result solve_rnc_lm(
     const auto n = static_cast<index_type>(problem.num_parameters);
     const auto m = static_cast<index_type>(problem.num_residuals);
 
-    if (!valid_options(cfg, options) || n <= 0 || m <= 0 ||
+    if (!valid_options(cfg) || n <= 0 || m <= 0 ||
         static_cast<std::size_t>(initial_guess.size()) != problem.num_parameters ||
         !initial_guess.allFinite() || !problem.residuals)
     {
         return finish(solver_status::invalid_problem, "Invalid RNC-LM problem or options");
     }
 
-    if (!problem.bounds.empty() || options.max_function_evaluations != 0)
+    if (!problem.bounds.empty())
     {
         return finish(solver_status::unsupported_capability,
-            "RNC-LM does not support bounds or evaluation budgets");
+            "RNC-LM does not support bounds");
     }
 
     if (!curve_derivatives)
@@ -119,8 +117,8 @@ solver_result solve_rnc_lm(
     };
     const auto converged = [&]()
     {
-        return *result.residual_norm <= options.function_tolerance ||
-               *result.gradient_norm <= options.gradient_tolerance;
+        return *result.residual_norm <= cfg.function_tolerance() ||
+               *result.gradient_norm <= cfg.gradient_tolerance();
     };
     double lambda = cfg.initial_damping();
     try
@@ -134,7 +132,7 @@ solver_result solve_rnc_lm(
             return finish(
                 solver_status::converged, "RNC-LM residual or gradient tolerance reached");
         }
-        for (int iteration = 0; iteration < options.max_iterations; ++iteration)
+        for (int iteration = 0; iteration < cfg.max_num_iterations(); ++iteration)
         {
             ++result.iterations;  // Counts attempted curves, including rejected curves.
             matrix_type metric = j.transpose() * j;
@@ -243,7 +241,7 @@ solver_result solve_rnc_lm(
                             "Invalid RNC derivatives at accepted point");
                     }
                     SOLVERS_LOG_IF(INFO,
-                        options.verbose,
+                        cfg.verbose(),
                         "RNC-LM iteration {} | order {} | t = {} | cost = {} | rho = {} | lambda = "
                         "{}",
                         result.iterations,
@@ -258,8 +256,8 @@ solver_result solve_rnc_lm(
                             "RNC-LM residual or gradient tolerance reached");
                     }
                     if (*result.step_norm <=
-                        options.parameter_tolerance *
-                            (result.parameters.stableNorm() + options.parameter_tolerance))
+                        cfg.parameter_tolerance() *
+                            (result.parameters.stableNorm() + cfg.parameter_tolerance()))
                     {
                         return finish(
                             solver_status::converged, "RNC-LM parameter tolerance reached");

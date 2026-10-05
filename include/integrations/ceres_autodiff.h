@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "detail/eigen_support.h"
-#include "solvers/api/detail/evaluator.h"
+#include "api/detail/evaluator.h"
 
 namespace solverslib
 {

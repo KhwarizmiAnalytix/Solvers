@@ -5,7 +5,7 @@
 
 #include <ceres/ceres.h>
 
-#include "solvers/api/status.h"
+#include "api/status.h"
 
 namespace solverslib::detail
 {

@@ -1,5 +1,5 @@
-#ifndef SOLVERS_SOLVE_H_
-#define SOLVERS_SOLVE_H_
+#ifndef SOLVERS_DISPATCH_H_
+#define SOLVERS_DISPATCH_H_
 
 #include <cstddef>
 #include <functional>
@@ -9,8 +9,8 @@
 #include "detail/eigen_support.h"
 #include "detail/support.h"
 #include "solver_options/solver_options.h"
-#include "solvers/api/result.h"
-#include "solvers/api/status.h"
+#include "api/result.h"
+#include "api/status.h"
 
 namespace solverslib::api
 {
@@ -322,12 +322,12 @@ problem_traits inspect(const optimization_problem& problem);
 
 solver_result solve(const least_squares_problem& problem,
     const vector_type&                           initial_guess,
-    const ::solverslib::solve_options&           options = {});
+    const solver_options&                        options);
 
 solver_result solve(const optimization_problem& problem,
     const vector_type&                          initial_guess,
-    const ::solverslib::solve_options&          options = {});
+    const solver_options&                       options);
 
 }  // namespace solverslib::api
 
-#endif  // SOLVERS_SOLVE_H_
+#endif  // SOLVERS_DISPATCH_H_

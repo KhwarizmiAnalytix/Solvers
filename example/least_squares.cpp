@@ -1,7 +1,7 @@
 #include <cstdio>
 
 #include "detail/eigen_support.h"
-#include "solvers/api/solve.h"
+#include "api/dispatch.h"
 
 int main()
 {
@@ -36,7 +36,7 @@ int main()
     vector_type initial_guess(num_params);
     initial_guess << 1.0, 0.0;
 
-    solve_options options;
+    solver_options options;
     options.max_iterations      = 100;
     options.function_tolerance  = 1e-8;
     options.parameter_tolerance = 1e-8;

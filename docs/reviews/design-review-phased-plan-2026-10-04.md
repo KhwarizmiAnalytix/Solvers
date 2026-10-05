@@ -27,15 +27,15 @@ P1 means a contract or correctness defect. P2 means an architectural, performanc
 | ID | Pri | Finding | Evidence |
 |---|---|---|---|
 | D1 | P1 | Automatic dispatch selects backends that are not compiled in. A residual-only least-squares problem resolves to POUNDERS, so a default build (PETSc `OFF`) returns `backend_unavailable`, even though native LM can solve it with finite differences. Tests lock this in. | [dispatch.cpp `select_algorithm`](../../src/api/dispatch.cpp#L323-L334), [TestSolverApiDispatch.cpp](../../Testing/Cxx/TestSolverApiDispatch.cpp#L265-L278) |
-| D2 | P1 | The automatic Ceres AD route is unreachable. `backend_for` requires `has_autodiff_provider && !has_jacobian_provider`, but `set_jacobian_provider` is the only writer of `provider_factory` and always sets `jacobian_provider` too. | [dispatch.cpp `backend_for`](../../src/api/dispatch.cpp#L47-L54), [problem.h setter](../../include/solvers/api/problem.h#L98-L109) |
+| D2 | P1 | The automatic Ceres AD route is unreachable. `backend_for` requires `has_autodiff_provider && !has_jacobian_provider`, but `set_jacobian_provider` is the only writer of `provider_factory` and always sets `jacobian_provider` too. | [dispatch.cpp `backend_for`](../../src/api/dispatch.cpp#L47-L54), [problem.h setter](../../include/api/problem.h#L98-L109) |
 | D3 | P1 | Derivative resolution is still split. TAO least squares calls `resolve_derivatives` and then ignores the result. Native L-BFGS, Ipopt, and TAO-objective each have their own order of preference; Ipopt and TAO-objective ignore `options.derivatives` and never set `effective_derivative_source`. The resolver returns errors as a raw `new solver_result*`. | [dispatch.cpp](../../src/api/dispatch.cpp#L369-L438), [TAO LS](../../src/api/dispatch.cpp#L827-L841), [native opt](../../src/api/dispatch.cpp#L879-L908), [Ipopt](../../src/api/dispatch.cpp#L978-L994) |
-| D4 | P1 | Results don't report honestly. The evaluation counters are plain `size_t` and stay 0 on every path except RNC-LM. `from_native` never sets `gradient_norm` or `step_norm`. A native LM stall at the damping ceiling is reported as `max_iterations`, which signals a usable iterate. Every Ipopt non-success, including hitting the budget, is reported as `numerical_failure`, because the adapters return `bool`. | [result.h](../../include/solvers/api/result.h#L29-L40), [from_native](../../src/api/dispatch.cpp#L92-L110), [LM ceiling](../../src/solvers/levenberg_marquardt_solver.cpp#L402-L406), [Ipopt status](../../src/api/dispatch.cpp#L1024) |
+| D4 | P1 | Results don't report honestly. The evaluation counters are plain `size_t` and stay 0 on every path except RNC-LM. `from_native` never sets `gradient_norm` or `step_norm`. A native LM stall at the damping ceiling is reported as `max_iterations`, which signals a usable iterate. Every Ipopt non-success, including hitting the budget, is reported as `numerical_failure`, because the adapters return `bool`. | [result.h](../../include/api/result.h#L29-L40), [from_native](../../src/api/dispatch.cpp#L92-L110), [LM ceiling](../../src/solvers/levenberg_marquardt_solver.cpp#L402-L406), [Ipopt status](../../src/api/dispatch.cpp#L1024) |
 | D5 | P2 | Native kernels can't use a provider efficiently. The dispatcher wraps `compute()` and throws the residuals away, so residuals are computed twice. `AutoDiffJacobianProvider::compute` builds a new `DynamicAutoDiffCostFunction` on every call. Each AD evaluation makes three buffer copies plus a layout conversion. | [dispatch.cpp](../../src/api/dispatch.cpp#L467-L477), [autodiff_provider.h](../../include/solvers/integrations/autodiff_provider.h#L49-L64), [ceres_autodiff.h](../../include/solvers/integrations/ceres_autodiff.h#L56-L116) |
-| D6 | P2 | `least_squares_problem` has five overlapping derivative fields, all public: `jacobian`, `jacobian_provider`, `provider_factory`, `model_provider_factory`, and `rnc_derivatives` with `rnc_derivative_source`. The rule tying `provider_factory` to `jacobian_provider` is enforced only by a setter. | [problem.h](../../include/solvers/api/problem.h#L65-L139) |
+| D6 | P2 | `least_squares_problem` has five overlapping derivative fields, all public: `jacobian`, `jacobian_provider`, `provider_factory`, `model_provider_factory`, and `rnc_derivatives` with `rnc_derivative_source`. The rule tying `provider_factory` to `jacobian_provider` is enforced only by a setter. | [problem.h](../../include/api/problem.h#L65-L139) |
 | D7 | P2 | Request validation is a 140-line chain of if-statements over backend × algorithm × capability. Bounds validation is duplicated between the two `solve` overloads, and native bounds rejection is duplicated inside each overload. | [validate_request](../../src/api/dispatch.cpp#L145-L282), [LS bounds](../../src/api/dispatch.cpp#L1134-L1158), [opt bounds](../../src/api/dispatch.cpp#L1225-L1246) |
-| D8 | P2 | There are two option systems. `solve_options` has no `lm` field, so the LM damping, geodesic, and variant controls added in `34aaf5a` can't be reached from `api::solve`. `algorithm::bfgs` silently runs L-BFGS. | [options.h](../../include/solvers/api/options.h#L42-L47), [dispatch.cpp](../../src/api/dispatch.cpp#L506-L518) |
+| D8 | P2 | There are two option systems. `solver_options` has no `lm` field, so the LM damping, geodesic, and variant controls added in `34aaf5a` can't be reached from `api::solve`. `algorithm::bfgs` silently runs L-BFGS. | [options.h](../../include/api/options.h#L42-L47), [dispatch.cpp](../../src/api/dispatch.cpp#L506-L518) |
 | D9 | P2 | LM solves the normal equations `JᵀJ + λD` with `PartialPivLU`. That squares the condition number and ignores that the matrix is symmetric positive definite. Each iteration builds an explicit `Jt` copy and allocates temporaries. The function tolerance is compared with ‖r‖, while the API defines the objective as ½‖r‖². | [LM](../../src/solvers/levenberg_marquardt_solver.cpp#L118), [L171](../../src/solvers/levenberg_marquardt_solver.cpp#L171), [L186-L187](../../src/solvers/levenberg_marquardt_solver.cpp#L186-L187) |
-| D10 | P2 | Smaller issues. `auto_diff()` is defined in both `solverslib` and `solverslib::api`. `run_ceres` builds a `ceres_solver` and then rebuilds it. Root finders return `bool` and polynomial solvers return a single `double`. `default.profraw` and two PNGs are tracked in the repository root. | [autodiff_provider.h](../../include/solvers/integrations/autodiff_provider.h#L119), [derivative_provider.h](../../include/solvers/api/derivative_provider.h#L195), [run_ceres](../../src/api/dispatch.cpp#L676-L691) |
+| D10 | P2 | Smaller issues. `auto_diff()` is defined in both `solverslib` and `solverslib::api`. `run_ceres` builds a `ceres_solver` and then rebuilds it. Root finders return `bool` and polynomial solvers return a single `double`. `default.profraw` and two PNGs are tracked in the repository root. | [autodiff_provider.h](../../include/solvers/integrations/autodiff_provider.h#L119), [derivative_provider.h](../../include/api/derivative_provider.h#L195), [run_ceres](../../src/api/dispatch.cpp#L676-L691) |
 
 ## Plan overview
 
@@ -56,7 +56,7 @@ flowchart LR
 | 1 | D1, D2, D7 | dispatch outcomes change; no signature change | M |
 | 2 | D3, D5 | internal kernel signatures; provider internals | L |
 | 3 | D4 | `solver_result` fields become `optional`; new status | M |
-| 4 | D6, D8, D10 (`auto_diff`, Ceres rebuild) | problem derivative slot; `solve_options::lm` | M |
+| 4 | D6, D8, D10 (`auto_diff`, Ceres rebuild) | problem derivative slot; `solver_options::lm` | M |
 | 5 | D9 | none (numerical behavior only) | M |
 | 6 | D10 (roots) | new structured root results; old functions kept | M |
 
@@ -119,7 +119,7 @@ Tasks:
    - pick by `large_scale` preference, then `priority`.
 
    Example: residual-only least squares picks native LM with finite differences when PETSc is absent, and POUNDERS when it is present.
-3. Make `select_backend` and `select_algorithm` thin wrappers over `select_route`, so the public test hooks in [solve.h](../../include/solvers/api/solve.h) keep their signatures.
+3. Make `select_backend` and `select_algorithm` thin wrappers over `select_route`, so the public test hooks in [dispatch.h](../../include/api/dispatch.h) keep their signatures.
 4. Replace `validate_request` with:
    - (a) option sanity checks (budgets, tolerances, finite initial guess);
    - (b) a route lookup that, when no row matches, reports the first unmet capability by name. A pin to an unavailable backend still returns `backend_unavailable`.
@@ -139,7 +139,7 @@ Tests:
 
 **Goal:** give every backend one derivative resolver, and have native kernels consume a single stateful evaluator instead of `std::function` pairs.
 
-**Design reference.** Ceres separates `Problem` (what the user declared) from `Evaluator` (a per-solve object that evaluates residuals and an optional Jacobian into buffers it owns). PyTorch's `autograd.Function` similarly keeps per-call state in a context object rather than recomputing. The existing [`residual_evaluator` / `provider_factory`](../../include/solvers/api/detail/evaluator.h) pair already has this shape; this phase makes it the only path. One deviation from Ceres: we keep dense Eigen storage and a single parameter block. Residual-block graphs stay out of scope until sparse problems are a stated requirement.
+**Design reference.** Ceres separates `Problem` (what the user declared) from `Evaluator` (a per-solve object that evaluates residuals and an optional Jacobian into buffers it owns). PyTorch's `autograd.Function` similarly keeps per-call state in a context object rather than recomputing. The existing [`residual_evaluator` / `provider_factory`](../../include/api/detail/evaluator.h) pair already has this shape; this phase makes it the only path. One deviation from Ceres: we keep dense Eigen storage and a single parameter block. Residual-block graphs stay out of scope until sparse problems are a stated requirement.
 
 Tasks:
 
@@ -170,7 +170,7 @@ Tasks:
    };
    // C++17: the error alternative carries the solver_result to return.
    std::variant<resolved_derivatives, solver_result>
-   resolve(const least_squares_problem&, const solve_options&, const route&, const vector_type&);
+   resolve(const least_squares_problem&, const solver_options&, const route&, const vector_type&);
    ```
 
    Add an `optimization_problem` overload. Every `run_*` function calls `resolve` exactly once and uses its evaluator. TAO least squares, native L-BFGS, Ipopt, and TAO-objective all stop doing their own derivative selection.
@@ -226,7 +226,7 @@ Tasks:
    The `jacobian` callback becomes sugar for `analytic_jacobian(...)`. `model_provider_factory` becomes an internal detail of `least_squares(model, n, m)`.
 2. Migration: keep the old public fields for one release as `[[deprecated]]`, with an internal normalization step at the top of `solve` that builds the provider from them. Add a test that old-style and new-style problems dispatch the same way.
 3. Make the same change on `optimization_problem` for `gradient` / `gradient_provider`.
-4. Add `std::optional<api::lm_options> lm` to `solve_options`, mirroring `solver_options_lm`: variant, bold acceptance, geodesic acceleration and threshold, damping factors, floors and ceilings. Map it in the native LM route. Validate it at the solve boundary, the way `rnc_lm_options` already is.
+4. Add `std::optional<api::lm_options> lm` to `solver_options`, mirroring `solver_options_lm`: variant, bold acceptance, geodesic acceleration and threshold, damping factors, floors and ceilings. Map it in the native LM route. Validate it at the solve boundary, the way `rnc_lm_options` already is.
 5. Either implement full-memory BFGS or remove `algorithm::bfgs` from the enum. Recommendation: remove it until it has a separate implementation, so the reported algorithm is always what ran.
 6. Keep `auto_diff()` only in `solverslib::api`, and remove the duplicate from [autodiff_provider.h](../../include/solvers/integrations/autodiff_provider.h#L119).
 7. Construct `ceres_solver` once in `run_ceres`, choosing the constructor before building it.
@@ -299,7 +299,7 @@ used; GCC and MSVC were not tried.
 | 1 | D1, D2, D7 | `src/api/routing.cpp` table; `validate_request` deleted; one `validate_bounds` |
 | 2 | D3, D5 | Evaluator layer (`api/detail/evaluators.h`), one `resolve_derivatives`/`resolve_gradient`; kernels take evaluators; AD cost function built once |
 | 3 | D4 | Optional counters, `stalled`, structured Ipopt/TAO/Ceres status |
-| 4 | D6, D8, D10 | One derivative slot per problem, `solve_options::lm`, `algorithm::bfgs` removed |
+| 4 | D6, D8, D10 | One derivative slot per problem, `solver_options::lm`, `algorithm::bfgs` removed |
 | 5 | D9 | `damped_step_solver` (LDLT / augmented QR), workspace, `F = 0.5||r||^2` tolerance |
 | 6 | D10 (roots) | `api::find_root`, `api::real_roots*`, selection policies |
 

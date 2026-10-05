@@ -344,8 +344,8 @@ first implementation slice:
 
 ### Implementation status (as delivered)
 
-The API layer lives under `include/solvers/api/` (`status.h`, `result.h`,
-`problem.h`, `options.h`, `backend_options.h`, `solve.h`) with the dispatcher in
+The API layer lives under `include/api/` (`status.h`, `result.h`,
+`problem.h`, `options.h`, `backend_options.h`, `dispatch.h`) with the dispatcher in
 `src/api/dispatch.cpp`; tests are in `Testing/Cxx/TestSolverApiDispatch.cpp`.
 
 - **Native LM / Gauss-Newton / L-BFGS** run the existing kernels for dense

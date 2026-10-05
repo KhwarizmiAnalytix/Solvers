@@ -1,7 +1,7 @@
 #pragma once
 
 #include "detail/taylor_series.h"
-#include "solvers/api/problem.h"
+#include "api/problem.h"
 #include <stdexcept>
 #include <type_traits>
 #include <utility>

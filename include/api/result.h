@@ -7,7 +7,7 @@
 
 #include "detail/eigen_support.h"
 #include "detail/support.h"
-#include "solvers/api/status.h"
+#include "api/status.h"
 
 namespace solverslib::api
 {

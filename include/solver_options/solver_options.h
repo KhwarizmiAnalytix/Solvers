@@ -7,7 +7,7 @@
 #include <string>
 
 #include "detail/support.h"
-#include "solvers/api/status.h"
+#include "api/status.h"
 
 namespace solverslib
 {
@@ -51,35 +51,5 @@ protected:
     double      parameter_tolerance_ = 0.0;
     bool        verbose_             = false;
     std::string log_file_;
-};
-
-// Forward declarations
-class solver_options_lm;
-class solver_options_rnc_lm;
-class solver_options_ceres;
-class solver_options_ipopt;
-class solver_options_petsc;
-
-// Minimal solve options - users choose which solver and configure it directly
-struct solve_options
-{
-    api::algorithm algorithm = api::algorithm::automatic;
-    api::backend   backend   = api::backend::automatic;
-    api::derivative_mode derivatives = api::derivative_mode::automatic;
-
-    // Defaults when building solver options
-    int    max_iterations        = 100;
-    int    max_function_evaluations = 0;
-    double function_tolerance    = std::numeric_limits<double>::epsilon();
-    double gradient_tolerance    = 0.0;
-    double parameter_tolerance   = std::numeric_limits<double>::epsilon();
-    bool   verbose               = false;
-
-    // Optional backend-specific configurations
-    std::optional<std::shared_ptr<const solver_options_lm>>     lm;
-    std::optional<std::shared_ptr<const solver_options_rnc_lm>> rnc_lm;
-    std::optional<std::shared_ptr<const solver_options_ceres>>  ceres;
-    std::optional<std::shared_ptr<const solver_options_ipopt>>  ipopt;
-    std::optional<std::shared_ptr<const solver_options_petsc>>  petsc_tao;
 };
 }  // namespace solverslib

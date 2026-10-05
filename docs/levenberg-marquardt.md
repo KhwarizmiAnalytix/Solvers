@@ -96,11 +96,11 @@ Taylor AD or an analytic callback and does not use this heuristic.
 
 ## Public options
 
-Reach these options through `api::solve` with `solve_options::lm`
+Reach these options through `api::solve` with `solver_options::lm`
 (`api::lm_options`, same names and defaults, with `variant` in place of `type`:
 `lm_variant::levenberg_marquardt`, `quadratic_interpolation`, `nielsen`). They
 are validated at the solve boundary: an invalid value returns `invalid_problem`
-instead of throwing. Budgets and tolerances stay in `solve_options`; the
+instead of throwing. Budgets and tolerances stay in `solver_options`; the
 finite-difference step is owned by the shared finite-difference evaluator, not
 by this struct. The `solver_options_lm` builder below is the internal layer
 behind that mapping.

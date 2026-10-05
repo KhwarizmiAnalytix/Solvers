@@ -18,8 +18,8 @@
 
 #include "detail/eigen_support.h"
 #include "detail/support.h"
-#include "solvers/api/derivative_provider.h"
-#include "solvers/api/problem.h"
+#include "api/derivative_provider.h"
+#include "api/problem.h"
 #include "solvers/integrations/ceres_autodiff.h"
 
 namespace solverslib

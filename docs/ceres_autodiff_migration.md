@@ -33,7 +33,7 @@ This prevents silent degradation: explicit requests are validated before solving
 ### Before: Hand-Coded Jacobian
 
 ```cpp
-#include <solvers/api/solve.h>
+#include <api/dispatch.h>
 
 struct MyModel {
     void residuals(const vector_type& x, vector_type& r) const {
@@ -62,7 +62,7 @@ int main() {
     });
 
     vector_type x = {1.0, 1.0};
-    api::solve_options opts;
+    api::solver_options opts;
     auto result = api::solve(problem, x, opts);
 
     return result.converged() ? 0 : 1;
@@ -89,7 +89,7 @@ int main() {
     auto problem = make_ceres_autodiff_problem(2, 2, MyResiduals{});
 
     vector_type x = {1.0, 1.0};
-    api::solve_options opts;
+    api::solver_options opts;
     opts.backend = api::backend::ceres;
     opts.derivatives = api::derivative_mode::automatic_differentiation;
 
@@ -112,7 +112,7 @@ int main() {
 Use when AD is critical and you want to fail fast if unavailable:
 
 ```cpp
-api::solve_options opts;
+api::solver_options opts;
 opts.derivatives = api::derivative_mode::automatic_differentiation;
 opts.backend = api::backend::ceres;
 // Solves with AD Jacobian or returns unsupported_capability error
@@ -124,11 +124,11 @@ auto result = api::solve(problem, x, opts);
 Use to test AD quality against finite differences:
 
 ```cpp
-api::solve_options opts_ad;
+api::solver_options opts_ad;
 opts_ad.derivatives = api::derivative_mode::automatic_differentiation;
 auto result_ad = api::solve(problem, x, opts_ad);
 
-api::solve_options opts_fd;
+api::solver_options opts_fd;
 opts_fd.derivatives = api::derivative_mode::finite_difference;
 auto result_fd = api::solve(problem, x, opts_fd);
 
@@ -198,7 +198,7 @@ int main() {
     auto problem = make_ceres_autodiff_problem(2, 5, fit);
 
     vector_type x = {1.0, 0.1};
-    api::solve_options opts;
+    api::solver_options opts;
     opts.backend = api::backend::ceres;
 
     auto result = api::solve(problem, x, opts);

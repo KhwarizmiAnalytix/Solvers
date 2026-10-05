@@ -77,7 +77,7 @@ bool converged = solverslib::root_finding_algorithms::brent(
 For a status, counts and the best estimate instead of a `bool`, use the structured form:
 
 ```cpp
-#include <solvers/api/roots.h>
+#include <api/roots.h>
 
 using namespace solverslib::api;
 
@@ -98,7 +98,7 @@ const auto first = smallest_positive_root(roots.roots);          // 1
 Everything goes through `api::solve`. Describe the problem, call `solve`, and read one structured result.
 
 ```cpp
-#include "solvers/api/solve.h"
+#include "api/dispatch.h"
 
 using namespace solverslib;
 using namespace solverslib::api;
@@ -114,7 +114,7 @@ problem.set_jacobian([](const vector_type& params, matrix_type& J) {
     // fill J with dr_i / dparam_j
 });
 
-solve_options options;
+solver_options options;
 options.max_iterations = 100;
 
 const solver_result result = solve(problem, initial_guess, options);
@@ -129,7 +129,7 @@ A problem carries one derivative slot (a provider): `set_jacobian(...)` for a ca
 
 `solver_result::status` is one closed vocabulary across backends: `converged`, `max_iterations` (budget used up, iterate usable), `stalled` (no acceptable step; the last accepted point is valid), and the failure statuses. Work counters (`residual_evaluations`, `jacobian_evaluations`, `accepted_steps`, ...) are `std::optional`: an empty value means the backend does not report it, an engaged zero means it measured zero.
 
-> The `solver_options_*` builders and the native kernel classes (`levenberg_marquardt_solver`, `gauss_newton_solver`, `lbfgs_solver`) are the internal layer behind `api::solve`. New options are only added to `api::solve_options`.
+> The `solver_options_*` builders and the native kernel classes (`levenberg_marquardt_solver`, `gauss_newton_solver`, `lbfgs_solver`) are the internal layer behind `api::solve`. New options are only added to `api::solver_options`.
 
 ### Automatic Differentiation with Ceres
 
@@ -137,7 +137,7 @@ For problems where hand-coded Jacobians are expensive or error-prone, define a t
 
 ```cpp
 #include <iostream>
-#include "solvers/api/solve.h"
+#include "api/dispatch.h"
 #include "solvers/integrations/autodiff_provider.h"
 
 struct MyResiduals {
@@ -155,7 +155,7 @@ int main() {
     auto problem = least_squares(MyResiduals{}, 1, 1);
     problem.derivatives(api::auto_diff());
 
-    solve_options options;
+    solver_options options;
     options.backend = backend::ceres;
     options.derivatives = derivative_mode::automatic_differentiation;
 

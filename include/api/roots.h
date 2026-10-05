@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "detail/support.h"
-#include "solvers/api/status.h"
+#include "api/status.h"
 
 // Structured results for scalar root finding and real polynomial roots. They
 // extend the problem-structure API's conventions (one closed status vocabulary,

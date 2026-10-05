@@ -8,11 +8,11 @@ Date: 2026-09-27. Scope: current source, optional backend integration, and a pro
 
 ## Current design and findings
 
-The separation into `least_squares_problem`, `optimization_problem`, `solve_options`, dispatch, and backend adapters is a useful foundation. The least-squares convention is explicit: `F = 0.5 * ||r||^2`, `J(i,j) = dr_i/dx_j`. Keep this architecture; a new optimization abstraction is unnecessary to deliver AD.
+The separation into `least_squares_problem`, `optimization_problem`, `solver_options`, dispatch, and backend adapters is a useful foundation. The least-squares convention is explicit: `F = 0.5 * ||r||^2`, `J(i,j) = dr_i/dx_j`. Keep this architecture; a new optimization abstraction is unnecessary to deliver AD.
 
 | Priority | Finding and source | Consequence |
 |---|---|---|
-| P1 | [`problem.h`](../../include/solvers/api/problem.h), `least_squares_problem`, stores a functor in `std::any`, but [`dispatch.cpp`](../../src/api/dispatch.cpp), `run_ceres`, passes only the double residual and Jacobian callbacks. | The advertised templated-residual path does not compute derivatives. |
+| P1 | [`problem.h`](../../include/api/problem.h), `least_squares_problem`, stores a functor in `std::any`, but [`dispatch.cpp`](../../src/api/dispatch.cpp), `run_ceres`, passes only the double residual and Jacobian callbacks. | The advertised templated-residual path does not compute derivatives. |
 | P1 | [`ceres_solver.cpp`](../../src/solvers/ceres_solver.cpp), `solve`, installs a central-difference lambda with an absolute `1e-8` bump when the Jacobian callback is empty. | Current “internal Jacobian” means library-written finite differences, not Ceres AD or Ceres numeric differentiation. |
 | P1 | [`dispatch.cpp`](../../src/api/dispatch.cpp), `inspect` and `select_algorithm`, considers only `jacobian.has_value()` and routes missing Jacobians to POUNDERS. | A usable AD provider would still be classified as derivative-free unless dispatch changes. An engaged optional holding an empty `std::function` is also misclassified. |
 | P1 | [`TestSolverBackends.cpp`](../../Testing/Cxx/TestSolverBackends.cpp), `AutomaticDifferentiation` tests, checks storage/retrieval and residual values with `double`. | These tests do not instantiate Jets or verify a Jacobian. `CeresWithInternalJacobian` currently tests finite differences. |
@@ -56,7 +56,7 @@ Add an optional header, for example `solvers/integrations/ceres_autodiff.h`, wit
 auto problem = api::make_ceres_autodiff_problem(
     2, 2, RosenbrockResiduals{});
 
-api::solve_options options;
+api::solver_options options;
 options.backend = api::backend::ceres;
 options.derivatives = api::derivative_mode::automatic_differentiation;
 auto result = api::solve(problem, initial_guess, options);

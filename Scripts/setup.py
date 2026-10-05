@@ -1117,15 +1117,23 @@ class SolversConfiguration:
         if self.__value["benchmark"] != "benchmark" or not self.__solvers_flags.is_benchmark():
             return 0
 
-        bench_dir = os.path.join(build_path, "Testing", "Cxx")
-        bench_names = ["SolversBenchmark"]
+        bench_exes = [
+            os.path.join(build_path, "Testing", "Benchmark", "BenchmarkSolverComparison"),
+        ]
         ran = 0
-        for name in bench_names:
-            exe = os.path.join(bench_dir, name)
+        for exe in bench_exes:
             if not os.path.isfile(exe):
                 continue
+            name = os.path.basename(exe)
             print_status(f"Running benchmark: {name}", "INFO")
-            result = subprocess.run([exe], capture_output=False)
+            # Google Benchmark flags for good statistical output
+            benchmark_args = [
+                exe,
+                "--benchmark_min_time=0.5s",
+                "--benchmark_repetitions=3",
+                "--benchmark_report_aggregates_only=true"
+            ]
+            result = subprocess.run(benchmark_args, capture_output=False)
             if result.returncode != 0:
                 print_status(f"Benchmark {name} exited with code {result.returncode}", "ERROR")
             ran += 1

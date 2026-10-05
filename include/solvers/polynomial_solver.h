@@ -12,7 +12,7 @@ namespace solverslib
 // Single-double convenience forms. They return one root chosen by a fixed rule
 // (and, for the quartic, clamp it to a threshold) and report no failure. To get
 // every real root with a status, then pick one with an explicit policy, use
-// solverslib::api::real_roots and the selection functions in solvers/api/roots.h.
+// solverslib::api::real_roots and the selection functions in api/roots.h.
 class polynomial_solver
 {
     SOLVERS_DELETE_CLASS(polynomial_solver);

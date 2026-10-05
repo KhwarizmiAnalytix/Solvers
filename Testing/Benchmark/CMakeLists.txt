@@ -1,0 +1,21 @@
+# Use system-installed Google Benchmark via pkg-config
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(BENCHMARK benchmark QUIET IMPORTED_TARGET)
+endif()
+
+if(NOT TARGET PkgConfig::BENCHMARK)
+  message(STATUS "Google Benchmark not found. Trying find_package...")
+  find_package(benchmark QUIET)
+  if(NOT benchmark_FOUND)
+    message(FATAL_ERROR "Google Benchmark not found. Install it via: brew install benchmark")
+  endif()
+endif()
+
+add_executable(BenchmarkSolverComparison BenchmarkSolverComparison.cpp)
+target_include_directories(BenchmarkSolverComparison PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+if(TARGET PkgConfig::BENCHMARK)
+  target_link_libraries(BenchmarkSolverComparison PRIVATE Solvers PkgConfig::BENCHMARK)
+else()
+  target_link_libraries(BenchmarkSolverComparison PRIVATE Solvers benchmark::benchmark)
+endif()

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./Testing/Cxx/TestSolversBackend)",
+      "Bash(./Testing/Cxx/TestSolversBackend --gtest_filter=\"*RNC*\")",
+      "Bash(./Testing/Cxx/TestSolversBackend --gtest_filter=\"*Riemann*\")",
+      "Bash(./Testing/Cxx/TestSolversBackend --gtest_filter=\"Native*\")"
+    ]
+  }
+}

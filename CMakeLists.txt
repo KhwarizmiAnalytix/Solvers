@@ -14,6 +14,7 @@ option(SOLVERS_ENABLE_SANITIZER "Enable address and undefined behavior sanitizer
 option(SOLVERS_ENABLE_COVERAGE "Enable coverage instrumentation" OFF)
 option(SOLVERS_ENABLE_CLANGTIDY "Enable clang-tidy static analysis for Solvers" OFF)
 option(SOLVERS_ENABLE_IWYU "Enable include-what-you-use analysis for Solvers" OFF)
+option(SOLVERS_ENABLE_BENCHMARKS "Build the solver backend comparison benchmark" OFF)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -96,6 +97,10 @@ endif()
 if(SOLVERS_ENABLE_TESTING)
     enable_testing()
     add_subdirectory(Testing/Cxx)
+endif()
+
+if(SOLVERS_ENABLE_BENCHMARKS)
+    add_subdirectory(Testing/Benchmark)
 endif()
 
 # ---------------------------------------------------------------------------

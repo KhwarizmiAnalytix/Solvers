@@ -35,7 +35,7 @@ changes that callers can observe are listed first.
   A throwing callback becomes `numerical_failure` with its message; a non-finite
   trial point is a rejected step; a non-finite initial point fails before iterating.
 - **Every backend resolves derivative policy the same way.** Ipopt, TAO and native
-  L-BFGS used to ignore `solve_options::derivatives` or choose their own order; they
+  L-BFGS used to ignore `solver_options::derivatives` or choose their own order; they
   now honor it and report `effective_derivative_source`. With no derivative source,
   least squares reports `finite_difference` (it used to report `automatic`).
   Objective problems still require an explicit gradient unless
@@ -48,7 +48,7 @@ changes that callers can observe are listed first.
 
 ### API additions
 
-- `api::find_root(method, f, ...)` (`solvers/api/roots.h`): the seven root methods
+- `api::find_root(method, f, ...)` (`api/roots.h`): the seven root methods
   behind one entry point returning `root_result` (status, root, residual,
   iterations, evaluations, message). An unusable bracket is `invalid_problem`
   (checked before searching), a non-finite or throwing function is
@@ -60,7 +60,7 @@ changes that callers can observe are listed first.
   `smallest_positive_root`, `largest_root`, `roots_in_interval`,
   `smallest_root_in_interval`, and the opt-in `at_least` for the old clamp.
 
-- `solve_options::lm` (`api::lm_options`): variant, bold acceptance, geodesic
+- `solver_options::lm` (`api::lm_options`): variant, bold acceptance, geodesic
   acceleration, damping factors/floors/ceilings, and `linear_solver`
   (`normal_ldlt`, `augmented_qr`).
 - Problem setters: `least_squares_problem::set_jacobian`, `set_curve_derivatives`,
