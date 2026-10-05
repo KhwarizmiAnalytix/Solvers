@@ -129,7 +129,7 @@ A problem carries one derivative slot (a provider): `set_jacobian(...)` for a ca
 
 `solver_result::status` is one closed vocabulary across backends: `converged`, `max_iterations` (budget used up, iterate usable), `stalled` (no acceptable step; the last accepted point is valid), and the failure statuses. Work counters (`residual_evaluations`, `jacobian_evaluations`, `accepted_steps`, ...) are `std::optional`: an empty value means the backend does not report it, an engaged zero means it measured zero.
 
-> The `solver_options_*` builders and the native kernel classes (`levenberg_marquardt_solver`, `gauss_newton_solver`, `lbfgs_solver`) are the internal layer behind `api::solve`. Calling them directly still works, but it is deprecated for new code: they will stop being public in a later release, and new options are only added to `api::solve_options`.
+> The `solver_options_*` builders and the native kernel classes (`levenberg_marquardt_solver`, `gauss_newton_solver`, `lbfgs_solver`) are the internal layer behind `api::solve`. New options are only added to `api::solve_options`.
 
 ### Automatic Differentiation with Ceres
 
@@ -215,23 +215,25 @@ This requires Ceres as a dependency; see [ceres-solver.org](http://ceres-solver.
 
 ## Performance
 
-Benchmark programs are in `Testing/Cxx/`:
+All benchmarks are sections of one executable, `SolversBenchmark`
+(`Testing/Cxx/Benchmark*.cpp`), built with `-DSOLVERS_ENABLE_BENCHMARKS=ON`. Every
+section times the same way (warmup, then best-of and median in microseconds) and prints
+the same table layout:
 
-- `BenchmarkRootFinders.cpp`
-- `BenchmarkRootFindersVsLM.cpp`
-- `BenchmarkSolvers.cpp`
-- `BenchmarkSviCalibration.cpp` — calibrates the EURO STOXX 50 raw-SVI example
-  from [Ferhati (2020)](https://doi.org/10.2139/ssrn.3543766) with native,
-  Ceres, Ipopt, PETSc/TAO, and POUNDERS
-
-Each benchmark reports wall-clock time, iterations, function evaluations, and final residual. Reproduce them locally with:
+| Section | What it measures |
+|---|---|
+| `solvers` | every dispatch path of the decision tree across native, Ceres, Ipopt and PETSc/TAO |
+| `root-finders` | every root-finding method, plus LM on the same scalar problems |
+| `lm-linear-solvers` | native LM under `normal_ldlt` and `augmented_qr` |
+| `rnc-lm` | RNC-LM on the generalized Rosenbrock valley, by curve order |
+| `svi-calibration` | the EURO STOXX 50 raw-SVI example from [Ferhati (2020)](https://doi.org/10.2139/ssrn.3543766) with native, Ceres, Ipopt, PETSc/TAO, and POUNDERS |
+| `ceres-autodiff` | analytic, Ceres AD, finite-difference and native-LM-with-AD derivatives (Ceres builds only) |
 
 ```bash
-cmake --build build --target BenchmarkRootFinders
-./build/Testing/Cxx/BenchmarkRootFinders
-
-cmake --build build --target SviCalibrationBenchmark
-./build/Testing/Cxx/SviCalibrationBenchmark
+cmake --build build --target SolversBenchmark
+./build/Testing/Cxx/SolversBenchmark                    # every section
+./build/Testing/Cxx/SolversBenchmark root-finders svi-calibration
+./build/Testing/Cxx/SolversBenchmark --list
 ```
 
 See the dedicated SVI calibration example in [svi_calib.md](svi_calib.md).

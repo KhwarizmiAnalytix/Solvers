@@ -73,25 +73,29 @@ changes that callers can observe are listed first.
 
 ### Fixes found along the way
 
+- Finite-difference stencils no longer step outside a box narrower than the step: the
+  one-sided step was limited to the box width instead of the room on the chosen side, so
+  at an interior point it evaluated the objective or residuals out of bounds.
 - `root_finding_algorithms::dekker` ignored `function_offset`; it now solves
   `f(x) = offset` like the other methods.
 - The `fourth_degree_polynomial_solver` comment promised the minimum positive root
   while the code returns the largest real root (clamped to the threshold). The
   behavior is unchanged and the comment now says what it does.
 
-### Deprecated or removed
+### Removed
 
-- Deprecated for one release (still read, compile with a warning):
-  `least_squares_problem::jacobian`, `jacobian_provider`, `provider_factory`,
-  `rnc_derivatives`, `rnc_derivative_source`; `optimization_problem::gradient`,
-  `gradient_provider`. `model_provider_factory` is now private. Setters no longer
-  fill the deprecated fields, so code that *read* `problem.provider_factory` must use
-  `problem.derivative_provider()->ceres_factory()`.
+- Removed the deprecated inputs `least_squares_problem::jacobian`, `jacobian_provider`,
+  `provider_factory`, `rnc_derivatives`, `rnc_derivative_source`, and
+  `optimization_problem::gradient`, `gradient_provider`. Use `set_jacobian`,
+  `set_jacobian_provider`, `set_curve_derivatives`, `set_gradient` and
+  `set_gradient_provider`; read the effective provider with `derivative_provider()`
+  (for the Ceres factory, `derivative_provider()->ceres_factory()`).
+  `model_provider_factory` is now private.
 - Removed `algorithm::bfgs`: it silently ran L-BFGS. Use `algorithm::lbfgs`.
 - Removed the duplicate `solverslib::auto_diff()` definition (re-exported from
   `solverslib::api`).
 - The `solver_options_*` builders and the native kernel classes are now documented
-  as an internal layer behind `api::solve`; direct use is deprecated for new code.
+  as an internal layer behind `api::solve`.
 
 ### Repository
 

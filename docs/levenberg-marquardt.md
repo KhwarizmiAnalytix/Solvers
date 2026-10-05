@@ -103,7 +103,7 @@ are validated at the solve boundary: an invalid value returns `invalid_problem`
 instead of throwing. Budgets and tolerances stay in `solve_options`; the
 finite-difference step is owned by the shared finite-difference evaluator, not
 by this struct. The `solver_options_lm` builder below is the internal layer
-behind that mapping; direct use is deprecated for new code.
+behind that mapping.
 
 A step rejected while the damping already sits at its ceiling ends the run with
 `solver_status::stalled` (the last accepted iterate is returned) rather than
@@ -185,7 +185,7 @@ tolerance by `0.5 * tolerance_old^2`.
 ### Measured behavior
 
 Iteration counts and final costs are identical for both methods on the library's
-standard problems (`LmLinearSolversBenchmark`; analytic Jacobians, tolerances
+standard problems (`SolversBenchmark lm-linear-solvers`; analytic Jacobians, tolerances
 `1e-24 / 1e-14 / 1e-14`):
 
 | Problem | Linear solver | Status | Iterations | Final cost F |
@@ -195,7 +195,7 @@ standard problems (`LmLinearSolversBenchmark`; analytic Jacobians, tolerances
 | PowellSingular | normal_ldlt / augmented_qr | converged | 18 / 18 | 2.313e-20 / 2.313e-20 |
 | ExponentialFit | normal_ldlt / augmented_qr | converged | 5 / 5 | 6.642e-32 / 6.642e-32 |
 
-On the raw-SVI calibration fixture (`SviCalibrationBenchmark`, 5 parameters,
+On the raw-SVI calibration fixture (`SolversBenchmark svi-calibration`, 5 parameters,
 analytic Jacobian, gradient tolerance 1e-3) both converge in 8 iterations to the
 same 3.37518 variance-bp RMSE as the other solvers; the median solve takes about
 6.8 us with `normal_ldlt` and 7.7 us with `augmented_qr` on the development

@@ -15,14 +15,14 @@ The benchmark uses the EURO STOXX 50 raw-SVI fixture and fits the 5-parameter mo
 
 ## Calibration setup
 
-The implementation is in [Testing/Cxx/BenchmarkSviCalibration.cpp](Testing/Cxx/BenchmarkSviCalibration.cpp). It uses the paper’s raw-SVI parameters and imposes the admissible-box constraints directly on the optimization variables rather than solving an unconstrained reparameterized form.
+The implementation is in [Testing/Cxx/BenchmarkSolvers.cpp](Testing/Cxx/BenchmarkSolvers.cpp) (the `svi-calibration` section). It uses the paper’s raw-SVI parameters and imposes the admissible-box constraints directly on the optimization variables rather than solving an unconstrained reparameterized form.
 
 The benchmark is built with:
 
 ```bash
 cmake -S . -B build -DSOLVERS_ENABLE_TESTING=ON -DSOLVERS_ENABLE_BENCHMARKS=ON
-cmake --build build --target SviCalibrationBenchmark
-./build/Testing/Cxx/SviCalibrationBenchmark --benchmark_min_time=0.01s
+cmake --build build --target SolversBenchmark
+./build/Testing/Cxx/SolversBenchmark svi-calibration
 ```
 
 ## Problem data

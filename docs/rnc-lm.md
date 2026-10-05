@@ -158,18 +158,18 @@ Bounds, general scalar objectives, and evaluation budgets are unsupported.
 
 ## Validation and reproducible comparison
 
-`TestRncLm.cpp` checks analytic second-, third-, and fourth-order updates,
+`TestRncModels.cpp` (one test per RNC model) checks analytic second-, third-, and fourth-order updates,
 Taylor derivatives of polynomial and elementary functions, the moving-tangent
 terms, polynomial curve interpolation, derivative reuse, rank deficiency,
 stationarity, malformed inputs, failed callbacks, nonfinite trials, and the
-initial-tangent trust-ratio model. All 15 RNC tests passed with AddressSanitizer
+initial-tangent trust-ratio model. The RNC tests, as 15 separate tests at the time, passed with AddressSanitizer
 and UndefinedBehaviorSanitizer in a native-only build with Ceres, Ipopt, and
 PETSc disabled. The full release CTest suite passed 187 tests, with one
 unavailable-backend test skipped and no failures.
 
-`RncLmBenchmark` uses the generalized Rosenbrock residuals from Eq. (6), with
+`SolversBenchmark rnc-lm` uses the generalized Rosenbrock residuals from Eq. (6), with
 stiffness `A=1e6`, initial point `(1,1/n)`, and objective threshold `C<1e-4`.
-Run it with `SOLVERS_ENABLE_BENCHMARKS=ON`. Local results on 4 October 2026,
+Build with `SOLVERS_ENABLE_BENCHMARKS=ON`. Local results on 4 October 2026,
 using the defaults above, were:
 
 | Valley exponent | Order 1 | Order 2 | Order 3 | Order 4 |

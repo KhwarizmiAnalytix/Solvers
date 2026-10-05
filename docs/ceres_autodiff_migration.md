@@ -221,31 +221,6 @@ For optimal performance:
 - Use `T()` instead of implicit conversions
 - Provide bounds when available (improves algorithm selection)
 
-## Backwards Compatibility
-
-### Legacy API (Deprecated)
-
-The old `std::any` based API still works but is **not recommended**:
-
-```cpp
-// NOT recommended - type erasure prevents AD instantiation
-problem.set_templated_residuals(MyResiduals{});
-// Only works if Jacobian callback is also provided
-```
-
-**Why it's deprecated:**
-- Cannot instantiate template member functions from non-templated code
-- Requires separate Jacobian callback
-- No provider factory pattern
-
-### Recommended Replacement
-
-```cpp
-// Use provider factory pattern instead
-auto problem = make_ceres_autodiff_problem(n, m, MyResiduals{});
-// Provides AD automatically, no separate Jacobian needed
-```
-
 ## Result Interpretation
 
 The `solver_result` now tracks the effective derivative source:
@@ -315,5 +290,5 @@ auto result_fd = api::solve(problem, x, opts_fd);
 ## See Also
 
 - `include/solvers/integrations/ceres_autodiff.h` — Implementation
-- `Testing/Cxx/TestCeresAutoDiff.cpp` — Test examples
+- `Testing/Cxx/TestLeastSquaresModels.cpp` (the AD provider and Ceres checks) — Test examples
 - [Ceres AD documentation](http://ceres-solver.readthedocs.io/latest/automatic_derivatives.html)
