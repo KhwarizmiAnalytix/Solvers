@@ -1118,12 +1118,7 @@ class SolversConfiguration:
             return 0
 
         bench_dir = os.path.join(build_path, "Testing", "Cxx")
-        bench_names = [
-            "SolversBenchmark",
-            "RootFindersBenchmark",
-            "RootFindersVsLMBenchmark",
-            "BenchmarkCeresAutoDiff",
-        ]
+        bench_names = ["SolversBenchmark"]
         ran = 0
         for name in bench_names:
             exe = os.path.join(bench_dir, name)
