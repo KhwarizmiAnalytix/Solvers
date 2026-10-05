@@ -1176,15 +1176,17 @@ class SolversConfiguration:
             result = _orig_find_library(build_dir, lib_folder, module_name, dll_extension)
             if result is not None:
                 return result
-            # Try the test executable — it statically links the instrumented library.
-            from pathlib import Path
-
-            for candidate in [
-                Path(build_dir) / "Testing" / "Cxx" / f"{module_name}Tests",
-                Path(build_dir) / "bin" / f"{module_name}Tests",
-            ]:
-                if candidate.exists():
-                    return str(candidate)
+            # Use the test executable CTest registers for the module (LABELS in
+            # Testing/Cxx/CMakeLists.txt) — it statically links the instrumented library.
+            matched = _ct_common.find_test_for_module(
+                _ct_common.discover_tests_via_ctest(build_dir),
+                module_name,
+                _ct_common.get_config()["test_exe_pattern"],
+            )
+            if matched and matched["command"]:
+                exe = _ct_common.resolve_multi_config_artifact(Path(matched["command"][0]))
+                if exe is not None:
+                    return str(exe)
             return None
 
         _ct_common.find_library = _find_library_with_static_fallback
