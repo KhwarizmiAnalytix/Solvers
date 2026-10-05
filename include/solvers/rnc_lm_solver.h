@@ -1,12 +1,14 @@
 #pragma once
-#include "solvers/api/options.h"
+
+#include "solver_options/solver_options.h"
+#include "solvers/api/problem.h"
 #include "solvers/api/result.h"
 
-namespace solverslib
+namespace solverslib::api
 {
-// Native RNC-LM entry point. Also dispatched by api::solve with
-// algorithm::riemann_normal_coordinate_lm. Requires curve derivatives.
-SOLVER_API api::solver_result solve_rnc_lm(const api::least_squares_problem& problem,
-    const vector_type&                                                       initial_guess,
-    const api::solve_options&                                                options);
-}  // namespace solverslib
+// Native RNC-LM entry point. Requires curve derivatives in the problem.
+SOLVER_API solver_result solve_rnc_lm(
+    const least_squares_problem& problem,
+    const vector_type&           initial_guess,
+    const solve_options&         options);
+}  // namespace solverslib::api

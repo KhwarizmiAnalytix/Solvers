@@ -3,7 +3,6 @@
 #include <cmath>
 #include <limits>
 
-#include "detail/root_finding_core.h"
 #include "detail/support.h"
 
 namespace solverslib
@@ -435,84 +434,4 @@ root_run run_secant(
     return {root_outcome::iteration_limit, x1, options.max_iterations()};
 }
 }  // namespace detail
-
-// ---------------------------------------------------------------------------
-// Public bool/out-parameter forms: thin wrappers over the cores above. On a
-// false return `root` is left untouched, as it always was.
-// ---------------------------------------------------------------------------
-namespace
-{
-bool publish(const detail::root_run& run, double& root)
-{
-    if (run.outcome != detail::root_outcome::converged)
-    {
-        return false;
-    }
-    root = run.root;
-    return true;
-}
-}  // namespace
-
-bool root_finding_algorithms::bisection(function_type const& func,
-    double                                                   x1,
-    double                                                   x2,
-    double&                                                  root,
-    const root_finding_options&                              options)
-{
-    return publish(detail::run_bisection(func, x1, x2, options), root);
-}
-
-bool root_finding_algorithms::false_position(function_type const& func,
-    double                                                        x1,
-    double                                                        x2,
-    double&                                                       root,
-    const root_finding_options&                                   options)
-{
-    return publish(detail::run_false_position(func, x1, x2, options), root);
-}
-
-bool root_finding_algorithms::ridders(function_type const& func,
-    double                                                 x1,
-    double                                                 x2,
-    double&                                                root,
-    const root_finding_options&                            options)
-{
-    return publish(detail::run_ridders(func, x1, x2, options), root);
-}
-
-bool root_finding_algorithms::dekker(const function_gradient_type& func,
-    double                                                         x1,
-    double                                                         x2,
-    double&                                                        result,
-    const root_finding_options&                                    options)
-{
-    return publish(detail::run_dekker(func, x1, x2, options), result);
-}
-
-bool root_finding_algorithms::brent(function_type const& func,
-    double                                               x1,
-    double                                               x2,
-    double&                                              root,
-    const root_finding_options&                          options)
-{
-    return publish(detail::run_brent(func, x1, x2, options), root);
-}
-
-bool root_finding_algorithms::newton_raphson(function_gradient_type const& func,
-    double                                                                 x0,
-    double&                                                                root,
-    const root_finding_options&                                            options)
-{
-    return publish(detail::run_newton_raphson(func, x0, options), root);
-}
-
-bool root_finding_algorithms::secant(function_type const& func,
-    double                                                x0,
-    double                                                x1,
-    double&                                               root,
-    const root_finding_options&                           options)
-{
-    return publish(detail::run_secant(func, x0, x1, options), root);
-}
-
 }  // namespace solverslib

@@ -15,12 +15,7 @@ template <typename T> inline double l2_norm(T const& h)
     return h.norm();
 }
 
-// Thrown from inside the line-search callback to unwind to solve() when an
-// evaluation fails fatally; never escapes the kernel.
-struct evaluation_failure
-{
-    std::string message;
-};
+// Exceptions thrown from inside the line-search callback are caught by solve()
 
 }  // namespace
 
@@ -331,30 +326,26 @@ lbfgs_solver::lbfgs_solver(
     : num_parameters_(num_parameters), num_residuals_(0), objective_(std::move(objective)),
       gradient_(std::move(gradient)), scalar_mode_(true) {};
 
-lbfgs_solver::lbfgs_solver(api::detail::residual_evaluator& evaluator)
-    : num_parameters_(evaluator.metadata().num_parameters),
-      num_residuals_(evaluator.metadata().num_residuals), evaluator_(&evaluator)
-{
-}
-
-lbfgs_solver::lbfgs_solver(api::detail::gradient_evaluator& evaluator)
-    : num_parameters_(evaluator.num_parameters()), num_residuals_(0), scalar_mode_(true),
-      gradient_evaluator_(&evaluator)
-{
-}
-
 native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
 {
     try
     {
         return run(parameters, options);
     }
-    catch (const evaluation_failure& failure)
+    catch (const std::runtime_error& e)
     {
         native_result result;
         result.status        = native_convergence::numerical_failure;
         result.residual_norm = std::numeric_limits<double>::quiet_NaN();
-        result.message       = failure.message;
+        result.message       = e.what();
+        return result;
+    }
+    catch (const std::exception& e)
+    {
+        native_result result;
+        result.status        = native_convergence::numerical_failure;
+        result.residual_norm = std::numeric_limits<double>::quiet_NaN();
+        result.message       = std::string("unexpected exception: ") + e.what();
         return result;
     }
 }
@@ -362,7 +353,6 @@ native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_
 native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bfgs& options) const
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
-    using api::detail::evaluation_status;
 
     // Scalar-objective mode: the caller supplied f(x) and ∇f(x) directly,
     // so the L-BFGS loop operates on the true objective without a residual
@@ -374,62 +364,99 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
     vector_type y_p;
     matrix_type J;
 
-    // Wrappers built from raw callbacks live for this call only.
-    std::unique_ptr<api::detail::gradient_evaluator> owned_gradient;
-    native_evaluator_binding                         binding;
-
     if (scalar_mode_)
     {
-        api::detail::gradient_evaluator* evaluator = gradient_evaluator_;
-        if (evaluator == nullptr)
+        lbfg_function = [this, &options](vector_type const& x, vector_type& grad)
         {
-            owned_gradient = std::make_unique<api::detail::callback_gradient_evaluator>(
-                num_parameters_, objective_, gradient_, api::derivative_mode::supplied);
-            evaluator = owned_gradient.get();
-        }
-        lbfg_function = [evaluator](vector_type const& x, vector_type& grad)
-        {
-            double     fx     = 0.0;
-            const auto status = evaluator->evaluate(x, fx, &grad);
-            if (status == evaluation_status::fatal_error)
+            try
             {
-                throw evaluation_failure{"objective/gradient evaluation: " +
-                                         evaluator->last_error().value_or("evaluation failed")};
+                double fx = objective_(x);
+                if (!std::isfinite(fx))
+                {
+                    throw std::runtime_error("non-finite objective value");
+                }
+
+                if (gradient_)
+                {
+                    gradient_(x, grad);
+                    if (!grad.allFinite())
+                    {
+                        throw std::runtime_error("non-finite gradient values");
+                    }
+                }
+                else
+                {
+                    // Finite difference approximation of gradient
+                    const double h = options.bump() * std::max(1.0, std::abs(x.norm()));
+                    vector_type x_trial = x;
+                    grad.resize(num_parameters_);
+
+                    for (size_t j = 0; j < num_parameters_; ++j)
+                    {
+                        x_trial[j] = x[j] + h;
+                        double fx_plus = objective_(x_trial);
+                        x_trial[j] = x[j] - h;
+                        double fx_minus = objective_(x_trial);
+                        x_trial[j] = x[j];
+                        grad[j] = (fx_plus - fx_minus) / (2.0 * h);
+                    }
+                }
+                return fx;
             }
-            // invalid_trial passes the (non-finite) value on so the line search
-            // shortens its step, as it always has.
-            return fx;
+            catch (const std::exception& e)
+            {
+                throw std::runtime_error(std::string("objective/gradient evaluation: ") + e.what());
+            }
         };
     }
     else
     {
-        binding = bind_native_evaluator(
-            evaluator_, num_parameters_, num_residuals_, function_, jacobian_, options.bump());
-        api::detail::residual_evaluator* evaluator = binding.evaluator;
-
         y_p.resize(num_residuals_);
         J.resize(num_residuals_, num_parameters_);
 
-        lbfg_function = [evaluator, &y_p, &J](vector_type const& x, vector_type& grad)
+        lbfg_function = [this, &y_p, &J, &options](vector_type const& x, vector_type& grad)
         {
-            auto status = evaluator->evaluate(x, y_p);
-            if (status == evaluation_status::fatal_error)
+            try
             {
-                throw evaluation_failure{
-                    evaluation_failure_message(*evaluator, status, "residual evaluation")};
-            }
-            double fx = l2_norm(y_p);
-            fx *= fx;
+                function_(x, y_p);
+                if (!y_p.allFinite())
+                {
+                    throw std::runtime_error("non-finite residual values");
+                }
+                double fx = l2_norm(y_p);
+                fx *= fx;
 
-            status = evaluator->jacobian(x, y_p, J);
-            if (status == evaluation_status::fatal_error)
+                if (jacobian_)
+                {
+                    jacobian_(x, J);
+                }
+                else
+                {
+                    // Finite difference approximation of Jacobian
+                    const double h = options.bump() * std::max(1.0, x.norm() / num_parameters_);
+                    vector_type x_trial = x;
+                    vector_type y_trial(num_residuals_);
+
+                    for (size_t j = 0; j < num_parameters_; ++j)
+                    {
+                        x_trial[j] = x[j] + h;
+                        function_(x_trial, y_trial);
+                        J.col(j) = (y_trial - y_p) / h;
+                        x_trial[j] = x[j];
+                    }
+                }
+                if (!J.allFinite())
+                {
+                    throw std::runtime_error("non-finite Jacobian values");
+                }
+                grad = 2. * (J.transpose() * y_p);
+
+                return fx;
+            }
+            catch (const std::exception& e)
             {
-                throw evaluation_failure{
-                    evaluation_failure_message(*evaluator, status, "Jacobian evaluation")};
+                throw std::runtime_error(std::string("residual/Jacobian evaluation: ") + e.what());
             }
-            grad = 2. * (J.transpose() * y_p);
-
-            return fx;
         };
     }
 
@@ -489,9 +516,9 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
                 break;
             }
         }
-        catch (const evaluation_failure&)
+        catch (const std::runtime_error& e)
         {
-            throw;  // reported by solve() as a numerical failure
+            throw;  // evaluation failures are re-thrown and caught in solve()
         }
         catch (const std::exception& e)
         {

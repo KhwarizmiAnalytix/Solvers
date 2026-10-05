@@ -5,7 +5,7 @@
 #include <exception>
 #include <string>
 
-#include "detail/root_finding_core.h"
+#include "solvers/root_finding_algorithms.h"
 #include "solver_options/root_finding_options.h"
 
 namespace solverslib::api

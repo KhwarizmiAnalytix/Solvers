@@ -3,120 +3,45 @@
 
 #include <cstddef>
 #include <functional>
-#include <limits>
 
-#include "detail/support.h"
 #include "solver_options/root_finding_options.h"
 
-namespace solverslib
+// Internal: the root-finding iterations with diagnostics. The public
+// run_xxx functions are bool/out-parameter wrappers over these,
+// and api::find_root builds the structured root_result from them.
+namespace solverslib::detail
 {
-/**
- * @brief Scalar (1-D) root-finding algorithms, all configured through a
- * single root_finding_options instance rather than per-call trailing
- * parameter lists.
- *
- * Bracketing methods (bisection, false_position, ridders, dekker, brent)
- * require x1/x2 to bracket a sign change and are guaranteed to converge.
- * Open methods (newton_raphson, secant) only need one or two starting
- * points and converge faster when they converge, but are not guaranteed to.
- *
- * These bool/out-parameter forms are convenience wrappers: they return false
- * without touching `root` when the method does not converge, and throw on an
- * unusable bracket or a vanishing derivative. For iteration and evaluation
- * counts, the residual, the best estimate when the budget runs out, and
- * failures reported as a status instead of an exception, use
- * solverslib::api::find_root (solvers/api/roots.h).
- */
-class root_finding_algorithms
+enum class root_outcome
 {
-public:
-    using function_type          = std::function<double(double)>;
-    using function_gradient_type = std::function<double(double, double&)>;
-
-    // -- Bracketing methods --------------------------------------------------
-
-    /**
-     * @brief Simple bisection: halves the bracket every iteration. The
-     * slowest bracketing method (linear convergence) but the most robust -
-     * useful as a fallback when a function's derivative is unreliable.
-     */
-    SOLVER_API static bool bisection(function_type const& func,
-        double                                            x1,
-        double                                            x2,
-        double&                                           root,
-        const root_finding_options&                       options = root_finding_options());
-
-    /**
-     * @brief Regula falsi (false position): like bisection but replaces the
-     * midpoint with the linear-interpolation root of the secant line
-     * through the bracket endpoints. Uses the Illinois modification (damping
-     * a stagnant endpoint) to avoid the classic slow one-sided convergence
-     * of plain false position.
-     */
-    SOLVER_API static bool false_position(function_type const& func,
-        double                                                 x1,
-        double                                                 x2,
-        double&                                                root,
-        const root_finding_options&                            options = root_finding_options());
-
-    /**
-     * @brief Ridders' method: combines a bisection step with exponential
-     * (Ridders) interpolation for quadratic-ish convergence without needing
-     * a derivative.
-     */
-    SOLVER_API static bool ridders(function_type const& func,
-        double                                          x1,
-        double                                          x2,
-        double&                                         root,
-        const root_finding_options&                     options = root_finding_options());
-
-    /**
-     * @brief Dekker's method: hybrid secant/bisection using the function's
-     * derivative to choose the next iterate, falling back to bisection when
-     * the secant step would leave the bracket. Predecessor of brent().
-     */
-    SOLVER_API static bool dekker(function_gradient_type const& func,
-        double                                                  x1,
-        double                                                  x2,
-        double&                                                 result,
-        const root_finding_options&                             options = root_finding_options());
-
-    /**
-     * @brief Brent's method: Dekker's method refined with inverse quadratic
-     * interpolation and stricter step-acceptance rules. The most robust
-     * general-purpose bracketing solver here; prefer it when unsure.
-     */
-    SOLVER_API static bool brent(function_type const& func,
-        double                                        x1,
-        double                                        x2,
-        double&                                       root,
-        const root_finding_options&                   options = root_finding_options());
-
-    // -- Open (non-bracketing) methods ---------------------------------------
-
-    /**
-     * @brief Newton-Raphson: quadratic convergence from a single starting
-     * point using the function's derivative, but not guaranteed to converge
-     * (can diverge or cycle if the derivative is small or the guess poor).
-     */
-    SOLVER_API static bool newton_raphson(function_gradient_type const& func,
-        double                                                          x0,
-        double&                                                         root,
-        const root_finding_options& options = root_finding_options());
-
-    /**
-     * @brief Secant method: Newton-Raphson's derivative-free counterpart,
-     * approximating the derivative from two starting points.
-     */
-    SOLVER_API static bool secant(function_type const& func,
-        double                                         x0,
-        double                                         x1,
-        double&                                        root,
-        const root_finding_options&                    options = root_finding_options());
-
-private:
-    SOLVERS_DELETE_CLASS(root_finding_algorithms);
+    converged,        // a tolerance was met; `root` is the answer
+    iteration_limit,  // budget used up; `root` is the best estimate so far
+    degenerate        // the method could not continue (e.g. zero interpolation denominator)
 };
-}  // namespace solverslib
+
+struct root_run
+{
+    root_outcome outcome    = root_outcome::iteration_limit;
+    double       root       = 0.0;
+    std::size_t  iterations = 0;
+};
+
+using scalar_function          = std::function<double(double)>;
+using scalar_function_gradient = std::function<double(double, double&)>;
+
+// Bracketing methods require f(x1) * f(x2) <= 0 and throw otherwise (the
+// structured entry point checks the bracket first and reports it instead).
+root_run run_bisection(const scalar_function& f, double x1, double x2, const root_finding_options&);
+root_run run_false_position(
+    const scalar_function& f, double x1, double x2, const root_finding_options&);
+root_run run_ridders(const scalar_function& f, double x1, double x2, const root_finding_options&);
+root_run run_brent(const scalar_function& f, double x1, double x2, const root_finding_options&);
+root_run run_dekker(
+    const scalar_function_gradient& f, double x1, double x2, const root_finding_options&);
+
+// Open methods. A vanishing derivative or secant denominator throws.
+root_run run_newton_raphson(
+    const scalar_function_gradient& f, double x0, const root_finding_options&);
+root_run run_secant(const scalar_function& f, double x0, double x1, const root_finding_options&);
+}  // namespace solverslib::detail
 
 #endif  // SOLVERS_ROOT_FINDING_ALGORITHMS_H_

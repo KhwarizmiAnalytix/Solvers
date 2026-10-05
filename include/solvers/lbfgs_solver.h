@@ -11,11 +11,6 @@
 
 namespace solverslib
 {
-namespace api::detail
-{
-class residual_evaluator;
-class gradient_evaluator;
-}  // namespace api::detail
 class solver_options_bfgs;
 class lbfgs_solver
 {
@@ -37,10 +32,6 @@ class lbfgs_solver
     gradient_type  gradient_;
     bool           scalar_mode_ = false;
 
-    // Non-owning; when set, take precedence over the callbacks above.
-    api::detail::residual_evaluator* evaluator_          = nullptr;
-    api::detail::gradient_evaluator* gradient_evaluator_ = nullptr;
-
     native_result run(vector_type& parameters, const solver_options_bfgs& options) const;
 
 public:
@@ -51,10 +42,6 @@ public:
 
     SOLVER_API lbfgs_solver(
         size_type num_parameters, objective_type objective, gradient_type gradient);
-
-    // Evaluator-driven forms; the evaluator must outlive the solver.
-    SOLVER_API explicit lbfgs_solver(api::detail::residual_evaluator& evaluator);
-    SOLVER_API explicit lbfgs_solver(api::detail::gradient_evaluator& evaluator);
 
     SOLVER_API native_result solve(
         vector_type& parameters, const solver_options_bfgs& options) const;

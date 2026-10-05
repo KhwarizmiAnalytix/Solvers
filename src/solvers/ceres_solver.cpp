@@ -7,7 +7,6 @@
 #include <ceres/ceres.h>
 
 #include "solver_options/solver_options_ceres.h"
-#include "solvers/api/detail/evaluator.h"
 
 #define DEBUG_AAD 0
 
@@ -98,74 +97,6 @@ private:
     jacobian_fn                      cost_function_aad_;
     size_t                           num_residuals_;
     size_t                           num_parameters_;
-};
-
-// Cost function adapter for evaluator-based providers (e.g., Ceres AD)
-class CeresProviderCostFunction : public ceres::CostFunction
-{
-public:
-    explicit CeresProviderCostFunction(
-        std::unique_ptr<api::detail::residual_evaluator> evaluator, size_t num_residuals)
-        : evaluator_(std::move(evaluator))
-    {
-        set_num_residuals(static_cast<int>(num_residuals));
-        mutable_parameter_block_sizes()->push_back(
-            static_cast<int>(evaluator_->metadata().num_parameters));
-    }
-
-    bool Evaluate(
-        double const* const* parameters, double* residuals, double** jacobians) const override
-    {
-        try
-        {
-            const auto&  meta = evaluator_->metadata();
-            vector_type  x    = to_vector_type(parameters[0], meta.num_parameters);
-            vector_type  r    = make_vector(meta.num_residuals);
-            matrix_type* jac  = nullptr;
-
-            // Prepare Jacobian buffer if requested
-            if (jacobians && jacobians[0])
-            {
-                jac = new matrix_type(make_matrix(meta.num_residuals, meta.num_parameters));
-            }
-
-            // Evaluate through provider
-            auto status = evaluator_->evaluate(x, r, jac);
-            if (status != api::detail::evaluation_status::ok)
-            {
-                delete jac;
-                return false;  // Signal Ceres to reject this trial point
-            }
-
-            // Copy residuals back
-            for (std::size_t i = 0; i < r.size(); ++i)
-            {
-                residuals[i] = r[i];
-            }
-
-            // Copy Jacobian if requested
-            if (jac)
-            {
-                copy_row_major(jacobians[0], *jac);
-                delete jac;
-            }
-
-            return true;
-        }
-        catch (const std::exception& e)
-        {
-            SOLVERS_LOG_ERROR("Evaluator exception: {}", e.what());
-            return false;
-        }
-        catch (...)
-        {
-            SOLVERS_LOG_ERROR("Evaluator unknown exception");
-            return false;
-        }
-    }
-
-private:
-    mutable std::unique_ptr<api::detail::residual_evaluator> evaluator_;
 };
 
 void update_options(
@@ -382,24 +313,11 @@ namespace solverslib
 ceres_solver::ceres_solver(size_t                         num_parameters,
     size_t                                                num_residuals,
     CostFunctionLambda                                    cost_function,
-    std::function<void(const vector_type&, matrix_type&)> jacobian_callback,
+    const JacobianCallback&                               jacobian_callback,
     const std::vector<double>&                            lower_bounds,
     const std::vector<double>&                            upper_bounds)
-    : cost_function_(std::move(cost_function)), jacobian_callback_(std::move(jacobian_callback)),
-      provider_(nullptr), lower_bounds_(lower_bounds), upper_bounds_(upper_bounds),
-      num_parameters_(num_parameters), num_residuals_(num_residuals)
-{
-}
-
-// Constructor with provider support
-ceres_solver::ceres_solver(size_t                        num_parameters,
-    size_t                                               num_residuals,
-    CostFunctionLambda                                   cost_function,
-    std::shared_ptr<const api::detail::provider_factory> provider,
-    const std::vector<double>&                           lower_bounds,
-    const std::vector<double>&                           upper_bounds)
-    : cost_function_(std::move(cost_function)), jacobian_callback_(nullptr),
-      provider_(std::move(provider)), lower_bounds_(lower_bounds), upper_bounds_(upper_bounds),
+    : cost_function_(std::move(cost_function)), jacobian_callback_(jacobian_callback),
+      lower_bounds_(lower_bounds), upper_bounds_(upper_bounds),
       num_parameters_(num_parameters), num_residuals_(num_residuals)
 {
 }
@@ -437,30 +355,15 @@ void ceres_solver::solve_with_summary(SOLVERS_UNUSED std::vector<double>& parame
     ceres::CostFunction* cost_function = nullptr;
 
     // ============================================================================
-    // Phase 1: Derivative selection - use provider if available, else fallback
+    // Phase 1: Derivative selection - use callbacks directly
     // ============================================================================
-    std::unique_ptr<api::detail::residual_evaluator> evaluator;
 
-    if (provider_)
+    // Auto-build FD if no Jacobian callback provided
+    if (jacobian_callback_ == nullptr)
     {
-        // Use evaluator-based provider (e.g., Ceres AD)
-        // Validate provider dimensions match problem dimensions
-        const auto& meta = provider_->metadata();
-        SOLVERS_CHECK(
-            meta.num_parameters == num_parameters_ && meta.num_residuals == num_residuals_,
-            "Provider dimensions do not match problem dimensions");
+        double bump = 1e-8;
 
-        evaluator     = provider_->create_evaluator();
-        cost_function = new CeresProviderCostFunction(std::move(evaluator), num_residuals_);
-    }
-    else
-    {
-        // Fallback to callback path; auto-build FD if no Jacobian callback provided
-        if (jacobian_callback_ == nullptr)
-        {
-            double bump = 1e-8;
-
-            jacobian_callback_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
+        jacobian_callback_ = [this, bump](vector_type const& x, matrix_type& dy_dx)
             {
                 auto number_of_parameters = x.size();
 
@@ -557,11 +460,10 @@ void ceres_solver::solve_with_summary(SOLVERS_UNUSED std::vector<double>& parame
                     x_tmp[i] = x[i];
                 }
             };
-        }
-
-        cost_function = new LambdaCostFunctor(
-            cost_function_, jacobian_callback_, num_parameters_, num_residuals_);
     }
+
+    cost_function = new LambdaCostFunctor(
+        cost_function_, jacobian_callback_, num_parameters_, num_residuals_);
 
     problem.AddResidualBlock(cost_function, nullptr, parameters.data());
 

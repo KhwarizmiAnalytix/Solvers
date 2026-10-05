@@ -45,25 +45,12 @@ gauss_newton_solver::gauss_newton_solver(size_t num_parameters,
 {
 }
 
-gauss_newton_solver::gauss_newton_solver(api::detail::residual_evaluator& evaluator)
-    : num_parameters_(evaluator.metadata().num_parameters),
-      num_residuals_(evaluator.metadata().num_residuals), evaluator_(&evaluator)
-{
-}
-
 native_result gauss_newton_solver::solve(
     vector_type& parameters, const solver_options_gn& options) const
 {
-    auto binding = bind_native_evaluator(
-        evaluator_, num_parameters_, num_residuals_, function_, jacobian_, options.bump());
-    auto& evaluator = *binding.evaluator;
-
-    using api::detail::evaluation_status;
-    std::string failure;  // non-empty once an evaluation fails fatally
-    auto        failed_to_evaluate = [&](evaluation_status status, const char* where)
-    { failure = evaluation_failure_message(evaluator, status, where); };
-
     SOLVERS_CHECK(num_parameters_ == parameters.size());
+
+    std::string failure;  // non-empty once an evaluation fails fatally
 
     const auto n        = num_parameters_;
     const auto m        = num_residuals_;
@@ -73,10 +60,24 @@ native_result gauss_newton_solver::solve(
     matrix_type J(m, n);
     vector_type gradient(n), step(n);
 
-    if (const auto status = evaluator.evaluate(parameters, y_p); status != evaluation_status::ok)
+    // Compute initial residuals
+    try
     {
-        failed_to_evaluate(status, "residuals at the initial point");
+        function_(parameters, y_p);
+        if (!y_p.allFinite())
+        {
+            failure = "non-finite residuals at the initial point";
+        }
     }
+    catch (const std::exception& e)
+    {
+        failure = std::string("exception during residual evaluation: ") + e.what();
+    }
+    catch (...)
+    {
+        failure = "unknown exception during residual evaluation";
+    }
+
     auto x2_p                 = l2_norm(y_p);
     auto x2_converged         = failure.empty() && 0.5 * x2_p * x2_p < options.function_tolerance();
     bool gradient_converged   = false;
@@ -94,10 +95,42 @@ native_result gauss_newton_solver::solve(
            iteration < max_iter;
         ++iteration)
     {
-        if (const auto status = evaluator.jacobian(parameters, y_p, J);
-            status != evaluation_status::ok)
+        // Compute Jacobian
+        try
         {
-            failed_to_evaluate(status, "Jacobian");
+            if (jacobian_)
+            {
+                jacobian_(parameters, J);
+            }
+            else
+            {
+                // Finite difference approximation of Jacobian
+                const double h = options.bump() * std::max(1.0, parameters.norm() / n);
+                vector_type x_trial = parameters;
+                vector_type y_trial_temp(m);
+
+                for (size_t j = 0; j < n; ++j)
+                {
+                    x_trial[j] = parameters[j] + h;
+                    function_(x_trial, y_trial_temp);
+                    J.col(j) = (y_trial_temp - y_p) / h;
+                    x_trial[j] = parameters[j];
+                }
+            }
+            if (!J.allFinite())
+            {
+                failure = "non-finite Jacobian";
+                break;
+            }
+        }
+        catch (const std::exception& e)
+        {
+            failure = std::string("exception during Jacobian evaluation: ") + e.what();
+            break;
+        }
+        catch (...)
+        {
+            failure = "unknown exception during Jacobian evaluation";
             break;
         }
         gradient            = J.transpose() * y_p;
@@ -119,23 +152,36 @@ native_result gauss_newton_solver::solve(
         for (size_t line_search_iter = 0; line_search_iter < options.max_line_search_iterations();
             ++line_search_iter)
         {
-            trial             = parameters - step_scale * step;
-            const auto status = evaluator.evaluate(trial, y_trial);
-            if (status == evaluation_status::fatal_error)
+            trial = parameters - step_scale * step;
+            bool trial_valid = false;
+
+            try
             {
-                failed_to_evaluate(status, "line-search trial point");
+                function_(trial, y_trial);
+                trial_valid = y_trial.allFinite();
+                if (trial_valid)
+                {
+                    x2_trial = l2_norm(y_trial);
+
+                    // Armijo sufficient-decrease condition on f(x) = 0.5*||r(x)||^2.
+                    // An invalid (non-finite) trial counts as a failed condition.
+                    if (0.5 * x2_trial * x2_trial <=
+                        0.5 * x2_p * x2_p + options.line_search_sufficient_decrease() * step_scale *
+                                                directional_derivative)
+                    {
+                        accepted = true;
+                        break;
+                    }
+                }
+            }
+            catch (const std::exception& e)
+            {
+                failure = std::string("exception during line-search: ") + e.what();
                 break;
             }
-            x2_trial = l2_norm(y_trial);
-
-            // Armijo sufficient-decrease condition on f(x) = 0.5*||r(x)||^2.
-            // An invalid (non-finite) trial counts as a failed condition.
-            if (status == evaluation_status::ok &&
-                0.5 * x2_trial * x2_trial <=
-                    0.5 * x2_p * x2_p + options.line_search_sufficient_decrease() * step_scale *
-                                            directional_derivative)
+            catch (...)
             {
-                accepted = true;
+                failure = "unknown exception during line-search";
                 break;
             }
 
