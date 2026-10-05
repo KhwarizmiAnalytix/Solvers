@@ -243,7 +243,10 @@ backend_solve_status classify(Ipopt::ApplicationReturnStatus status)
         break;
     case Ipopt::Maximum_Iterations_Exceeded:
     case Ipopt::Maximum_CpuTime_Exceeded:
+#if defined(IPOPT_VERSION_MAJOR) && \
+    (IPOPT_VERSION_MAJOR > 3 || (IPOPT_VERSION_MAJOR == 3 && IPOPT_VERSION_MINOR >= 14))
     case Ipopt::Maximum_WallTime_Exceeded:
+#endif
         out.outcome = backend_outcome::budget_exhausted;
         out.message = "Ipopt stopped at its iteration or time limit";
         break;
