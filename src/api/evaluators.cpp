@@ -46,8 +46,8 @@ stencil choose_stencil(double xi, double relative_step, double lo, double hi)
         return {stencil::kind::central, h};
     }
     // The interval is too narrow for a central stencil: step toward the roomier
-    // side, no further than the interval allows.
-    h = std::min(h, hi - lo);
+    // side, no further than that side allows (xi is not necessarily at an end).
+    h = std::min(h, std::max(hi - xi, xi - lo));
     if (!(h > 0.0))
     {
         return {stencil::kind::none, 0.0};

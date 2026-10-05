@@ -13,8 +13,8 @@
 #include "solvers/api/detail/evaluators.h"
 
 // Shared plumbing for the native kernels: every kernel evaluates through a
-// residual_evaluator. A kernel built from raw callbacks (the legacy
-// constructors) wraps them in an evaluator for the duration of one solve.
+// residual_evaluator. A kernel built from raw callbacks (the
+// callback constructors) wraps them in an evaluator for the duration of one solve.
 namespace solverslib
 {
 using native_residual_function = std::function<void(vector_type const&, vector_type&)>;

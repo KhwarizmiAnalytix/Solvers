@@ -61,15 +61,6 @@ struct constraints
     bool empty() const noexcept { return num_equality == 0 && num_inequality == 0; }
 };
 
-// Legacy public fields are kept for one release so existing callers keep
-// compiling; they are inputs only and are folded into the single derivative
-// provider by derivative_provider() below. New code uses the setters.
-#if defined(__clang__) || defined(__GNUC__)
-#define SOLVERS_LEGACY_FIELD(message) [[deprecated(message)]]
-#else
-#define SOLVERS_LEGACY_FIELD(message)
-#endif
-
 // F(x) = 0.5 * ||r(x)||^2, J(i,j) = d r_i / d x_j, g = J^T r.
 //
 // A problem carries exactly one derivative slot: a JacobianProvider, which
@@ -84,18 +75,6 @@ struct least_squares_problem
 
     residual_function residuals;
     api::bounds       bounds;
-
-    // -- Deprecated inputs (folded into the provider slot when read) ---------
-    SOLVERS_LEGACY_FIELD("use set_jacobian(); the field is read only for compatibility")
-    std::optional<jacobian_function> jacobian;
-    SOLVERS_LEGACY_FIELD("use set_jacobian_provider()")
-    std::shared_ptr<JacobianProvider> jacobian_provider;
-    SOLVERS_LEGACY_FIELD("derive from derivative_provider()->ceres_factory()")
-    std::shared_ptr<const detail::provider_factory> provider_factory;
-    SOLVERS_LEGACY_FIELD("use set_curve_derivatives()")
-    rnc_derivative_function rnc_derivatives;
-    SOLVERS_LEGACY_FIELD("use set_curve_derivatives()")
-    derivative_mode rnc_derivative_source = derivative_mode::supplied;
 
     // -- Derivative slot ------------------------------------------------------
 
@@ -153,41 +132,8 @@ struct least_squares_problem
         model_provider_factory_ = std::move(factory);
     }
 
-    // The effective provider: the one set through the setters, else one built
-    // from the deprecated fields, else null.
-    std::shared_ptr<JacobianProvider> derivative_provider() const
-    {
-        if (provider_)
-        {
-            return provider_;
-        }
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#elif defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-        if (jacobian_provider)
-        {
-            return jacobian_provider;
-        }
-        if (rnc_derivatives)
-        {
-            return curve_derivatives(
-                rnc_derivatives, rnc_derivative_source, num_parameters, num_residuals);
-        }
-        if (jacobian.has_value() && static_cast<bool>(*jacobian) && residuals)
-        {
-            return analytic_jacobian(residuals, *jacobian, num_parameters, num_residuals);
-        }
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#elif defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-        return nullptr;
-    }
+    // The attached provider, or null.
+    std::shared_ptr<JacobianProvider> derivative_provider() const { return provider_; }
 
     // -- Queries ----------------------------------------------------------------
 
@@ -218,12 +164,6 @@ struct optimization_problem
     api::bounds      bounds;
     api::constraints constraints;
 
-    // -- Deprecated inputs (folded into the provider slot when read) ---------
-    SOLVERS_LEGACY_FIELD("use set_gradient(); the field is read only for compatibility")
-    std::optional<gradient_function> gradient;
-    SOLVERS_LEGACY_FIELD("use set_gradient_provider()")
-    std::shared_ptr<GradientProvider> gradient_provider;
-
     // Attach a gradient provider. Replaces any previously set provider.
     void set_gradient_provider(std::shared_ptr<GradientProvider> provider)
     {
@@ -242,36 +182,8 @@ struct optimization_problem
         set_gradient_provider(analytic_gradient(std::move(gradient_callback), num_parameters));
     }
 
-    // The effective provider: set through the setters, else built from the
-    // deprecated fields, else null.
-    std::shared_ptr<GradientProvider> derivative_provider() const
-    {
-        if (provider_)
-        {
-            return provider_;
-        }
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#elif defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-        if (gradient_provider)
-        {
-            return gradient_provider;
-        }
-        if (gradient.has_value() && static_cast<bool>(*gradient))
-        {
-            return analytic_gradient(*gradient, num_parameters);
-        }
-#if defined(__clang__)
-#pragma clang diagnostic pop
-#elif defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
-        return nullptr;
-    }
+    // The attached provider, or null.
+    std::shared_ptr<GradientProvider> derivative_provider() const { return provider_; }
 
 private:
     std::shared_ptr<GradientProvider> provider_;
