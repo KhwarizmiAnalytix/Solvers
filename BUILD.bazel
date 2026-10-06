@@ -5,10 +5,13 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "Solvers",
     srcs = glob(["src/**/*.cpp"]),
-    hdrs = glob([
-        "include/**/*.h",
-        "include/**/*.hpp",
-    ]),
+    hdrs = glob(
+        [
+            "include/**/*.h",
+            "include/**/*.hpp",
+        ],
+        allow_empty = True,
+    ),
     defines = [
         "SOLVERS_HAS_CERES=0",
         "SOLVERS_HAS_IPOPT=0",
@@ -20,7 +23,7 @@ cc_library(
     features = ["layering_check"],
     includes = ["include"],
     deps = [
-        "//ThirdParty/Logging:Logging",
+        "@xsigma_logging//:logging_lib",
         "@eigen//:eigen",
     ],
 )

@@ -1,0 +1,30 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_test(
+    name = "BenchmarkRootFinding",
+    size = "large",
+    timeout = "long",
+    srcs = ["BenchmarkRootFinding.cpp"],
+    args = ["--benchmark_min_time=0.05s"],
+    tags = ["benchmark"],
+    deps = [
+        "//:Solvers",
+        "@google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_test(
+    name = "BenchmarkSolverComparison",
+    size = "large",
+    timeout = "long",
+    srcs = ["BenchmarkSolverComparison.cpp"],
+    args = ["--benchmark_min_time=0.05s"],
+    tags = ["benchmark"],
+    deps = [
+        "//:Solvers",
+        "//Testing:test_problems",
+        "@google_benchmark//:benchmark_main",
+    ],
+)

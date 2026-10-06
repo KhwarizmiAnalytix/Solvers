@@ -32,3 +32,4 @@ standard_library = ["typing_extensions"]
 
 [tool.codespell]
 ignore-words = "Scripts/suppressions/spell_suppressions.txt"
+skip = "ThirdParty,build,build_full,build_coverage,build_ninja,build_test,build_xcode*,bazel-*,*.lock,*.profraw"

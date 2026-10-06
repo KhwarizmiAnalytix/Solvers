@@ -8,6 +8,8 @@ The aspect runs IWYU on every C++ source in targets it visits and emits a
 are suppressed (--error=0) so suggestions are advisory only.
 """
 
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+
 IwyuInfo = provider(
     doc = "Propagates IWYU output files.",
     fields = {"report_files": "depset of .iwyu.txt report files"},

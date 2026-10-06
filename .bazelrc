@@ -4,6 +4,12 @@
 build --cxxopt=-std=c++17
 build --host_cxxopt=-std=c++17
 
+# Coverage instrumentation.
+# Usage: bazel coverage //Testing/Cxx/...
+coverage --instrumentation_filter=//...
+coverage --instrument_test_targets
+coverage --combined_report=lcov
+
 # Include-What-You-Use analysis.
 # Usage: bazel build --config=iwyu //...
 # Requires include-what-you-use to be on PATH (brew install include-what-you-use).

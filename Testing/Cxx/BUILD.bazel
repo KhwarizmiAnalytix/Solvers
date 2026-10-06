@@ -1,1 +1,37 @@
-# No tests.
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_test(
+    name = "TestSolversBackend",
+    size = "medium",
+    srcs = ["TestSolversBackend.cpp"],
+    deps = [
+        "//:Solvers",
+        "//Testing:test_problems",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "TestRootFinding",
+    size = "small",
+    srcs = ["TestRootFinding.cpp"],
+    deps = [
+        "//:Solvers",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "TestRncLmSolver",
+    size = "medium",
+    srcs = ["TestRncLmSolver.cpp"],
+    deps = [
+        "//:Solvers",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
