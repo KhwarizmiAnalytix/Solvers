@@ -12,14 +12,11 @@ class solver_options_ceres;
 class ceres_solver
 {
 public:
-    using CostFunctionLambda = std::function<void(const vector_type&, vector_type&)>;
-    using JacobianCallback   = std::function<void(const vector_type&, matrix_type&)>;
-
     // Constructor with explicit Jacobian callback.
     SOLVER_API ceres_solver(size_t num_parameters,
         size_t                              num_residuals,
-        CostFunctionLambda                  cost_function,
-        const JacobianCallback&             jacobian_callback = nullptr,
+        function_type                       cost_function,
+        const jacobian_type&                jacobian_callback = nullptr,
         const std::vector<double>&          lower_bounds      = {},
         const std::vector<double>&          upper_bounds      = {});
 
@@ -34,8 +31,8 @@ public:
     SOLVER_API static bool is_supported();
 
 private:
-    CostFunctionLambda         cost_function_;
-    JacobianCallback           jacobian_callback_;
+    function_type              cost_function_;
+    jacobian_type              jacobian_callback_;
     std::vector<double>        lower_bounds_;
     std::vector<double>        upper_bounds_;
     size_t                     num_parameters_;
