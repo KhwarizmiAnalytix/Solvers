@@ -9,3 +9,8 @@ add_executable(TestRootFinding TestRootFinding.cpp)
 target_include_directories(TestRootFinding PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(TestRootFinding PRIVATE Solvers GTest::gtest_main)
 gtest_discover_tests(TestRootFinding PROPERTIES LABELS Solvers)
+
+add_executable(TestRncLmSolver TestRncLmSolver.cpp)
+target_include_directories(TestRncLmSolver PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(TestRncLmSolver PRIVATE Solvers GTest::gtest_main)
+gtest_discover_tests(TestRncLmSolver PROPERTIES LABELS Solvers)
