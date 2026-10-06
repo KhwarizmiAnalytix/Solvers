@@ -316,8 +316,8 @@ public:
 
 lbfgs_solver::lbfgs_solver(size_type num_parameters,
     size_type                        num_residuals,
-    lbfgs_solver::function_type      function,
-    lbfgs_solver::jacobian_type      jacobian)
+    function_type                    function,
+    jacobian_type                    jacobian)
     : function_(std::move(function)), jacobian_(std::move(jacobian)),
       num_parameters_(num_parameters), num_residuals_(num_residuals) {};
 

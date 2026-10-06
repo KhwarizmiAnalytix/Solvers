@@ -38,8 +38,8 @@ template <typename T> inline double l2_norm(T const& h)
 
 gauss_newton_solver::gauss_newton_solver(size_t num_parameters,
     size_t                                      num_residuals,
-    gauss_newton_solver::function_type          function,
-    gauss_newton_solver::jacobian_type          jacobian)
+    function_type                               function,
+    jacobian_type                               jacobian)
     : function_(std::move(function)), jacobian_(std::move(jacobian)),
       num_parameters_(num_parameters), num_residuals_(num_residuals)
 {

@@ -17,9 +17,6 @@ class lbfgs_solver
     using size_type   = size_t;
     using scalar_type = double;
 
-    using function_type = std::function<void(vector_type const&, vector_type&)>;
-    using jacobian_type = std::function<void(vector_type const&, matrix_type&)>;
-
     using objective_type = std::function<double(vector_type const&)>;
     using gradient_type  = std::function<void(vector_type const&, vector_type&)>;
 

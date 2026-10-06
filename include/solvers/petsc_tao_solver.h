@@ -25,7 +25,6 @@ public:
     using gradient_type  = std::function<void(const vector_type&, vector_type&)>;
     using hessian_type   = std::function<void(const vector_type&, matrix_type&)>;
     using residual_type  = std::function<void(const vector_type&, vector_type&)>;
-    using jacobian_type  = std::function<void(const vector_type&, matrix_type&)>;
 
     // General objective mode: minimize f(x) with optional Hessian and bounds.
     SOLVER_API petsc_tao_solver(size_t num_parameters,

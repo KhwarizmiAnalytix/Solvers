@@ -38,8 +38,8 @@ template <typename T> inline double l2_norm(T const& h)
 
 levenberg_marquardt_solver::levenberg_marquardt_solver(size_t num_parameters,
     size_t                                                    num_residuals,
-    levenberg_marquardt_solver::function_type                 function,
-    levenberg_marquardt_solver::jacobian_type                 jacobian)
+    function_type                                             function,
+    jacobian_type                                             jacobian)
     : function_(std::move(function)), jacobian_(std::move(jacobian)),
       num_parameters_(num_parameters), num_residuals_(num_residuals)
 {

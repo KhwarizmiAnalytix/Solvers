@@ -48,7 +48,7 @@ struct tao_context
     petsc_tao_solver::gradient_type*  gradient;
     petsc_tao_solver::hessian_type*   hessian;
     petsc_tao_solver::residual_type*  residuals;
-    petsc_tao_solver::jacobian_type*  jacobian;
+    jacobian_type*                    jacobian;
 };
 
 vector_type vec_to_eigen(Vec v, size_t n)

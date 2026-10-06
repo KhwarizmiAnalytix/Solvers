@@ -40,6 +40,10 @@
 
 namespace solverslib
 {
+// Common callback types used across all solvers.
+using function_type = std::function<void(vector_type const&, vector_type&)>;
+using jacobian_type = std::function<void(vector_type const&, matrix_type&)>;
+
 template <typename T>
 inline bool is_almost_zero(T value, T tolerance = std::numeric_limits<T>::epsilon())
 {

@@ -34,9 +34,6 @@ class gauss_newton_solver
 {
     using scalar_type = double;
 
-    using function_type = std::function<void(vector_type const&, vector_type&)>;
-    using jacobian_type = std::function<void(vector_type const&, matrix_type&)>;
-
     function_type function_;
     jacobian_type jacobian_;
     size_t        num_parameters_;
