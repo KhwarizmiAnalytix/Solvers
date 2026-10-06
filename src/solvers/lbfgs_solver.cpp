@@ -3,7 +3,6 @@
 #include <optional>
 #include <string>
 
-#include "detail/native_evaluation.h"
 #include "solver_options/solver_options_bfgs.h"
 
 namespace solverslib

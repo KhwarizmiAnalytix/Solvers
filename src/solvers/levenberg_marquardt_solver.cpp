@@ -4,7 +4,6 @@
 #include <optional>
 #include <sstream>
 
-#include "detail/native_evaluation.h"
 #include "detail/support.h"
 #include "solver_options/solver_options_lm.h"
 
