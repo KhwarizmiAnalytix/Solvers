@@ -15,10 +15,8 @@ namespace solverslib
 class LambdaCostFunctor : public ceres::CostFunction
 {
 public:
-    using jacobian_fn = jacobian_type;
-
     LambdaCostFunctor(function_type                            cost_function,
-        jacobian_fn                                    jacobian_callback,
+        jacobian_type                                  jacobian_callback,
         size_t                                         num_parameters,
         size_t                                         num_residuals)
         : cost_function_(std::move(cost_function)),
@@ -94,7 +92,7 @@ public:
 
 private:
     function_type                    cost_function_;
-    jacobian_fn                      cost_function_aad_;
+    jacobian_type                    cost_function_aad_;
     size_t                           num_residuals_;
     size_t                           num_parameters_;
 };
