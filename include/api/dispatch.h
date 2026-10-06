@@ -18,9 +18,6 @@ namespace solverslib::api
 // Derivative types (function-based, not classes)
 // ---------------------------------------------------------------------------
 
-// Jacobian: J(i, j) = ∂r_i / ∂x_j (m x n matrix)
-using jacobian_function = std::function<void(const vector_type&, matrix_type&)>;
-
 // Gradient: g(j) = ∂f / ∂x_j (n-dim vector)
 using gradient_function = std::function<void(const vector_type&, vector_type&)>;
 
@@ -43,7 +40,6 @@ using rnc_derivative_function = std::function<void(
 
 using residual_function = std::function<void(const vector_type&, vector_type&)>;
 using objective_function = std::function<double(const vector_type&)>;
-using hessian_function   = std::function<void(const vector_type&, matrix_type&)>;
 using hessian_vector_function =
     std::function<void(const vector_type& x, const vector_type& v, vector_type& out)>;
 
@@ -82,7 +78,7 @@ struct least_squares_problem
     residual_function residuals;
 
     // Optional: Jacobian callback. If absent, finite differences will be used.
-    std::optional<jacobian_function> jacobian;
+    std::optional<jacobian_type> jacobian;
 
     // Optional: Derivatives along a curve for RNC-LM (analytic or Taylor AD).
     std::optional<rnc_derivative_function> curve_derivatives;
@@ -96,7 +92,7 @@ struct optimization_problem
     std::size_t num_parameters = 0;
 
     objective_function                     objective;
-    std::optional<hessian_function>        hessian;
+    std::optional<jacobian_type>           hessian;
     std::optional<hessian_vector_function> hessian_vector;
 
     // Optional: gradient callback. If absent, finite differences will be used.
@@ -146,8 +142,8 @@ struct check_gradient_result
 
 // Compare two Jacobian implementations at x
 inline check_jacobian_result check_jacobian(
-    const jacobian_function& jacobian_a,
-    const jacobian_function& jacobian_b,
+    const jacobian_type& jacobian_a,
+    const jacobian_type& jacobian_b,
     const vector_type&       x,
     std::size_t              m,
     std::size_t              n,
