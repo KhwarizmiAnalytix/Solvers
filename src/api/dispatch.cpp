@@ -137,7 +137,6 @@ problem_traits inspect(const optimization_problem& problem)
     traits.is_least_squares           = false;
     traits.has_gradient               = problem.gradient.has_value();
     traits.has_hessian                = problem.hessian.has_value();
-    traits.has_hessian_vector_product = problem.hessian_vector.has_value();
     traits.has_bounds                 = !problem.bounds.empty();
     traits.has_nonlinear_constraints  = !problem.constraints.empty();
     traits.num_parameters             = problem.num_parameters;

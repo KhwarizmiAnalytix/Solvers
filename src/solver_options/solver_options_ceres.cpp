@@ -96,7 +96,6 @@ double solver_options_ceres::max_line_search_step_expansion() const
 {
     return max_line_search_step_expansion_;
 }
-bool   solver_options_ceres::check_gradients() const { return check_gradients_; }
 double solver_options_ceres::gradient_check_relative_precision() const
 {
     return gradient_check_relative_precision_;
@@ -359,11 +358,6 @@ solver_options_ceres_builder& solver_options_ceres_builder::with_max_line_search
     double val)
 {
     options_->max_line_search_step_expansion_ = val;
-    return *this;
-}
-solver_options_ceres_builder& solver_options_ceres_builder::with_check_gradients(bool val)
-{
-    options_->check_gradients_ = val;
     return *this;
 }
 solver_options_ceres_builder& solver_options_ceres_builder::with_gradient_check_relative_precision(

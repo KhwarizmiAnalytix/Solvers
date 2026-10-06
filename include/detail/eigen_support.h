@@ -93,18 +93,6 @@ inline void copy_from_row_major(
             source, static_cast<index_type>(rows), static_cast<index_type>(cols));
 }
 
-// Test hook: forbid (or allow again) heap allocation by the linear-algebra
-// backend. Active only when the backend's runtime allocation guard is compiled
-// in (Eigen: EIGEN_RUNTIME_NO_MALLOC); otherwise a no-op.
-inline void set_allocation_allowed(bool allowed)
-{
-#ifdef EIGEN_RUNTIME_NO_MALLOC
-    Eigen::internal::set_is_malloc_allowed(allowed);
-#else
-    (void)allowed;
-#endif
-}
-
 // Ceres' CostFunction::Evaluate hands back jacobians as a flat row-major
 // double*; this is the one place that layout detail needs to be named.
 inline void copy_row_major(double* destination, const matrix_type& source)

@@ -8,8 +8,6 @@
 
 #include "solver_options/solver_options_ceres.h"
 
-#define DEBUG_AAD 0
-
 namespace solverslib
 {
 class LambdaCostFunctor : public ceres::CostFunction
@@ -37,52 +35,11 @@ public:
         cost_function_(params_double, residual_values);
         copy_into(residuals, num_residuals_, residual_values);
 
-#if DEBUG_AAD
-        double bump = 0.00001;
-
-        auto cost_function_bump = [this, bump](vector_type const& x, matrix_type& dy_dx)
-        {
-            auto number_of_parameters = x.size();
-
-            SOLVERS_CHECK(dy_dx.cols() == number_of_parameters);
-
-            auto number_of_targets = dy_dx.rows();
-
-            vector_type y_plus  = make_vector(number_of_targets);
-            vector_type y_minus = make_vector(number_of_targets);
-
-            vector_type x_tmp = make_vector(number_of_parameters);
-            x_tmp             = x;
-
-            for (size_t i = 0; i < number_of_parameters; ++i)
-            {
-                x_tmp[i] += bump;
-
-                cost_function_(x_tmp, y_plus);
-
-                x_tmp[i] -= 2 * bump;
-                cost_function_(x_tmp, y_minus);
-
-                for (size_t j = 0; j < y_plus.size(); ++j)
-                {
-                    dy_dx(j, i) = 0.5 * (y_plus[j] - y_minus[j]) / bump;
-                }
-
-                x_tmp[i] = x[i];
-            }
-        };
-#endif
-
         if (jacobians != nullptr && jacobians[0] != nullptr)
         {
             matrix_type grad = make_matrix(num_residuals_, num_parameters_);
             cost_function_aad_(params_double, grad);
             copy_row_major(jacobians[0], grad);
-
-#if DEBUG_AAD
-            matrix_type grad2 = make_matrix(num_residuals_, num_parameters_);
-            cost_function_bump(params_double, grad2);
-#endif
 
             return true;
         }
@@ -199,110 +156,6 @@ void update_options(
     output_options.trust_region_problem_dump_format_type =
         static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type());
 }
-
-// void update_options(ceres::Solver::Options& output_options, const solver_options_ceres&
-// input_options)
-//{
-//     // General settings
-//     output_options.minimizer_type =
-//     static_cast<ceres::MinimizerType>(input_options.minimizer_type());
-//
-//     output_options.line_search_direction_type =
-//         static_cast<ceres::LineSearchDirectionType>(input_options.line_search_direction_type_);
-//
-//     output_options.line_search_interpolation_type =
-//         static_cast<ceres::LineSearchInterpolationType>(input_options.line_search_interpolation_type_);
-//
-//     output_options.line_search_type =
-//     static_cast<ceres::LineSearchType>(input_options.line_search_type_);
-//
-//     output_options.trust_region_strategy_type =
-//         static_cast<ceres::TrustRegionStrategyType>(input_options.trust_region_strategy_type_);
-//
-//     output_options.dogleg_type = static_cast<ceres::DoglegType>(input_options.dogleg_type_);
-//
-//     // Iteration settings
-//     output_options.max_num_iterations           = input_options.max_num_iterations();
-//     output_options.function_tolerance           = input_options.function_tolerance();
-//     output_options.gradient_tolerance           = input_options.gradient_tolerance();
-//     output_options.parameter_tolerance          = input_options.parameter_tolerance();
-//     output_options.minimizer_progress_to_stdout = false;
-//     output_options.update_state_every_iteration = false;
-//
-//     // Linear solver settings
-//     output_options.linear_solver_type =
-//     static_cast<ceres::LinearSolverType>(input_options.linear_solver_type_);
-//
-//     output_options.linear_solver_ordering_type =
-//         static_cast<ceres::LinearSolverOrderingType>(input_options.linear_solver_ordering_type_);
-//
-//     output_options.dense_linear_algebra_library_type =
-//     static_cast<ceres::DenseLinearAlgebraLibraryType>(
-//         input_options.dense_linear_algebra_library_type_);
-//
-//     output_options.sparse_linear_algebra_library_type =
-//     static_cast<ceres::SparseLinearAlgebraLibraryType>(
-//         input_options.sparse_linear_algebra_library_type_);
-//
-//     output_options.preconditioner_type =
-//         static_cast<ceres::PreconditionerType>(input_options.preconditioner_type_);
-//
-//     output_options.visibility_clustering_type =
-//         static_cast<ceres::VisibilityClusteringType>(input_options.visibility_clustering_type_);
-//
-//     // Trust region settings
-//     output_options.initial_trust_region_radius = input_options.initial_trust_region_radius_;
-//     output_options.max_trust_region_radius     = input_options.max_trust_region_radius_;
-//     output_options.min_trust_region_radius     = input_options.min_trust_region_radius_;
-//     output_options.min_relative_decrease       = input_options.min_relative_decrease_;
-//     output_options.eta                         = input_options.eta_;
-//
-//     // Inner iteration settings
-//     output_options.use_inner_iterations      = input_options.use_inner_iterations_;
-//     output_options.inner_iteration_tolerance = input_options.inner_iteration_tolerance_;
-//
-//     // Jacobian scaling and sparsity
-//     output_options.jacobi_scaling   = input_options.jacobi_scaling_;
-//     output_options.dynamic_sparsity = input_options.dynamic_sparsity_;
-//
-//     // Mixed precision settings
-//     output_options.use_mixed_precision_solves    = input_options.use_mixed_precision_solves_;
-//     output_options.max_num_refinement_iterations = input_options.max_num_refinement_iterations_;
-//
-//     // Line search settings
-//     output_options.min_line_search_step_size = input_options.min_line_search_step_size_;
-//     output_options.line_search_sufficient_function_decrease =
-//         input_options.line_search_sufficient_function_decrease_;
-//     output_options.line_search_sufficient_curvature_decrease =
-//         input_options.line_search_sufficient_curvature_decrease_;
-//     output_options.max_line_search_step_contraction =
-//     input_options.max_line_search_step_contraction_;
-//     output_options.min_line_search_step_contraction =
-//     input_options.min_line_search_step_contraction_;
-//     output_options.max_line_search_step_expansion   =
-//     input_options.max_line_search_step_expansion_;
-//
-//     // Debugging and logging
-//     output_options.check_gradients                   = false;
-//     output_options.gradient_check_relative_precision =
-//     input_options.gradient_check_relative_precision_;
-//     output_options.gradient_check_numeric_derivative_relative_step_size =
-//         input_options.gradient_check_numeric_derivative_relative_step_size_;
-//
-//     // Time and iteration limits
-//     output_options.max_solver_time_in_seconds   = input_options.max_solver_time_in_seconds_;
-//     output_options.num_threads                  = input_options.num_threads_;
-//     output_options.min_linear_solver_iterations = input_options.min_linear_solver_iterations_;
-//     output_options.max_linear_solver_iterations = input_options.max_linear_solver_iterations_;
-//
-//     // Dumping output_options
-//     output_options.trust_region_minimizer_iterations_to_dump =
-//         input_options.trust_region_minimizer_iterations_to_dump_;
-//     output_options.trust_region_problem_dump_directory =
-//     input_options.trust_region_problem_dump_directory_;
-//     output_options.trust_region_problem_dump_format_type =
-//         static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type_);
-// }
 }  // namespace solverslib
 #endif
 

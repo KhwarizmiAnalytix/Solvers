@@ -6,9 +6,8 @@
 
 #include "solver_options/root_finding_options.h"
 
-// Internal: the root-finding iterations with diagnostics. The public
-// run_xxx functions are bool/out-parameter wrappers over these,
-// and api::find_root builds the structured root_result from them.
+// Root-finding iterations with diagnostics. The public run_xxx functions
+// are bool/out-parameter wrappers over these.
 namespace solverslib::detail
 {
 enum class root_outcome

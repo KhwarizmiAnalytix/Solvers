@@ -198,7 +198,6 @@ public:
     SOLVER_API double max_line_search_step_contraction() const;
     SOLVER_API double min_line_search_step_contraction() const;
     SOLVER_API double max_line_search_step_expansion() const;
-    SOLVER_API bool   check_gradients() const;
     SOLVER_API double gradient_check_relative_precision() const;
     SOLVER_API double gradient_check_numeric_derivative_relative_step_size() const;
     SOLVER_API double max_solver_time_in_seconds() const;
@@ -251,7 +250,6 @@ private:
     double                   max_line_search_step_contraction_                     = 1e-3;
     double                   min_line_search_step_contraction_                     = 0.6;
     double                   max_line_search_step_expansion_                       = 10.0;
-    bool                     check_gradients_                                      = false;
     double                   gradient_check_relative_precision_                    = 1e-8;
     double                   gradient_check_numeric_derivative_relative_step_size_ = 1e-6;
     double                   max_solver_time_in_seconds_                           = 1e9;
@@ -319,7 +317,6 @@ public:
     SOLVER_API solver_options_ceres_builder& with_max_line_search_step_contraction(double val);
     SOLVER_API solver_options_ceres_builder& with_min_line_search_step_contraction(double val);
     SOLVER_API solver_options_ceres_builder& with_max_line_search_step_expansion(double val);
-    SOLVER_API solver_options_ceres_builder& with_check_gradients(bool val = true);
     SOLVER_API solver_options_ceres_builder& with_gradient_check_relative_precision(double val);
     SOLVER_API solver_options_ceres_builder&
     with_gradient_check_numeric_derivative_relative_step_size(double val);
