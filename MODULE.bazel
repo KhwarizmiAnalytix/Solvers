@@ -41,4 +41,3 @@ new_local_repository(
     path = "ThirdParty/eigen",
     build_file = "//:eigen.BUILD",
 )
-
