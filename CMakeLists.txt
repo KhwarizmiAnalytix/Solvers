@@ -48,6 +48,7 @@ if(SOLVERS_ENABLE_CERES)
     target_link_libraries(Solvers_CeresAutodiff INTERFACE Solvers::Solvers Ceres::ceres)
     target_compile_definitions(Solvers_CeresAutodiff INTERFACE SOLVERS_HAS_CERES=1)
     add_library(Solvers::CeresAutodiff ALIAS Solvers_CeresAutodiff)
+    set_target_properties(Solvers_CeresAutodiff PROPERTIES EXPORT_NAME CeresAutodiff)
 endif()
 if(SOLVERS_ENABLE_IPOPT OR SOLVERS_ENABLE_PETSC)
     find_package(PkgConfig REQUIRED)
@@ -111,42 +112,56 @@ include(CMakePackageConfigHelpers)
 
 set(_solvers_install_cmakedir "${CMAKE_INSTALL_LIBDIR}/cmake/Solvers")
 
-# Eigen3 headers (bundled submodule)
+# Eigen3 headers (bundled submodule, header-only). Eigen3 has no proper
+# Eigen3Config.cmake installed by this package, so SolversConfig.cmake.in
+# keeps a minimal hand-rolled Eigen3::Eigen fallback (see that file) --
+# install(EXPORT) cannot manufacture a target for a dependency that was
+# never part of this package's own export set.
 install(DIRECTORY "${_solvers_tp}/eigen/Eigen" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(DIRECTORY "${_solvers_tp}/eigen/unsupported" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 
-# Logging and its bundled dependencies
+# loguru: Logging links loguru PRIVATE and, by its own documented design
+# (Logging/Cmake/LoggingConfig.cmake.in), deliberately never re-exports it --
+# correct for a SHARED Logging, where loguru's object code is baked directly
+# into libLogging.so. Solvers forces Logging to build STATIC when vendoring
+# it (see SolversDependencies.cmake), so loguru's objects are never merged
+# into libLogging.a; an external consumer linking the installed static
+# Solvers::Solvers/Logging::Logging still needs loguru on the link line, and
+# there is no LoguruConfig.cmake to find_dependency() against. Solvers
+# re-installs/re-exposes the archive itself as a deliberate, still-necessary
+# fallback (see SolversConfig.cmake.in) -- it is not redundant with
+# install(EXPORT).
 set(_logging_tp "${_solvers_tp}/Logging/ThirdParty")
-
 install(TARGETS loguru ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
 )
 install(FILES "${_logging_tp}/loguru/loguru.hpp" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/loguru")
-install(DIRECTORY "${_logging_tp}/magic_enum/include/magic_enum"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
 
-install(
-    TARGETS Logging
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-)
-install(
-    DIRECTORY "${_solvers_tp}/Logging/include/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/Logging/include"
-    FILES_MATCHING
-    PATTERN "*.h"
-    PATTERN "*.hpp"
-)
+# Logging itself, magic_enum's headers, and Logging's own CMake package
+# files are no longer hand-copied here: Logging is vendored without
+# EXCLUDE_FROM_ALL now (SolversDependencies.cmake), so its own
+# install(TARGETS Logging EXPORT LoggingTargets ...) / install(DIRECTORY
+# include/...) / configure_package_config_file(LoggingConfig...) rules run
+# automatically as part of this package's `cmake --install`.
 
-# Solvers library and headers
+# Solvers library, and Solvers::CeresAutodiff when Ceres is enabled (its
+# EXPORT_NAME is set to "CeresAutodiff" where the target is defined above, so
+# NAMESPACE Solvers:: below produces the same Solvers::CeresAutodiff name
+# used at build time). Both reference targets outside this export set
+# (Logging::Logging, Ceres::ceres, ...); CMake permits that in the generated
+# *Targets.cmake as long as SolversConfig.cmake.in find_dependency()s /
+# pkg_check_modules()s each one into existence before including it -- which
+# it does.
 install(
     TARGETS Solvers
+    EXPORT SolversTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
+if(TARGET Solvers_CeresAutodiff)
+    install(TARGETS Solvers_CeresAutodiff EXPORT SolversTargets)
+endif()
 install(
     DIRECTORY include/
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
@@ -170,4 +185,11 @@ configure_package_config_file(
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/SolversConfig.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/SolversConfigVersion.cmake"
         DESTINATION "${_solvers_install_cmakedir}"
+)
+
+install(
+    EXPORT SolversTargets
+    NAMESPACE Solvers::
+    FILE SolversTargets.cmake
+    DESTINATION "${_solvers_install_cmakedir}"
 )

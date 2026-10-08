@@ -2,21 +2,15 @@
 
 include(CMakeFindDependencyMacro)
 
-find_dependency(Threads)
-
-# fmt — use system package (header-only mode)
-if(NOT TARGET Fmt::fmt)
-  find_package(fmt QUIET)
-  if(TARGET fmt::fmt-header-only)
-    add_library(Fmt::fmt INTERFACE IMPORTED)
-    set_target_properties(Fmt::fmt PROPERTIES INTERFACE_LINK_LIBRARIES fmt::fmt-header-only)
-  elseif(TARGET fmt::fmt)
-    add_library(Fmt::fmt INTERFACE IMPORTED)
-    set_target_properties(Fmt::fmt PROPERTIES INTERFACE_LINK_LIBRARIES fmt::fmt)
-  endif()
-endif()
-
-# Eigen3
+# ---------------------------------------------------------------------------
+# Eigen3 (vendored submodule, header-only)
+# ---------------------------------------------------------------------------
+# Solvers installs the raw Eigen/unsupported headers directly (CMakeLists.txt)
+# but never generates/installs an Eigen3Config.cmake of its own. Try a system
+# Eigen3 package first; if none is present (the common case for this vendored
+# setup), fall back to a minimal header-only imported target pointing at the
+# headers this package itself installed. This fallback is intentional, not
+# redundant with install(EXPORT): nothing else can produce Eigen3::Eigen here.
 if(NOT TARGET Eigen3::Eigen)
   find_package(Eigen3 QUIET)
   if(NOT TARGET Eigen3::Eigen)
@@ -27,66 +21,73 @@ if(NOT TARGET Eigen3::Eigen)
   endif()
 endif()
 
-# magic_enum
-if(NOT TARGET MagicEnum::magic_enum)
-  add_library(MagicEnum::magic_enum INTERFACE IMPORTED)
-  set_target_properties(MagicEnum::magic_enum PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
-  )
-endif()
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# Logging ships its own install(EXPORT)-based LoggingConfig.cmake /
+# LoggingTargets.cmake (Solvers vendors it without EXCLUDE_FROM_ALL now, see
+# SolversDependencies.cmake, so Logging's own install rules run and its
+# package files land alongside Solvers'). find_dependency() it the standard
+# way instead of hand-reconstructing Logging::Logging.
+find_dependency(Logging)
 
-# loguru
+# loguru: Logging's own LoggingTargets.cmake links loguru (and fmt) PRIVATE,
+# and -- verified empirically against the actual generated file -- CMake
+# drops that private dependency entirely from the exported
+# INTERFACE_LINK_LIBRARIES (it is not merely hidden behind $<LINK_ONLY:>,
+# the reference itself comes out empty). That is fine for a SHARED Logging,
+# where loguru's object code is baked directly into libLogging.so, but
+# Solvers forces Logging to build STATIC when vendoring it
+# (SolversDependencies.cmake), so loguru's objects are never merged into
+# libLogging.a: an external consumer linking the installed static
+# Solvers/Logging still needs loguru on the link line. There is no
+# LoguruConfig.cmake to find_dependency() against either, so Solvers
+# re-installs/re-exposes the archive itself (CMakeLists.txt) and
+# reconstructs the import here -- a deliberate, necessary fallback, not
+# something install(EXPORT) could have generated.
 if(NOT TARGET Loguru::loguru)
-  add_library(Loguru::loguru UNKNOWN IMPORTED)
   find_library(_solvers_loguru_path NAMES loguru logurud
     PATHS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@" NO_DEFAULT_PATH)
-  set_target_properties(Loguru::loguru PROPERTIES
-    IMPORTED_LOCATION "${_solvers_loguru_path}"
-    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/loguru"
-    INTERFACE_LINK_LIBRARIES "Threads::Threads"
-  )
-endif()
-
-# Logging
-if(NOT TARGET Logging::Logging)
-  add_library(Logging::Logging UNKNOWN IMPORTED)
-  find_library(_solvers_logging_path NAMES Logging Loggingd
-    PATHS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@" NO_DEFAULT_PATH)
-  set_target_properties(Logging::Logging PROPERTIES
-    IMPORTED_LOCATION "${_solvers_logging_path}"
-    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/Logging;${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/Logging/include/logger"
-    INTERFACE_LINK_LIBRARIES "Loguru::loguru;MagicEnum::magic_enum"
-  )
-  if(TARGET Fmt::fmt)
-    set_property(TARGET Logging::Logging APPEND PROPERTY INTERFACE_LINK_LIBRARIES Fmt::fmt)
+  if(_solvers_loguru_path)
+    find_dependency(Threads)
+    add_library(Loguru::loguru UNKNOWN IMPORTED)
+    set_target_properties(Loguru::loguru PROPERTIES
+      IMPORTED_LOCATION "${_solvers_loguru_path}"
+      INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/loguru"
+      INTERFACE_LINK_LIBRARIES "Threads::Threads"
+    )
+    if(TARGET Logging::Logging)
+      set_property(TARGET Logging::Logging APPEND PROPERTY INTERFACE_LINK_LIBRARIES Loguru::loguru)
+    endif()
   endif()
+  unset(_solvers_loguru_path)
 endif()
 
-# Determine which optional backends are available (as numeric values)
-if(@SOLVERS_ENABLE_CERES@)
-  set(SOLVERS_HAS_CERES 1)
-else()
-  set(SOLVERS_HAS_CERES 0)
-endif()
+# ---------------------------------------------------------------------------
+# Optional backends -- mirrors how Parallel reports Parallel_HAS_TBB /
+# Parallel_HAS_OPENMP in ParallelConfig.cmake.in.
+# ---------------------------------------------------------------------------
+set(SOLVERS_HAS_CERES @SOLVERS_ENABLE_CERES@)
+set(SOLVERS_HAS_IPOPT @SOLVERS_ENABLE_IPOPT@)
+set(SOLVERS_HAS_PETSC @SOLVERS_ENABLE_PETSC@)
 
-if(@SOLVERS_ENABLE_IPOPT@)
-  set(SOLVERS_HAS_IPOPT 1)
-else()
-  set(SOLVERS_HAS_IPOPT 0)
-endif()
-
-if(@SOLVERS_ENABLE_PETSC@)
-  set(SOLVERS_HAS_PETSC 1)
-else()
-  set(SOLVERS_HAS_PETSC 0)
-endif()
-
-# Ceres (optional, but required for Solvers::CeresAutodiff)
+# Ceres: Solvers builds it from a vendored submodule (ThirdParty/ceres), not
+# a found package, and never installs it, so it has no installed package
+# identity of its own here. A consumer must provide its own
+# separately-installed Ceres; find_dependency() looks for that. Once found,
+# Solvers::Solvers's own $<LINK_ONLY:Ceres::ceres> (below, generated
+# automatically by install(EXPORT) since Solvers links Ceres::ceres PRIVATE)
+# and Solvers::CeresAutodiff's plain Ceres::ceres (INTERFACE, so its headers
+# do propagate -- CeresAutodiff users need them) both resolve against it.
 if(SOLVERS_HAS_CERES)
   find_dependency(Ceres QUIET)
 endif()
 
-# Ipopt (optional, pkg-config based)
+# Ipopt (optional, pkg-config based -- Ipopt has no standard CMake Config
+# package upstream, so there is nothing to find_dependency() against).
+# QUIET/non-required throughout: Solvers' public headers never expose
+# Ipopt's own types (see include/solvers/ipopt_solver.h), so a consumer who
+# isn't using the Ipopt backend should not be forced to have it discoverable.
 if(SOLVERS_HAS_IPOPT)
   find_package(PkgConfig QUIET)
   if(PkgConfig_FOUND)
@@ -94,7 +95,12 @@ if(SOLVERS_HAS_IPOPT)
   endif()
 endif()
 
-# PETSc/TAO (optional, pkg-config based)
+# PETSc/TAO (optional, pkg-config based -- same rationale as Ipopt). Plain
+# QUIET find_package(), not find_dependency(): find_dependency() would
+# forward this package's own REQUIRED-ness onto MPI, and MPI's C component
+# can fail to resolve in a consumer project that never enables LANGUAGES C
+# (FindMPI needs a C compiler enabled in the *consuming* project to probe
+# it) -- which must stay non-fatal, the same as the original Config.
 if(SOLVERS_HAS_PETSC)
   find_package(PkgConfig QUIET)
   if(PkgConfig_FOUND)
@@ -103,46 +109,20 @@ if(SOLVERS_HAS_PETSC)
   find_package(MPI QUIET COMPONENTS C)
 endif()
 
-# Solvers
-if(NOT TARGET Solvers::Solvers)
-  add_library(Solvers::Solvers UNKNOWN IMPORTED)
-  find_library(_solvers_library_path NAMES Solvers Solversd
-    PATHS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@" NO_DEFAULT_PATH)
-  set_target_properties(Solvers::Solvers PROPERTIES
-    IMPORTED_LOCATION "${_solvers_library_path}"
-    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@"
-    INTERFACE_COMPILE_FEATURES "cxx_std_17"
-    INTERFACE_LINK_LIBRARIES "Eigen3::Eigen;Logging::Logging"
-    INTERFACE_COMPILE_DEFINITIONS "SOLVERS_HAS_CERES=${SOLVERS_HAS_CERES};SOLVERS_HAS_IPOPT=${SOLVERS_HAS_IPOPT};SOLVERS_HAS_PETSC=${SOLVERS_HAS_PETSC}"
-  )
-
-  # Link to Ceres if available
-  if(SOLVERS_HAS_CERES AND TARGET Ceres::ceres)
-    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES Ceres::ceres)
-  endif()
-
-  # Link to Ipopt if available
-  if(SOLVERS_HAS_IPOPT AND TARGET PkgConfig::IPOPT)
-    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES PkgConfig::IPOPT)
-  endif()
-
-  # Link to PETSc if available
-  if(SOLVERS_HAS_PETSC AND TARGET PkgConfig::PETSC)
-    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES PkgConfig::PETSC)
-  endif()
-  if(SOLVERS_HAS_PETSC AND TARGET MPI::MPI_C)
-    set_property(TARGET Solvers::Solvers APPEND PROPERTY INTERFACE_LINK_LIBRARIES MPI::MPI_C)
-  endif()
-endif()
-
-# Solvers::CeresAutodiff (only available when Ceres is enabled)
-if(SOLVERS_HAS_CERES AND NOT TARGET Solvers::CeresAutodiff)
-  if(TARGET Ceres::ceres)
-    add_library(Solvers_CeresAutodiff INTERFACE IMPORTED)
-    target_link_libraries(Solvers_CeresAutodiff INTERFACE Solvers::Solvers Ceres::ceres)
-    target_compile_definitions(Solvers_CeresAutodiff INTERFACE SOLVERS_HAS_CERES=1)
-    add_library(Solvers::CeresAutodiff ALIAS Solvers_CeresAutodiff)
-  endif()
-endif()
+# ---------------------------------------------------------------------------
+# Solvers targets (install(EXPORT)-generated)
+# ---------------------------------------------------------------------------
+# Solvers::Solvers and (when Ceres is enabled) Solvers::CeresAutodiff are
+# both generated here. Solvers links Ceres::ceres / PkgConfig::IPOPT /
+# PkgConfig::PETSC / MPI::MPI_C PRIVATE in the main build (CMakeLists.txt);
+# for a STATIC library install(EXPORT) still records those as
+# $<LINK_ONLY:...> entries (verified against the actual generated file) so
+# the final link line still resolves them, while correctly NOT propagating
+# their include dirs/compile definitions to consumers -- matching the
+# ipopt_solver.h / petsc_tao_solver.h design ("Ipopt's/PETSc's own types
+# never cross this header"). No manual re-exposure needed here, unlike
+# loguru above: those targets just need to exist (via the find_dependency/
+# pkg_check_modules calls above) before this include().
+include("${CMAKE_CURRENT_LIST_DIR}/SolversTargets.cmake")
 
 check_required_components(Solvers)

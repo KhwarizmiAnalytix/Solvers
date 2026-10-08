@@ -23,7 +23,12 @@ if(NOT TARGET Logging::Logging)
   set(LOGGING_ENABLE_GTEST OFF CACHE BOOL "Logging testing is disabled; skip its GTest wiring" FORCE)
   set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
   set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Logging as static library" FORCE)
-  add_subdirectory("${_solvers_tp}/Logging" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging" EXCLUDE_FROM_ALL)
+  # Deliberately NOT EXCLUDE_FROM_ALL: Logging's own install(EXPORT
+  # LoggingTargets ...) / LoggingConfig.cmake / header-install rules need to
+  # run as part of `cmake --install` so Cmake/SolversConfig.cmake.in can
+  # find_dependency(Logging) against a real, standard LoggingConfig.cmake
+  # instead of Solvers hand-reconstructing Logging::Logging itself.
+  add_subdirectory("${_solvers_tp}/Logging" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging")
   set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
 endif()
 # Keep dependency-wide options scoped to this directory, away from the host project.

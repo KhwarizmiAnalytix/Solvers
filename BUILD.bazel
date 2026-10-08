@@ -1,4 +1,7 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_pkg//pkg:install.bzl", "pkg_install")
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files", "strip_prefix")
+load("@rules_pkg//pkg:pkg.bzl", "pkg_tar")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -25,5 +28,48 @@ cc_library(
     deps = [
         "@xsigma_logging//:logging_lib",
         "@eigen//:eigen",
+    ],
+)
+
+# =============================================================================
+# Install / export (bazel-side analogue of CMake's `install(TARGETS Solvers ...)` /
+# `install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" ...)`, which
+# installs headers flat under "include" rather than "include/Solvers"). `bazel build
+# //:solvers_pkg_tar` produces a relocatable tarball; `bazel run //:install --
+# --destdir=/some/prefix` stages the same tree directly on disk.
+# =============================================================================
+
+pkg_files(
+    name = "solvers_installed_hdrs",
+    srcs = glob(
+        [
+            "include/**/*.h",
+            "include/**/*.hpp",
+        ],
+        allow_empty = True,
+    ),
+    prefix = "include",
+    strip_prefix = strip_prefix.from_pkg("include"),
+)
+
+pkg_files(
+    name = "solvers_installed_libs",
+    srcs = [":Solvers"],
+    prefix = "lib",
+)
+
+pkg_tar(
+    name = "solvers_pkg_tar",
+    srcs = [
+        ":solvers_installed_hdrs",
+        ":solvers_installed_libs",
+    ],
+)
+
+pkg_install(
+    name = "install",
+    srcs = [
+        ":solvers_installed_hdrs",
+        ":solvers_installed_libs",
     ],
 )
