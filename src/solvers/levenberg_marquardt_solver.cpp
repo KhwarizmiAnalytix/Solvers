@@ -105,35 +105,8 @@ native_result levenberg_marquardt_solver::solve(
     const auto function_converged = [function_tolerance](double residual_norm)
     { return 0.5 * residual_norm * residual_norm < function_tolerance; };
 
-    // Evaluate initial residuals
-    try
-    {
-        function_(parameters, y_p);
-        if (!y_p.allFinite())
-        {
-            native_result result;
-            result.status        = native_convergence::numerical_failure;
-            result.residual_norm = std::numeric_limits<double>::quiet_NaN();
-            result.message       = "non-finite residuals at the initial point";
-            return result;
-        }
-    }
-    catch (const std::exception& e)
-    {
-        native_result result;
-        result.status        = native_convergence::numerical_failure;
-        result.residual_norm = std::numeric_limits<double>::quiet_NaN();
-        result.message       = std::string("residual evaluation exception: ") + e.what();
-        return result;
-    }
-    catch (...)
-    {
-        native_result result;
-        result.status        = native_convergence::numerical_failure;
-        result.residual_norm = std::numeric_limits<double>::quiet_NaN();
-        result.message       = "unknown exception during residual evaluation";
-        return result;
-    }
+    function_(parameters, y_p);
+    SOLVERS_CHECK(y_p.allFinite(), "non-finite residuals at the initial point");
     auto x2_p = l2_norm(y_p);
     // Smallest cost yet found, C(θ) = Σ r_m(θ)^2.
     auto min_cost             = y_p.squaredNorm();
@@ -151,55 +124,32 @@ native_result levenberg_marquardt_solver::solve(
 
     if (!x2_converged)
     {
-        bool stop = false;
+        if (jacobian_)
+        {
+            jacobian_(parameters, J);
+        }
+        else
+        {
+            // Finite difference approximation
+            const double h = options.finite_difference_step() * std::max(1.0, parameters.norm() / n);
+            vector_type  x_trial = parameters;
+            vector_type  y_trial(m);
 
-        // Compute Jacobian at initial point
-        try
-        {
-            if (jacobian_)
+            for (size_t j = 0; j < n; ++j)
             {
-                jacobian_(parameters, J);
-            }
-            else
-            {
-                // Finite difference approximation
-                const double h = options.finite_difference_step() * std::max(1.0, parameters.norm() / n);
-                vector_type x_trial = parameters;
-                vector_type y_trial(m);
-
-                for (size_t j = 0; j < n; ++j)
-                {
-                    x_trial[j] = parameters[j] + h;
-                    function_(x_trial, y_trial);
-                    J.col(j) = (y_trial - y_p) / h;
-                    x_trial[j] = parameters[j];
-                }
-            }
-            if (!J.allFinite())
-            {
-                failure = "non-finite Jacobian at the initial point";
-                stop = true;
+                x_trial[j] = parameters[j] + h;
+                function_(x_trial, y_trial);
+                J.col(j)   = (y_trial - y_p) / h;
+                x_trial[j] = parameters[j];
             }
         }
-        catch (const std::exception& e)
-        {
-            failure = std::string("Jacobian evaluation exception: ") + e.what();
-            stop = true;
-        }
-        catch (...)
-        {
-            failure = "unknown exception during Jacobian evaluation";
-            stop = true;
-        }
+        SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian at the initial point");
 
         refresh_normal_terms();
 
-        if (failure.empty())
-        {
-            final_gradient_norm = JtWdy.norm();
-        }
-        gradient_converged = failure.empty() && JtWdy.norm() <= options.gradient_tolerance();
-        stop               = stop || gradient_converged;
+        final_gradient_norm = JtWdy.norm();
+        gradient_converged  = JtWdy.norm() <= options.gradient_tolerance();
+        bool stop           = gradient_converged;
 
         for (; !stop && iteration < max_iter; ++iteration)
         {
@@ -249,23 +199,10 @@ native_result levenberg_marquardt_solver::solve(
             if (factored && geodesic)
             {
                 p_new = parameters - epsilon * step;
-                try
+                function_(p_new, y_p_new);
+                if (!y_p_new.allFinite())
                 {
-                    function_(p_new, y_p_new);
-                    if (!y_p_new.allFinite())
-                    {
-                        geodesic_valid = false;
-                    }
-                }
-                catch (const std::exception& e)
-                {
-                    failure = std::string("geodesic probe exception: ") + e.what();
-                    break;
-                }
-                catch (...)
-                {
-                    failure = "unknown exception during geodesic probe";
-                    break;
+                    geodesic_valid = false;
                 }
 
                 y_tmp.noalias() = J * step;
@@ -306,21 +243,8 @@ native_result levenberg_marquardt_solver::solve(
             }
             else
             {
-                try
-                {
-                    function_(p_new, y_p_new);
-                    trial_valid = y_p_new.allFinite();
-                }
-                catch (const std::exception& e)
-                {
-                    failure = std::string("trial point evaluation exception: ") + e.what();
-                    break;
-                }
-                catch (...)
-                {
-                    failure = "unknown exception during trial point evaluation";
-                    break;
-                }
+                function_(p_new, y_p_new);
+                trial_valid = y_p_new.allFinite();
             }
             auto x2_p_new = l2_norm(y_p_new);
 
@@ -338,23 +262,9 @@ native_result levenberg_marquardt_solver::solve(
                     tmp = (-alpha_quadratic) * step;
                     tmp += parameters;
 
-                    bool interpolation_valid = false;
-                    try
-                    {
-                        function_(tmp, y_tmp);
-                        interpolation_valid = y_tmp.allFinite();
-                    }
-                    catch (const std::exception& e)
-                    {
-                        failure = std::string("interpolated trial point exception: ") + e.what();
-                        break;
-                    }
-                    catch (...)
-                    {
-                        failure = "unknown exception during interpolated trial evaluation";
-                        break;
-                    }
-                    const auto norm = l2_norm(y_tmp);
+                    function_(tmp, y_tmp);
+                    const bool interpolation_valid = y_tmp.allFinite();
+                    const auto norm                = l2_norm(y_tmp);
 
                     if (interpolation_valid && x2_p > norm)
                     {
@@ -447,44 +357,27 @@ native_result levenberg_marquardt_solver::solve(
                     break;
                 }
 
-                // Recompute Jacobian at accepted point
-                try
+                if (jacobian_)
                 {
-                    if (jacobian_)
-                    {
-                        jacobian_(parameters, J);
-                    }
-                    else
-                    {
-                        // Finite difference approximation
-                        const double h = options.finite_difference_step() * std::max(1.0, parameters.norm() / n);
-                        vector_type x_trial = parameters;
-                        vector_type y_trial(m);
+                    jacobian_(parameters, J);
+                }
+                else
+                {
+                    // Finite difference approximation
+                    const double h =
+                        options.finite_difference_step() * std::max(1.0, parameters.norm() / n);
+                    vector_type x_trial = parameters;
+                    vector_type y_trial(m);
 
-                        for (size_t j = 0; j < n; ++j)
-                        {
-                            x_trial[j] = parameters[j] + h;
-                            function_(x_trial, y_trial);
-                            J.col(j) = (y_trial - y_p) / h;
-                            x_trial[j] = parameters[j];
-                        }
-                    }
-                    if (!J.allFinite())
+                    for (size_t j = 0; j < n; ++j)
                     {
-                        failure = "non-finite Jacobian at an accepted point";
-                        break;
+                        x_trial[j] = parameters[j] + h;
+                        function_(x_trial, y_trial);
+                        J.col(j)   = (y_trial - y_p) / h;
+                        x_trial[j] = parameters[j];
                     }
                 }
-                catch (const std::exception& e)
-                {
-                    failure = std::string("Jacobian evaluation exception: ") + e.what();
-                    break;
-                }
-                catch (...)
-                {
-                    failure = "unknown exception during Jacobian evaluation";
-                    break;
-                }
+                SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian at an accepted point");
 
                 refresh_normal_terms();
 

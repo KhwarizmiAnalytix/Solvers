@@ -49,8 +49,6 @@ native_result gauss_newton_solver::solve(
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
 
-    std::string failure;  // non-empty once an evaluation fails fatally
-
     const auto n        = num_parameters_;
     const auto m        = num_residuals_;
     const auto max_iter = static_cast<size_t>(options.max_num_iterations());
@@ -59,26 +57,11 @@ native_result gauss_newton_solver::solve(
     matrix_type J(m, n);
     vector_type gradient(n), step(n);
 
-    // Compute initial residuals
-    try
-    {
-        function_(parameters, y_p);
-        if (!y_p.allFinite())
-        {
-            failure = "non-finite residuals at the initial point";
-        }
-    }
-    catch (const std::exception& e)
-    {
-        failure = std::string("exception during residual evaluation: ") + e.what();
-    }
-    catch (...)
-    {
-        failure = "unknown exception during residual evaluation";
-    }
+    function_(parameters, y_p);
+    SOLVERS_CHECK(y_p.allFinite(), "non-finite residuals at the initial point");
 
     auto x2_p                 = l2_norm(y_p);
-    auto x2_converged         = failure.empty() && 0.5 * x2_p * x2_p < options.function_tolerance();
+    auto x2_converged         = 0.5 * x2_p * x2_p < options.function_tolerance();
     bool gradient_converged   = false;
     bool parameters_converged = false;
 
@@ -90,48 +73,29 @@ native_result gauss_newton_solver::solve(
     std::optional<double> last_step_norm;
     std::optional<double> final_gradient_norm;
 
-    for (; failure.empty() && !x2_converged && !parameters_converged && !gradient_converged &&
-           iteration < max_iter;
+    for (; !x2_converged && !parameters_converged && !gradient_converged && iteration < max_iter;
         ++iteration)
     {
-        // Compute Jacobian
-        try
+        if (jacobian_)
         {
-            if (jacobian_)
-            {
-                jacobian_(parameters, J);
-            }
-            else
-            {
-                // Finite difference approximation of Jacobian
-                const double h = options.bump() * std::max(1.0, parameters.norm() / n);
-                vector_type x_trial = parameters;
-                vector_type y_trial_temp(m);
+            jacobian_(parameters, J);
+        }
+        else
+        {
+            // Finite difference approximation of Jacobian
+            const double h       = options.bump() * std::max(1.0, parameters.norm() / n);
+            vector_type  x_trial = parameters;
+            vector_type  y_trial_temp(m);
 
-                for (size_t j = 0; j < n; ++j)
-                {
-                    x_trial[j] = parameters[j] + h;
-                    function_(x_trial, y_trial_temp);
-                    J.col(j) = (y_trial_temp - y_p) / h;
-                    x_trial[j] = parameters[j];
-                }
-            }
-            if (!J.allFinite())
+            for (size_t j = 0; j < n; ++j)
             {
-                failure = "non-finite Jacobian";
-                break;
+                x_trial[j] = parameters[j] + h;
+                function_(x_trial, y_trial_temp);
+                J.col(j)   = (y_trial_temp - y_p) / h;
+                x_trial[j] = parameters[j];
             }
         }
-        catch (const std::exception& e)
-        {
-            failure = std::string("exception during Jacobian evaluation: ") + e.what();
-            break;
-        }
-        catch (...)
-        {
-            failure = "unknown exception during Jacobian evaluation";
-            break;
-        }
+        SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian");
         gradient            = J.transpose() * y_p;
         final_gradient_norm = gradient.norm();
 
@@ -154,43 +118,25 @@ native_result gauss_newton_solver::solve(
             trial = parameters - step_scale * step;
             bool trial_valid = false;
 
-            try
+            function_(trial, y_trial);
+            trial_valid = y_trial.allFinite();
+            if (trial_valid)
             {
-                function_(trial, y_trial);
-                trial_valid = y_trial.allFinite();
-                if (trial_valid)
-                {
-                    x2_trial = l2_norm(y_trial);
+                x2_trial = l2_norm(y_trial);
 
-                    // Armijo sufficient-decrease condition on f(x) = 0.5*||r(x)||^2.
-                    // An invalid (non-finite) trial counts as a failed condition.
-                    if (0.5 * x2_trial * x2_trial <=
-                        0.5 * x2_p * x2_p + options.line_search_sufficient_decrease() * step_scale *
-                                                directional_derivative)
-                    {
-                        accepted = true;
-                        break;
-                    }
+                // Armijo sufficient-decrease condition on f(x) = 0.5*||r(x)||^2.
+                // An invalid (non-finite) trial counts as a failed condition.
+                if (0.5 * x2_trial * x2_trial <=
+                    0.5 * x2_p * x2_p + options.line_search_sufficient_decrease() * step_scale *
+                                            directional_derivative)
+                {
+                    accepted = true;
+                    break;
                 }
-            }
-            catch (const std::exception& e)
-            {
-                failure = std::string("exception during line-search: ") + e.what();
-                break;
-            }
-            catch (...)
-            {
-                failure = "unknown exception during line-search";
-                break;
             }
 
             ++rejected_steps;
             step_scale *= options.line_search_backtracking_factor();
-        }
-
-        if (!failure.empty())
-        {
-            break;
         }
 
         if (!accepted)
@@ -255,12 +201,7 @@ native_result gauss_newton_solver::solve(
     native_result result;
     result.iterations    = iteration;
     result.residual_norm = l2_norm(y_p);
-    if (!failure.empty())
-    {
-        result.status  = native_convergence::numerical_failure;
-        result.message = failure;
-    }
-    else if (x2_converged)
+    if (x2_converged)
     {
         result.status = native_convergence::function_converged;
     }

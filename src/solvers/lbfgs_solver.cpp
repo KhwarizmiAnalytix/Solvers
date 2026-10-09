@@ -1,7 +1,6 @@
 #include "solvers/lbfgs_solver.h"
 
 #include <optional>
-#include <string>
 
 #include "solver_options/solver_options_bfgs.h"
 
@@ -13,9 +12,6 @@ template <typename T> inline double l2_norm(T const& h)
 {
     return h.norm();
 }
-
-// Exceptions thrown from inside the line-search callback are caught by solve()
-
 }  // namespace
 
 template <lbfgs_line_search_type type> class line_search
@@ -327,26 +323,7 @@ lbfgs_solver::lbfgs_solver(
 
 native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
 {
-    try
-    {
-        return run(parameters, options);
-    }
-    catch (const std::runtime_error& e)
-    {
-        native_result result;
-        result.status        = native_convergence::numerical_failure;
-        result.residual_norm = std::numeric_limits<double>::quiet_NaN();
-        result.message       = e.what();
-        return result;
-    }
-    catch (const std::exception& e)
-    {
-        native_result result;
-        result.status        = native_convergence::numerical_failure;
-        result.residual_norm = std::numeric_limits<double>::quiet_NaN();
-        result.message       = std::string("unexpected exception: ") + e.what();
-        return result;
-    }
+    return run(parameters, options);
 }
 
 native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bfgs& options) const
@@ -367,45 +344,32 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
     {
         lbfg_function = [this, &options](vector_type const& x, vector_type& grad)
         {
-            try
-            {
-                double fx = objective_(x);
-                if (!std::isfinite(fx))
-                {
-                    throw std::runtime_error("non-finite objective value");
-                }
+            double fx = objective_(x);
+            SOLVERS_CHECK(std::isfinite(fx), "non-finite objective value");
 
-                if (gradient_)
-                {
-                    gradient_(x, grad);
-                    if (!grad.allFinite())
-                    {
-                        throw std::runtime_error("non-finite gradient values");
-                    }
-                }
-                else
-                {
-                    // Finite difference approximation of gradient
-                    const double h = options.bump() * std::max(1.0, std::abs(x.norm()));
-                    vector_type x_trial = x;
-                    grad.resize(num_parameters_);
-
-                    for (size_t j = 0; j < num_parameters_; ++j)
-                    {
-                        x_trial[j] = x[j] + h;
-                        double fx_plus = objective_(x_trial);
-                        x_trial[j] = x[j] - h;
-                        double fx_minus = objective_(x_trial);
-                        x_trial[j] = x[j];
-                        grad[j] = (fx_plus - fx_minus) / (2.0 * h);
-                    }
-                }
-                return fx;
-            }
-            catch (const std::exception& e)
+            if (gradient_)
             {
-                throw std::runtime_error(std::string("objective/gradient evaluation: ") + e.what());
+                gradient_(x, grad);
+                SOLVERS_CHECK(grad.allFinite(), "non-finite gradient values");
             }
+            else
+            {
+                // Finite difference approximation of gradient
+                const double h       = options.bump() * std::max(1.0, std::abs(x.norm()));
+                vector_type  x_trial = x;
+                grad.resize(num_parameters_);
+
+                for (size_t j = 0; j < num_parameters_; ++j)
+                {
+                    x_trial[j]      = x[j] + h;
+                    double fx_plus  = objective_(x_trial);
+                    x_trial[j]      = x[j] - h;
+                    double fx_minus = objective_(x_trial);
+                    x_trial[j]      = x[j];
+                    grad[j]         = (fx_plus - fx_minus) / (2.0 * h);
+                }
+            }
+            return fx;
         };
     }
     else
@@ -415,47 +379,34 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
 
         lbfg_function = [this, &y_p, &J, &options](vector_type const& x, vector_type& grad)
         {
-            try
+            function_(x, y_p);
+            SOLVERS_CHECK(y_p.allFinite(), "non-finite residual values");
+            double fx = l2_norm(y_p);
+            fx *= fx;
+
+            if (jacobian_)
             {
-                function_(x, y_p);
-                if (!y_p.allFinite())
-                {
-                    throw std::runtime_error("non-finite residual values");
-                }
-                double fx = l2_norm(y_p);
-                fx *= fx;
-
-                if (jacobian_)
-                {
-                    jacobian_(x, J);
-                }
-                else
-                {
-                    // Finite difference approximation of Jacobian
-                    const double h = options.bump() * std::max(1.0, x.norm() / num_parameters_);
-                    vector_type x_trial = x;
-                    vector_type y_trial(num_residuals_);
-
-                    for (size_t j = 0; j < num_parameters_; ++j)
-                    {
-                        x_trial[j] = x[j] + h;
-                        function_(x_trial, y_trial);
-                        J.col(j) = (y_trial - y_p) / h;
-                        x_trial[j] = x[j];
-                    }
-                }
-                if (!J.allFinite())
-                {
-                    throw std::runtime_error("non-finite Jacobian values");
-                }
-                grad = 2. * (J.transpose() * y_p);
-
-                return fx;
+                jacobian_(x, J);
             }
-            catch (const std::exception& e)
+            else
             {
-                throw std::runtime_error(std::string("residual/Jacobian evaluation: ") + e.what());
+                // Finite difference approximation of Jacobian
+                const double h       = options.bump() * std::max(1.0, x.norm() / num_parameters_);
+                vector_type  x_trial = x;
+                vector_type  y_trial(num_residuals_);
+
+                for (size_t j = 0; j < num_parameters_; ++j)
+                {
+                    x_trial[j] = x[j] + h;
+                    function_(x_trial, y_trial);
+                    J.col(j)   = (y_trial - y_p) / h;
+                    x_trial[j] = x[j];
+                }
             }
+            SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian values");
+            grad = 2. * (J.transpose() * y_p);
+
+            return fx;
         };
     }
 
@@ -488,8 +439,6 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
     size_type             iter           = 0;
     size_type             iter_tau       = 0;
     std::size_t           accepted_steps = 0;
-    bool                  stalled        = false;
-    std::string           stall_message;
     std::optional<double> last_step_norm;
 
     for (; !x2_converged && iter < options.max_num_iterations(); ++iter)
@@ -497,34 +446,19 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
         const scalar_type previous_fx = fx;
         scalar_type       step        = 0.5;
 
-        try
+        switch (options.type())
         {
-            switch (options.type())
-            {
-            case lbfgs_line_search_type::NOCEDAL_WRIGHT:
-                line_search<lbfgs_line_search_type::NOCEDAL_WRIGHT>::search(
-                    lbfg_function, fx, p_new, grad, step, direction, parameters, options);
-                break;
-            case lbfgs_line_search_type::BACKTRACKING:
-                line_search<lbfgs_line_search_type::BACKTRACKING>::search(
-                    lbfg_function, fx, p_new, grad, step, direction, parameters, options);
-                break;
-            case lbfgs_line_search_type::BRACKETING:
-                line_search<lbfgs_line_search_type::BRACKETING>::search(
-                    lbfg_function, fx, p_new, grad, step, direction, parameters, options);
-                break;
-            }
-        }
-        catch (const std::runtime_error& e)
-        {
-            throw;  // evaluation failures are re-thrown and caught in solve()
-        }
-        catch (const std::exception& e)
-        {
-            // The line search gave up (no step satisfies its conditions); the
-            // last accepted iterate is still valid.
-            stalled       = true;
-            stall_message = e.what();
+        case lbfgs_line_search_type::NOCEDAL_WRIGHT:
+            line_search<lbfgs_line_search_type::NOCEDAL_WRIGHT>::search(
+                lbfg_function, fx, p_new, grad, step, direction, parameters, options);
+            break;
+        case lbfgs_line_search_type::BACKTRACKING:
+            line_search<lbfgs_line_search_type::BACKTRACKING>::search(
+                lbfg_function, fx, p_new, grad, step, direction, parameters, options);
+            break;
+        case lbfgs_line_search_type::BRACKETING:
+            line_search<lbfgs_line_search_type::BRACKETING>::search(
+                lbfg_function, fx, p_new, grad, step, direction, parameters, options);
             break;
         }
         ++accepted_steps;
@@ -604,25 +538,13 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
         }
     }
 
-    if (stalled)
-    {
-        // The failed search left trial values in fx/grad/y_p; restore them to
-        // the last accepted point.
-        fx = lbfg_function(parameters, grad);
-    }
-
     native_result result;
     result.iterations     = iter;
     result.residual_norm  = scalar_mode_ ? std::sqrt(std::fabs(fx)) : l2_norm(y_p);
     result.accepted_steps = accepted_steps;
     result.step_norm      = last_step_norm;
     result.gradient_norm  = l2_norm(grad);
-    if (stalled)
-    {
-        result.status  = native_convergence::stalled;
-        result.message = "line search failed: " + stall_message;
-    }
-    else if (x2_converged)
+    if (x2_converged)
     {
         result.status = native_convergence::function_converged;
     }

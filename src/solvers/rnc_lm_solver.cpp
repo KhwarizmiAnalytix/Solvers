@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <exception>
-#include <stdexcept>
 
 #include "solver_options/solver_options_rnc_lm.h"
 
@@ -121,178 +119,169 @@ solver_result solve_rnc_lm(
                *result.gradient_norm <= cfg.gradient_tolerance();
     };
     double lambda = cfg.initial_damping();
-    try
+    if (!refresh())
     {
-        if (!refresh())
+        return finish(solver_status::numerical_failure, "Invalid RNC base derivatives");
+    }
+    if (converged())
+    {
+        return finish(
+            solver_status::converged, "RNC-LM residual or gradient tolerance reached");
+    }
+    for (int iteration = 0; iteration < cfg.max_num_iterations(); ++iteration)
+    {
+        ++result.iterations;  // Counts attempted curves, including rejected curves.
+        matrix_type metric = j.transpose() * j;
+        vector_type diagonal(n);
+        for (index_type i = 0; i < n; ++i)
         {
-            return finish(solver_status::numerical_failure, "Invalid RNC base derivatives");
+            diagonal[i] = std::max(metric(i, i), cfg.diagonal_scaling_floor());
+            metric(i, i) += lambda * diagonal[i];
         }
-        if (converged())
+        bool                     accepted    = false;
+        bool                     curve_valid = metric.allFinite();
+        std::vector<vector_type> coefficients;
+        double                   sigma       = 0.;
+        double                   damped_norm = 0.;
+        if (curve_valid)
         {
-            return finish(
-                solver_status::converged, "RNC-LM residual or gradient tolerance reached");
-        }
-        for (int iteration = 0; iteration < cfg.max_num_iterations(); ++iteration)
-        {
-            ++result.iterations;  // Counts attempted curves, including rejected curves.
-            matrix_type metric = j.transpose() * j;
-            vector_type diagonal(n);
-            for (index_type i = 0; i < n; ++i)
-            {
-                diagonal[i] = std::max(metric(i, i), cfg.diagonal_scaling_floor());
-                metric(i, i) += lambda * diagonal[i];
-            }
-            bool                     accepted    = false;
-            bool                     curve_valid = metric.allFinite();
-            std::vector<vector_type> coefficients;
-            double                   sigma       = 0.;
-            double                   damped_norm = 0.;
+            positive_definite_solver factorization(metric);
+            curve_valid = factorization.valid();
             if (curve_valid)
             {
-                positive_definite_solver factorization(metric);
-                curve_valid = factorization.valid();
-                if (curve_valid)
-                {
-                    const vector_type velocity = factorization.solve(-gradient);
-                    sigma                      = -gradient.dot(velocity);
-                    damped_norm                = velocity.dot(diagonal.cwiseProduct(velocity));
-                    curve_valid = velocity.allFinite() && std::isfinite(sigma) && sigma > 0. &&
-                                  std::isfinite(damped_norm);
-                    coefficients.push_back(velocity);
-                }
-                // Liu & Zhang (2026), Eq. (21). All derivatives are evaluated
-                // along theta_<order; every solve reuses the factorization.
-                for (int order = 2; curve_valid && order <= cfg.order(); ++order)
-                {
-                    rnc_curve_derivatives derivatives;
-                    ++*result.jacobian_evaluations;
-                    (*curve_derivatives)(result.parameters, coefficients, order, derivatives);
-                    curve_valid = valid_derivatives(derivatives, order, m, n);
-                    if (!curve_valid)
-                    {
-                        break;
-                    }
-                    vector_type defect   = vector_type::Zero(n);
-                    double      binomial = 1.;
-                    for (int k = 0; k <= order - 2; ++k)
-                    {
-                        defect += binomial * derivatives.jacobian[k].transpose() *
-                                  derivatives.residual[order - k];
-                        if (k < order - 2)
-                        {
-                            binomial *= double(order - 2 - k) / double(k + 1);
-                        }
-                    }
-                    const vector_type coefficient = factorization.solve(-defect);
-                    curve_valid                   = coefficient.allFinite();
-                    coefficients.push_back(coefficient);
-                }
+                const vector_type velocity = factorization.solve(-gradient);
+                sigma                      = -gradient.dot(velocity);
+                damped_norm                = velocity.dot(diagonal.cwiseProduct(velocity));
+                curve_valid = velocity.allFinite() && std::isfinite(sigma) && sigma > 0. &&
+                              std::isfinite(damped_norm);
+                coefficients.push_back(velocity);
             }
-            double t = 1.;
-            for (int trial = 0; curve_valid && trial < cfg.max_curve_trials(); ++trial)
+            // Liu & Zhang (2026), Eq. (21). All derivatives are evaluated
+            // along theta_<order; every solve reuses the factorization.
+            for (int order = 2; curve_valid && order <= cfg.order(); ++order)
             {
-                vector_type displacement = vector_type::Zero(n);
-                double      weight       = 1.;
-                for (size_t q = 0; q < coefficients.size(); ++q)
+                rnc_curve_derivatives derivatives;
+                ++*result.jacobian_evaluations;
+                (*curve_derivatives)(result.parameters, coefficients, order, derivatives);
+                curve_valid = valid_derivatives(derivatives, order, m, n);
+                if (!curve_valid)
                 {
-                    weight *= t / double(q + 1);
-                    displacement += weight * coefficients[q];
-                }
-                const vector_type candidate = result.parameters + displacement;
-                vector_type       trial_residual(m);
-                bool              finite = candidate.allFinite();
-                if (finite)
-                {
-                    ++*result.residual_evaluations;
-                    problem.residuals(candidate, trial_residual);
-                    finite = trial_residual.size() == m && trial_residual.allFinite();
-                }
-                const double trial_cost = finite ? .5 * trial_residual.squaredNorm()
-                                                 : std::numeric_limits<double>::infinity();
-                // Eq. (34): predict with t*v, not the corrected displacement.
-                const double predicted =
-                    (t - .5 * t * t) * sigma + .5 * lambda * t * t * damped_norm;
-                const double actual = finite ? .5 * (r - trial_residual).dot(r + trial_residual)
-                                             : -std::numeric_limits<double>::infinity();
-                const double rho =
-                    predicted > 0. ? actual / predicted : -std::numeric_limits<double>::infinity();
-                if (std::isfinite(trial_cost) && std::isfinite(rho) &&
-                    rho > cfg.acceptance_threshold())
-                {
-                    result.parameters    = candidate;
-                    result.objective     = trial_cost;
-                    result.residual_norm = trial_residual.stableNorm();
-                    result.gradient_norm.reset();
-                    result.step_norm = displacement.stableNorm();
-                    ++*result.accepted_steps;
-                    accepted = true;
-                    // Eq. (40), separate from Nielsen and bold acceptance.
-                    if (rho < .25)
-                    {
-                        lambda = std::min(2. * lambda, cfg.damping_ceiling());
-                    }
-                    else if (rho > .75)
-                    {
-                        lambda = std::max(lambda / 3., cfg.damping_floor());
-                    }
-                    if (!refresh())
-                    {
-                        return finish(solver_status::numerical_failure,
-                            "Invalid RNC derivatives at accepted point");
-                    }
-                    SOLVERS_LOG_IF(INFO,
-                        cfg.verbose(),
-                        "RNC-LM iteration {} | order {} | t = {} | cost = {} | rho = {} | lambda = "
-                        "{}",
-                        result.iterations,
-                        cfg.order(),
-                        t,
-                        result.objective,
-                        rho,
-                        lambda);
-                    if (converged())
-                    {
-                        return finish(solver_status::converged,
-                            "RNC-LM residual or gradient tolerance reached");
-                    }
-                    if (*result.step_norm <=
-                        cfg.parameter_tolerance() *
-                            (result.parameters.stableNorm() + cfg.parameter_tolerance()))
-                    {
-                        return finish(
-                            solver_status::converged, "RNC-LM parameter tolerance reached");
-                    }
                     break;
                 }
-                ++*result.rejected_steps;  // Rejected trial points, not outer curves.
-                // Eqs. (37)-(38): scalar quadratic interpolation along the
-                // fixed polynomial curve; no new Jacobian or coefficients.
-                const double denominator = 2. * (trial_cost - result.objective + sigma * t);
-                double       next_t      = std::isfinite(denominator) && denominator > 0.
-                                               ? sigma * t * t / denominator
-                                               : cfg.contraction_min() * t;
-                if (!std::isfinite(next_t))
+                vector_type defect   = vector_type::Zero(n);
+                double      binomial = 1.;
+                for (int k = 0; k <= order - 2; ++k)
                 {
-                    next_t = cfg.contraction_min() * t;
+                    defect += binomial * derivatives.jacobian[k].transpose() *
+                              derivatives.residual[order - k];
+                    if (k < order - 2)
+                    {
+                        binomial *= double(order - 2 - k) / double(k + 1);
+                    }
                 }
-                t = std::clamp(next_t, cfg.contraction_min() * t, cfg.contraction_max() * t);
-            }
-            if (!accepted)
-            {
-                if (lambda >= cfg.damping_ceiling())
-                {
-                    return finish(solver_status::numerical_failure,
-                        "RNC-LM exhausted damping without an acceptable curve");
-                }
-                lambda = std::min(2. * lambda, cfg.damping_ceiling());
+                const vector_type coefficient = factorization.solve(-defect);
+                curve_valid                   = coefficient.allFinite();
+                coefficients.push_back(coefficient);
             }
         }
-    }
-    catch (const std::exception& error)
-    {
-        result.status  = solver_status::numerical_failure;
-        result.message = std::string("RNC-LM callback failed: ") + error.what();
-        return result;
+        double t = 1.;
+        for (int trial = 0; curve_valid && trial < cfg.max_curve_trials(); ++trial)
+        {
+            vector_type displacement = vector_type::Zero(n);
+            double      weight       = 1.;
+            for (size_t q = 0; q < coefficients.size(); ++q)
+            {
+                weight *= t / double(q + 1);
+                displacement += weight * coefficients[q];
+            }
+            const vector_type candidate = result.parameters + displacement;
+            vector_type       trial_residual(m);
+            bool              finite = candidate.allFinite();
+            if (finite)
+            {
+                ++*result.residual_evaluations;
+                problem.residuals(candidate, trial_residual);
+                finite = trial_residual.size() == m && trial_residual.allFinite();
+            }
+            const double trial_cost = finite ? .5 * trial_residual.squaredNorm()
+                                             : std::numeric_limits<double>::infinity();
+            // Eq. (34): predict with t*v, not the corrected displacement.
+            const double predicted =
+                (t - .5 * t * t) * sigma + .5 * lambda * t * t * damped_norm;
+            const double actual = finite ? .5 * (r - trial_residual).dot(r + trial_residual)
+                                         : -std::numeric_limits<double>::infinity();
+            const double rho =
+                predicted > 0. ? actual / predicted : -std::numeric_limits<double>::infinity();
+            if (std::isfinite(trial_cost) && std::isfinite(rho) &&
+                rho > cfg.acceptance_threshold())
+            {
+                result.parameters    = candidate;
+                result.objective     = trial_cost;
+                result.residual_norm = trial_residual.stableNorm();
+                result.gradient_norm.reset();
+                result.step_norm = displacement.stableNorm();
+                ++*result.accepted_steps;
+                accepted = true;
+                // Eq. (40), separate from Nielsen and bold acceptance.
+                if (rho < .25)
+                {
+                    lambda = std::min(2. * lambda, cfg.damping_ceiling());
+                }
+                else if (rho > .75)
+                {
+                    lambda = std::max(lambda / 3., cfg.damping_floor());
+                }
+                if (!refresh())
+                {
+                    return finish(solver_status::numerical_failure,
+                        "Invalid RNC derivatives at accepted point");
+                }
+                SOLVERS_LOG_IF(INFO,
+                    cfg.verbose(),
+                    "RNC-LM iteration {} | order {} | t = {} | cost = {} | rho = {} | lambda = "
+                    "{}",
+                    result.iterations,
+                    cfg.order(),
+                    t,
+                    result.objective,
+                    rho,
+                    lambda);
+                if (converged())
+                {
+                    return finish(solver_status::converged,
+                        "RNC-LM residual or gradient tolerance reached");
+                }
+                if (*result.step_norm <=
+                    cfg.parameter_tolerance() *
+                        (result.parameters.stableNorm() + cfg.parameter_tolerance()))
+                {
+                    return finish(
+                        solver_status::converged, "RNC-LM parameter tolerance reached");
+                }
+                break;
+            }
+            ++*result.rejected_steps;  // Rejected trial points, not outer curves.
+            // Eqs. (37)-(38): scalar quadratic interpolation along the
+            // fixed polynomial curve; no new Jacobian or coefficients.
+            const double denominator = 2. * (trial_cost - result.objective + sigma * t);
+            double       next_t      = std::isfinite(denominator) && denominator > 0.
+                                           ? sigma * t * t / denominator
+                                           : cfg.contraction_min() * t;
+            if (!std::isfinite(next_t))
+            {
+                next_t = cfg.contraction_min() * t;
+            }
+            t = std::clamp(next_t, cfg.contraction_min() * t, cfg.contraction_max() * t);
+        }
+        if (!accepted)
+        {
+            if (lambda >= cfg.damping_ceiling())
+            {
+                return finish(solver_status::numerical_failure,
+                    "RNC-LM exhausted damping without an acceptable curve");
+            }
+            lambda = std::min(2. * lambda, cfg.damping_ceiling());
+        }
     }
     return finish(solver_status::max_iterations, "RNC-LM reached its curve iteration budget");
 }

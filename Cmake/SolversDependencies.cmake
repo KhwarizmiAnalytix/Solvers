@@ -1,14 +1,17 @@
 # Pinned submodules provide deterministic, offline configuration after checkout.
 set(_solvers_tp "${CMAKE_CURRENT_LIST_DIR}/../ThirdParty")
 foreach(_dep eigen Logging)
-  if(NOT EXISTS "${_solvers_tp}/${_dep}/CMakeLists.txt")
-    message(FATAL_ERROR "Missing ThirdParty/${_dep}; run git submodule update --init --recursive")
-  endif()
+    if(NOT EXISTS "${_solvers_tp}/${_dep}/CMakeLists.txt")
+        message(
+            FATAL_ERROR "Missing ThirdParty/${_dep}; run git submodule update --init --recursive"
+        )
+    endif()
 endforeach()
 if(NOT TARGET Eigen3::Eigen)
-  add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
-  set_target_properties(Eigen3::Eigen PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${_solvers_tp}/eigen")
+    add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
+    set_target_properties(
+        Eigen3::Eigen PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_solvers_tp}/eigen"
+    )
 endif()
 # Logging (https://github.com/KhwarizmiAnalytix/Logging) backs every
 # SOLVERS_CHECK/SOLVERS_THROW/SOLVERS_LOGF/SOLVERS_LOG_* macro in
@@ -17,54 +20,65 @@ endif()
 # dependency reuses this repo's copy (see Logging/CMakeLists.txt's
 # _logging_tp_root: fmt/magic_enum prefer the host's ThirdParty when present).
 if(NOT TARGET Logging::Logging)
-  set(LOGGING_ENABLE_TESTING OFF CACHE BOOL "Disable Logging's own test suite" FORCE)
-  set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "Disable Logging's own examples" FORCE)
-  set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "Disable Logging's own benchmarks" FORCE)
-  set(LOGGING_ENABLE_GTEST OFF CACHE BOOL "Logging testing is disabled; skip its GTest wiring" FORCE)
-  set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
-  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Logging as static library" FORCE)
-  # Deliberately NOT EXCLUDE_FROM_ALL: Logging's own install(EXPORT
-  # LoggingTargets ...) / LoggingConfig.cmake / header-install rules need to
-  # run as part of `cmake --install` so Cmake/SolversConfig.cmake.in can
-  # find_dependency(Logging) against a real, standard LoggingConfig.cmake
-  # instead of Solvers hand-reconstructing Logging::Logging itself.
-  add_subdirectory("${_solvers_tp}/Logging" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging")
-  set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
+    set(LOGGING_ENABLE_TESTING OFF CACHE BOOL "Disable Logging's own test suite" FORCE)
+    set(LOGGING_ENABLE_EXAMPLES OFF CACHE BOOL "Disable Logging's own examples" FORCE)
+    set(LOGGING_ENABLE_BENCHMARK OFF CACHE BOOL "Disable Logging's own benchmarks" FORCE)
+    set(LOGGING_ENABLE_GTEST OFF CACHE BOOL "Logging testing is disabled; skip its GTest wiring"
+                                       FORCE
+    )
+    set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Logging as static library" FORCE)
+    # Deliberately NOT EXCLUDE_FROM_ALL: Logging's own install(EXPORT
+    # LoggingTargets ...) / LoggingConfig.cmake / header-install rules need to
+    # run as part of `cmake --install` so Cmake/SolversConfig.cmake.in can
+    # find_dependency(Logging) against a real, standard LoggingConfig.cmake
+    # instead of Solvers hand-reconstructing Logging::Logging itself.
+    add_subdirectory("${_solvers_tp}/Logging" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/Logging")
+    set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
 endif()
 # Keep dependency-wide options scoped to this directory, away from the host project.
 function(solvers_add_optional_dependencies)
-  set(BUILD_TESTING OFF)
-  set(BUILD_EXAMPLES OFF)
-  set(BUILD_BENCHMARKS OFF)
-  if(SOLVERS_ENABLE_CERES AND NOT TARGET Ceres::ceres)
-    set(MINIGLOG ON CACHE BOOL "Use Ceres' bundled minimal logger")
-    set(GFLAGS OFF CACHE BOOL "Disable gflags")
-    set(SUITESPARSE OFF CACHE BOOL "Disable SuiteSparse")
-    set(CXSPARSE OFF CACHE BOOL "Disable CXSparse")
-    set(LAPACK OFF CACHE BOOL "Disable LAPACK")
-    set(WITH_ACCELERATESPARSE OFF CACHE BOOL "Disable Accelerate sparse solvers" FORCE)
-    set(Eigen3_DIR "${CMAKE_CURRENT_BINARY_DIR}/eigen-package")
-    file(MAKE_DIRECTORY "${Eigen3_DIR}")
-    file(WRITE "${Eigen3_DIR}/Eigen3Config.cmake" "set(Eigen3_FOUND TRUE)\nset(EIGEN3_VERSION_STRING 3.4.0)\n")
-    include(CMakePackageConfigHelpers)
-    write_basic_package_version_file("${Eigen3_DIR}/Eigen3ConfigVersion.cmake" VERSION 3.4.0 COMPATIBILITY SameMajorVersion)
-    # Force Ceres and abseil-cpp as static libraries: abseil shared DLLs on
-    # Windows fail to link (undefined AbslInternalSpinLockDelay/Wake symbols).
-    # Note: BUILD_SHARED_LIBS is intentionally left OFF after adding Ceres.
-    # Abseil (a Ceres dependency) builds with default symbol visibility and would
-    # be exported from any shared Solvers library, causing duplicate-symbol crashes
-    # if the test executable also links libceres.a. Keeping everything static avoids
-    # the collision: all Ceres/abseil symbols end up in exactly one place.
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Ceres and abseil as static libraries" FORCE)
-    add_subdirectory("${_solvers_tp}/ceres" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/ceres" EXCLUDE_FROM_ALL)
-  endif()
+    set(BUILD_TESTING OFF)
+    set(BUILD_EXAMPLES OFF)
+    set(BUILD_BENCHMARKS OFF)
+    if(SOLVERS_ENABLE_CERES AND NOT TARGET Ceres::ceres)
+        set(MINIGLOG ON CACHE BOOL "Use Ceres' bundled minimal logger")
+        set(GFLAGS OFF CACHE BOOL "Disable gflags")
+        set(SUITESPARSE OFF CACHE BOOL "Disable SuiteSparse")
+        set(CXSPARSE OFF CACHE BOOL "Disable CXSparse")
+        set(LAPACK OFF CACHE BOOL "Disable LAPACK")
+        set(WITH_ACCELERATESPARSE OFF CACHE BOOL "Disable Accelerate sparse solvers" FORCE)
+        set(Eigen3_DIR "${CMAKE_CURRENT_BINARY_DIR}/eigen-package")
+        file(MAKE_DIRECTORY "${Eigen3_DIR}")
+        file(WRITE "${Eigen3_DIR}/Eigen3Config.cmake"
+             "set(Eigen3_FOUND TRUE)\nset(EIGEN3_VERSION_STRING 3.4.0)\n"
+        )
+        include(CMakePackageConfigHelpers)
+        write_basic_package_version_file(
+            "${Eigen3_DIR}/Eigen3ConfigVersion.cmake" VERSION 3.4.0 COMPATIBILITY SameMajorVersion
+        )
+        # Force Ceres and abseil-cpp as static libraries: abseil shared DLLs on
+        # Windows fail to link (undefined AbslInternalSpinLockDelay/Wake symbols).
+        # Note: BUILD_SHARED_LIBS is intentionally left OFF after adding Ceres.
+        # Abseil (a Ceres dependency) builds with default symbol visibility and would
+        # be exported from any shared Solvers library, causing duplicate-symbol crashes
+        # if the test executable also links libceres.a. Keeping everything static avoids
+        # the collision: all Ceres/abseil symbols end up in exactly one place.
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build Ceres and abseil as static libraries" FORCE)
+        add_subdirectory(
+            "${_solvers_tp}/ceres" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/ceres" EXCLUDE_FROM_ALL
+        )
+    endif()
 endfunction()
 solvers_add_optional_dependencies()
 if(SOLVERS_ENABLE_TESTING AND NOT TARGET GTest::gtest_main)
-  set(INSTALL_GTEST OFF CACHE BOOL "Disable GoogleTest installation")
-  set(gtest_force_shared_crt ON CACHE BOOL "Use shared MSVC runtime")
-  set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
-  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build GTest as static library" FORCE)
-  add_subdirectory("${_solvers_tp}/googletest" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/googletest" EXCLUDE_FROM_ALL)
-  set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "Disable GoogleTest installation")
+    set(gtest_force_shared_crt ON CACHE BOOL "Use shared MSVC runtime")
+    set(BUILD_SHARED_LIBS_SAVE "${BUILD_SHARED_LIBS}")
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build GTest as static library" FORCE)
+    add_subdirectory(
+        "${_solvers_tp}/googletest" "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/googletest"
+        EXCLUDE_FROM_ALL
+    )
+    set(BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS_SAVE}" CACHE BOOL "Restore original setting" FORCE)
 endif()

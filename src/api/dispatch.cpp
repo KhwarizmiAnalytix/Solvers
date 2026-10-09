@@ -193,65 +193,57 @@ solver_result solve(
         result.backend    = backend::native;
         result.algorithm  = chosen_algorithm;
 
-        try
+        jacobian_type jacobian = problem.jacobian ? *problem.jacobian : nullptr;
+
+        switch (chosen_algorithm)
         {
-            jacobian_type jacobian = problem.jacobian ? *problem.jacobian : nullptr;
+        case algorithm::levenberg_marquardt:
+        {
+            levenberg_marquardt_solver solver(
+                problem.num_parameters, problem.num_residuals, problem.residuals, jacobian);
+            const auto out = solver.solve(x, static_cast<const solver_options_lm&>(options));
 
-            switch (chosen_algorithm)
-            {
-            case algorithm::levenberg_marquardt:
-            {
-                levenberg_marquardt_solver solver(
-                    problem.num_parameters, problem.num_residuals, problem.residuals, jacobian);
-                const auto out = solver.solve(x, static_cast<const solver_options_lm&>(options));
-
-                result.status        = translate_native(out.status);
-                result.parameters    = x;
-                result.residual_norm = out.residual_norm;
-                result.objective     = 0.5 * out.residual_norm * out.residual_norm;
-                result.iterations    = out.iterations;
-                result.gradient_norm = out.gradient_norm;
-                result.step_norm     = out.step_norm;
-                result.accepted_steps = out.accepted_steps;
-                result.rejected_steps = out.rejected_steps;
-                result.message       = out.message.empty() ? "converged" : out.message;
-                return result;
-            }
-
-            case algorithm::gauss_newton:
-            {
-                gauss_newton_solver solver(
-                    problem.num_parameters, problem.num_residuals, problem.residuals, jacobian);
-                const auto out = solver.solve(x, static_cast<const solver_options_gn&>(options));
-
-                result.status        = translate_native(out.status);
-                result.parameters    = x;
-                result.residual_norm = out.residual_norm;
-                result.objective     = 0.5 * out.residual_norm * out.residual_norm;
-                result.iterations    = out.iterations;
-                result.gradient_norm = out.gradient_norm;
-                result.step_norm     = out.step_norm;
-                result.accepted_steps = out.accepted_steps;
-                result.rejected_steps = out.rejected_steps;
-                result.message       = out.message.empty() ? "converged" : out.message;
-                return result;
-            }
-
-            case algorithm::riemann_normal_coordinate_lm:
-            {
-                return solve_rnc_lm(problem, initial_guess, static_cast<const solver_options_rnc_lm&>(options));
-            }
-
-            default:
-                result.status  = solver_status::unsupported_capability;
-                result.message = "algorithm not supported by native backend";
-                return result;
-            }
+            result.status         = translate_native(out.status);
+            result.parameters     = x;
+            result.residual_norm  = out.residual_norm;
+            result.objective      = 0.5 * out.residual_norm * out.residual_norm;
+            result.iterations     = out.iterations;
+            result.gradient_norm  = out.gradient_norm;
+            result.step_norm      = out.step_norm;
+            result.accepted_steps = out.accepted_steps;
+            result.rejected_steps = out.rejected_steps;
+            result.message        = out.message.empty() ? "converged" : out.message;
+            return result;
         }
-        catch (const std::exception& e)
+
+        case algorithm::gauss_newton:
         {
-            result.status  = solver_status::numerical_failure;
-            result.message = std::string("solver threw: ") + e.what();
+            gauss_newton_solver solver(
+                problem.num_parameters, problem.num_residuals, problem.residuals, jacobian);
+            const auto out = solver.solve(x, static_cast<const solver_options_gn&>(options));
+
+            result.status         = translate_native(out.status);
+            result.parameters     = x;
+            result.residual_norm  = out.residual_norm;
+            result.objective      = 0.5 * out.residual_norm * out.residual_norm;
+            result.iterations     = out.iterations;
+            result.gradient_norm  = out.gradient_norm;
+            result.step_norm      = out.step_norm;
+            result.accepted_steps = out.accepted_steps;
+            result.rejected_steps = out.rejected_steps;
+            result.message        = out.message.empty() ? "converged" : out.message;
+            return result;
+        }
+
+        case algorithm::riemann_normal_coordinate_lm:
+        {
+            return solve_rnc_lm(
+                problem, initial_guess, static_cast<const solver_options_rnc_lm&>(options));
+        }
+
+        default:
+            result.status  = solver_status::unsupported_capability;
+            result.message = "algorithm not supported by native backend";
             return result;
         }
     }
@@ -396,29 +388,20 @@ solver_result solve(
         result.backend    = backend::native;
         result.algorithm  = algorithm::lbfgs;
 
-        try
-        {
-            gradient_type gradient = problem.gradient ? *problem.gradient : nullptr;
-            lbfgs_solver solver(problem.num_parameters, problem.objective, gradient);
-            const auto   out = solver.solve(x, static_cast<const solver_options_bfgs&>(options));
+        gradient_type gradient = problem.gradient ? *problem.gradient : nullptr;
+        lbfgs_solver  solver(problem.num_parameters, problem.objective, gradient);
+        const auto    out = solver.solve(x, static_cast<const solver_options_bfgs&>(options));
 
-            result.status        = translate_native(out.status);
-            result.iterations    = out.iterations;
-            result.parameters    = x;
-            result.objective     = problem.objective(x);
-            result.gradient_norm = out.gradient_norm;
-            result.step_norm     = out.step_norm;
-            result.accepted_steps = out.accepted_steps;
-            result.rejected_steps = out.rejected_steps;
-            result.message       = out.message.empty() ? "converged" : out.message;
-            return result;
-        }
-        catch (const std::exception& e)
-        {
-            result.status  = solver_status::numerical_failure;
-            result.message = std::string("solver threw: ") + e.what();
-            return result;
-        }
+        result.status         = translate_native(out.status);
+        result.iterations     = out.iterations;
+        result.parameters     = x;
+        result.objective      = problem.objective(x);
+        result.gradient_norm  = out.gradient_norm;
+        result.step_norm      = out.step_norm;
+        result.accepted_steps = out.accepted_steps;
+        result.rejected_steps = out.rejected_steps;
+        result.message        = out.message.empty() ? "converged" : out.message;
+        return result;
     }
     case solver_enum::CERES:
     {

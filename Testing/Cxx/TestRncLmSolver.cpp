@@ -404,7 +404,7 @@ TEST(RncLmTermination, ExhaustedDamping)
 }
 
 // ---------------------------------------------------------------------------
-// Callback throws
+// Callback throws: the solver does not catch it.
 // ---------------------------------------------------------------------------
 
 TEST(RncLmTermination, CallbackThrows)
@@ -421,10 +421,7 @@ TEST(RncLmTermination, CallbackThrows)
 
     vector_type x0(1); x0 << 3.0;
     const auto opts = solver_options_rnc_lm_builder().with_order(1).build();
-    const auto result = solve_rnc_lm(p, x0, *opts);
-
-    EXPECT_EQ(result.status, solver_status::numerical_failure);
-    EXPECT_NE(result.message.find("simulated callback error"), std::string::npos);
+    EXPECT_THROW(solve_rnc_lm(p, x0, *opts), std::runtime_error);
 }
 
 // ---------------------------------------------------------------------------

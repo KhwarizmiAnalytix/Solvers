@@ -19,9 +19,10 @@ changes that callers can observe are listed first.
   at an essentially exact zero. Scale old tolerances by `0.5 * tol^2` to keep the
   old stopping point.
 - **New status `solver_status::stalled`.** A native LM run that is rejected at its
-  damping ceiling, a Gauss-Newton line search that fails, and an L-BFGS line search
-  that gives up used to be reported as `max_iterations` (or threw). They now report
-  `stalled`; `has_usable_iterate()` is true because the last accepted point is valid.
+  damping ceiling and a Gauss-Newton line search that fails used to be reported as
+  `max_iterations`. They now report `stalled`; `has_usable_iterate()` is true because
+  the last accepted point is valid. An L-BFGS line search that gives up throws
+  through `SOLVERS_CHECK` instead of returning `stalled`.
 - **Ipopt and TAO outcomes are distinguished.** Hitting the iteration budget is
   `max_iterations` (it was `numerical_failure` for Ipopt). Infeasibility,
   line-search failure and user stops map to their own statuses, and the raw library
@@ -31,9 +32,9 @@ changes that callers can observe are listed first.
   `objective_evaluations`) are empty when a backend does not report them; zero now
   means measured zero. `gradient_norm` and `step_norm` are filled by the native
   kernels and Ceres.
-- **No exceptions escape `api::solve` from the native kernels or user callbacks.**
-  A throwing callback becomes `numerical_failure` with its message; a non-finite
-  trial point is a rejected step; a non-finite initial point fails before iterating.
+- **Native kernels do not catch callback exceptions.** A throwing callback propagates.
+  Non-finite residuals or Jacobians at a point the solver must accept fail through
+  `SOLVERS_CHECK`. A non-finite trial point is still a rejected step.
 - **Every backend resolves derivative policy the same way.** Ipopt, TAO and native
   L-BFGS used to ignore `solver_options::derivatives` or choose their own order; they
   now honor it and report `effective_derivative_source`. With no derivative source,
