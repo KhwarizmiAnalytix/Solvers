@@ -23,7 +23,7 @@ struct native_result
     native_convergence status        = native_convergence::not_converged;
     double             residual_norm = 0.0;
     std::size_t        iterations    = 0;
-    std::string        message;  // set when status is numerical_failure or stalled
+    std::string        message;  // why the run ended; may be empty when it converged
 
     // Diagnostics at the returned iterate; empty where a kernel does not track them.
     std::optional<double>      gradient_norm;  // ||J^T r|| (or the objective gradient)

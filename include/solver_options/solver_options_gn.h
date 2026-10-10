@@ -14,20 +14,20 @@ class SOLVER_VISIBILITY solver_options_gn : public solver_options
     friend class solver_options_gn_builder;
 
 public:
-    SOLVER_API double                   bump() const;
+    SOLVER_API double                  bump() const;
     SOLVER_API finite_difference_scale difference_scale() const;
-    SOLVER_API size_t max_line_search_iterations() const;
-    SOLVER_API double line_search_backtracking_factor() const;
-    SOLVER_API double line_search_sufficient_decrease() const;
+    SOLVER_API size_t                  max_line_search_iterations() const;
+    SOLVER_API double                  line_search_backtracking_factor() const;
+    SOLVER_API double                  line_search_sufficient_decrease() const;
 
 private:
     solver_options_gn();
 
-    double                  bump_             = 0.00001;
-    finite_difference_scale difference_scale_ = finite_difference_scale::absolute;
-    size_t max_line_search_iterations_      = 20;
-    double line_search_backtracking_factor_ = 0.5;
-    double line_search_sufficient_decrease_ = 1e-4;
+    double                  bump_                            = 0.00001;
+    finite_difference_scale difference_scale_                = finite_difference_scale::absolute;
+    size_t                  max_line_search_iterations_      = 20;
+    double                  line_search_backtracking_factor_ = 0.5;
+    double                  line_search_sufficient_decrease_ = 1e-4;
 };
 
 class SOLVER_VISIBILITY solver_options_gn_builder

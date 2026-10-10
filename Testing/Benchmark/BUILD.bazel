@@ -16,10 +16,30 @@ cc_test(
 )
 
 cc_test(
-    name = "BenchmarkSolverComparison",
+    name = "BenchmarkNative",
     size = "large",
     timeout = "long",
-    srcs = ["BenchmarkSolverComparison.cpp"],
+    srcs = [
+        "BenchmarkNative.cpp",
+        "svi_fixture.h",
+    ],
+    args = ["--benchmark_min_time=0.05s"],
+    tags = ["benchmark"],
+    deps = [
+        "//:Solvers",
+        "//Testing:test_problems",
+        "@google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_test(
+    name = "BenchmarkExternal",
+    size = "large",
+    timeout = "long",
+    srcs = [
+        "BenchmarkExternal.cpp",
+        "svi_fixture.h",
+    ],
     args = ["--benchmark_min_time=0.05s"],
     tags = ["benchmark"],
     deps = [

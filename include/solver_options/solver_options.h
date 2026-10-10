@@ -6,8 +6,8 @@
 #include <optional>
 #include <string>
 
-#include "detail/support.h"
 #include "api/status.h"
+#include "detail/support.h"
 
 namespace solverslib
 {
@@ -26,12 +26,12 @@ class SOLVER_VISIBILITY solver_options
 public:
     virtual ~solver_options() = default;
 
-    SOLVER_API solver_enum        solver() const;
-    SOLVER_API int                max_num_iterations() const;
-    SOLVER_API double             function_tolerance() const;
-    SOLVER_API double             gradient_tolerance() const;
-    SOLVER_API double             parameter_tolerance() const;
-    SOLVER_API bool               verbose() const noexcept;
+    SOLVER_API solver_enum solver() const;
+    SOLVER_API int         max_num_iterations() const;
+    SOLVER_API double      function_tolerance() const;
+    SOLVER_API double      gradient_tolerance() const;
+    SOLVER_API double      parameter_tolerance() const;
+    SOLVER_API bool        verbose() const noexcept;
     SOLVER_API const std::string& log_file() const;
 
 protected:
@@ -45,10 +45,10 @@ protected:
     solver_options(solver_enum solver);
 
     solver_enum solver_;
-    int         max_num_iterations_ = 100;
+    int         max_num_iterations_  = 100;
     double      function_tolerance_  = std::numeric_limits<double>::epsilon();
-    double      gradient_tolerance_  = 0.0;
-    double      parameter_tolerance_ = 0.0;
+    double      gradient_tolerance_  = std::numeric_limits<double>::epsilon();
+    double      parameter_tolerance_ = std::numeric_limits<double>::epsilon();
     bool        verbose_             = false;
     std::string log_file_;
 };

@@ -26,11 +26,11 @@ class lbfgs_solver
     size_type     num_residuals_;
 
     // Step and scale are fixed at construction. Scratch is mutable because run() is const.
-    const double                   fd_step_;
-    const finite_difference_scale  fd_scale_;
-    mutable vector_type fd_parameters_;
-    mutable vector_type fd_residual_;
-    mutable vector_type fd_base_;
+    const double                  fd_step_;
+    const finite_difference_scale fd_scale_;
+    mutable vector_type           fd_parameters_;
+    mutable vector_type           fd_residual_;
+    mutable vector_type           fd_base_;
 
     objective_type objective_;
     gradient_type  gradient_;
@@ -42,14 +42,14 @@ public:
     SOLVER_API lbfgs_solver(size_type num_parameters,
         size_type                     num_residuals,
         function_type                 function,
-        jacobian_type                 jacobian = nullptr,
-        double                        bump = 1e-6,
+        jacobian_type                 jacobian         = nullptr,
+        double                        bump             = 1e-6,
         finite_difference_scale       difference_scale = finite_difference_scale::absolute);
 
     SOLVER_API lbfgs_solver(size_type num_parameters,
         objective_type                objective,
         gradient_type                 gradient,
-        double                        bump = 1e-6,
+        double                        bump             = 1e-6,
         finite_difference_scale       difference_scale = finite_difference_scale::absolute);
 
     SOLVER_API native_result solve(

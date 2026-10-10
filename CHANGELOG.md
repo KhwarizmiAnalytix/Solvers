@@ -13,6 +13,9 @@ changes that callers can observe are listed first.
   `backend_unavailable`). With PETSc built it still uses POUNDERS. A Ceres-native
   AD provider now routes to Ceres automatically when Ceres is built. Bounded
   problems pick a bound-capable built backend instead of failing on the native one.
+- **Gradient and parameter tolerances default to machine epsilon.**
+  `gradient_tolerance` and `parameter_tolerance` were `0`. They now match
+  `function_tolerance`: `std::numeric_limits<double>::epsilon()`.
 - **`function_tolerance` compares `F = 0.5 * ||r||^2`** in Levenberg-Marquardt,
   Gauss-Newton and least-squares L-BFGS. It was `||r||` (LM, GN) and `||r||^2`
   (L-BFGS). With the default tolerance a run now stops at `||r|| ~ 2e-8` instead of
@@ -64,6 +67,9 @@ changes that callers can observe are listed first.
 - `solver_options::lm` (`api::lm_options`): variant, bold acceptance, geodesic
   acceleration, damping factors/floors/ceilings, and `linear_solver`
   (`normal_ldlt`, `augmented_qr`).
+- L-BFGS line search: `initial_step` (default 0.5), `backtracking_decrease`
+  (default 0.5), `backtracking_increase` (default 2.1) and
+  `line_search_expansion` (default 5). They used to be fixed in the search.
 - Problem setters: `least_squares_problem::set_jacobian`, `set_curve_derivatives`,
   `derivative_provider()`; `optimization_problem::set_gradient`,
   `derivative_provider()`. A problem now has one derivative slot (a provider).

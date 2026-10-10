@@ -21,10 +21,10 @@ namespace
 {
 constexpr double kMinimumTolerance = 1e-4;
 
-#define REQUIRE_BACKEND(available, name)                  \
-    if (!(available))                                     \
-    {                                                     \
-        GTEST_SKIP() << (name) << " backend not compiled in"; \
+#define REQUIRE_BACKEND(available, name)                                                           \
+    if (!(available))                                                                              \
+    {                                                                                              \
+        GTEST_SKIP() << (name) << " backend not compiled in";                                      \
     }
 
 void expect_rosenbrock_minimum(const solver_result& result)
@@ -48,8 +48,7 @@ TEST(NativeBackend, LevenbergMarquardtLeastSquaresWithJacobian)
                              .with_gradient_tolerance(1e-12)
                              .with_parameter_tolerance(1e-14)
                              .build();
-    const auto result =
-        solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+    const auto result = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.backend, backend::native);
     EXPECT_EQ(result.algorithm, algorithm::levenberg_marquardt);
@@ -64,8 +63,7 @@ TEST(NativeBackend, LevenbergMarquardtLeastSquaresFiniteDifferences)
                              .with_gradient_tolerance(1e-12)
                              .with_parameter_tolerance(1e-14)
                              .build();
-    const auto result =
-        solve(rosenbrock_least_squares(false), rosenbrock_start(), *options);
+    const auto result = solve(rosenbrock_least_squares(false), rosenbrock_start(), *options);
 
     expect_rosenbrock_minimum(result);
 }
@@ -78,8 +76,7 @@ TEST(NativeBackend, GaussNewtonLeastSquares)
                              .with_gradient_tolerance(1e-12)
                              .with_parameter_tolerance(1e-14)
                              .build();
-    const auto result =
-        solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+    const auto result = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.algorithm, algorithm::gauss_newton);
     expect_rosenbrock_minimum(result);
@@ -101,8 +98,7 @@ TEST(NativeBackend, LBFGSOptimization)
 TEST(NativeBackend, LBFGSLeastSquaresIsUnsupported)
 {
     const auto options = solver_options_bfgs_builder().build();
-    const auto result =
-        solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
@@ -110,14 +106,14 @@ TEST(NativeBackend, LBFGSLeastSquaresIsUnsupported)
 TEST(NativeBackend, LevenbergMarquardtOptimizationIsNotRouted)
 {
     const auto options = solver_options_lm_builder().build();
-    const auto result = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.status, solver_status::backend_unavailable);
 }
 
 TEST(NativeBackend, RejectsWrongInitialGuessSize)
 {
-    const auto options = solver_options_lm_builder().build();
+    const auto  options = solver_options_lm_builder().build();
     vector_type bad(3);
     bad << 0.0, 0.0, 0.0;
     const auto result = solve(rosenbrock_least_squares(true), bad, *options);
@@ -133,8 +129,7 @@ TEST(CeresBackend, LeastSquares)
 {
     REQUIRE_BACKEND(ceres_solver::is_supported(), "Ceres");
     const auto options = solver_options_ceres_builder().with_max_iterations(200).build();
-    const auto result =
-        solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.backend, backend::ceres);
     expect_rosenbrock_minimum(result);
@@ -144,7 +139,7 @@ TEST(CeresBackend, OptimizationIsUnsupported)
 {
     REQUIRE_BACKEND(ceres_solver::is_supported(), "Ceres");
     const auto options = solver_options_ceres_builder().build();
-    const auto result = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
@@ -157,8 +152,7 @@ TEST(IpoptBackend, LeastSquaresWithJacobian)
 {
     REQUIRE_BACKEND(ipopt_solver::is_supported(), "Ipopt");
     const auto options = solver_options_ipopt_builder().with_max_iterations(500).build();
-    const auto result =
-        solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.backend, backend::ipopt);
     expect_rosenbrock_minimum(result);
@@ -168,8 +162,7 @@ TEST(IpoptBackend, LeastSquaresWithoutJacobianIsUnsupported)
 {
     REQUIRE_BACKEND(ipopt_solver::is_supported(), "Ipopt");
     const auto options = solver_options_ipopt_builder().build();
-    const auto result =
-        solve(rosenbrock_least_squares(false), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_least_squares(false), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
@@ -178,7 +171,7 @@ TEST(IpoptBackend, OptimizationWithGradient)
 {
     REQUIRE_BACKEND(ipopt_solver::is_supported(), "Ipopt");
     const auto options = solver_options_ipopt_builder().with_max_iterations(500).build();
-    const auto result = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.backend, backend::ipopt);
     expect_rosenbrock_minimum(result);
@@ -188,7 +181,7 @@ TEST(IpoptBackend, OptimizationWithoutGradientIsUnsupported)
 {
     REQUIRE_BACKEND(ipopt_solver::is_supported(), "Ipopt");
     const auto options = solver_options_ipopt_builder().build();
-    const auto result = solve(rosenbrock_optimization(false), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_optimization(false), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
@@ -204,8 +197,7 @@ TEST(PetscBackend, LeastSquaresBRGN)
                              .with_tao_type(tao_algorithm_enum::BRGN)
                              .with_max_iterations(200)
                              .build();
-    const auto result =
-        solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+    const auto result = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.backend, backend::petsc_tao);
     expect_rosenbrock_minimum(result);
@@ -228,7 +220,7 @@ TEST(PetscBackend, OptimizationWithoutGradientIsUnsupported)
 {
     REQUIRE_BACKEND(petsc_tao_solver::is_supported(), "PETSc/TAO");
     const auto options = solver_options_petsc_builder().build();
-    const auto result = solve(rosenbrock_optimization(false), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_optimization(false), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
@@ -244,8 +236,7 @@ TEST(PetscBackend, OptimizationWithoutGradientIsUnsupported)
 TEST(NativeBackend, RNC_LM_WithoutCurveDerivatives_Fails)
 {
     const auto options = solver_options_rnc_lm_builder().build();
-    const auto result   = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+    const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
 
     EXPECT_EQ(result.status, solver_status::unsupported_capability);
 }
-

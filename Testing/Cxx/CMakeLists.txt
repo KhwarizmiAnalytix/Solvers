@@ -14,3 +14,8 @@ add_executable(TestRncLmSolver TestRncLmSolver.cpp)
 target_include_directories(TestRncLmSolver PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(TestRncLmSolver PRIVATE Solvers GTest::gtest_main)
 gtest_discover_tests(TestRncLmSolver PROPERTIES LABELS Solvers)
+
+add_executable(TestLevenbergMarquardt TestLevenbergMarquardt.cpp)
+target_include_directories(TestLevenbergMarquardt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(TestLevenbergMarquardt PRIVATE Solvers GTest::gtest_main)
+gtest_discover_tests(TestLevenbergMarquardt PROPERTIES LABELS Solvers)

@@ -1118,7 +1118,8 @@ class SolversConfiguration:
             return 0
 
         bench_exes = [
-            os.path.join(build_path, "Testing", "Benchmark", "BenchmarkSolverComparison"),
+            os.path.join(build_path, "Testing", "Benchmark", "BenchmarkNative"),
+            os.path.join(build_path, "Testing", "Benchmark", "BenchmarkExternal"),
         ]
         ran = 0
         for exe in bench_exes:
@@ -1131,7 +1132,7 @@ class SolversConfiguration:
                 exe,
                 "--benchmark_min_time=0.5s",
                 "--benchmark_repetitions=3",
-                "--benchmark_report_aggregates_only=true"
+                "--benchmark_report_aggregates_only=true",
             ]
             result = subprocess.run(benchmark_args, capture_output=False)
             if result.returncode != 0:

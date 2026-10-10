@@ -5,9 +5,9 @@
 #include <optional>
 #include <string>
 
+#include "api/status.h"
 #include "detail/eigen_support.h"
 #include "detail/support.h"
-#include "api/status.h"
 
 namespace solverslib::api
 {
@@ -23,7 +23,7 @@ struct solver_result
     // replaces it (review invariant 2).
     vector_type parameters;
 
-    // 0.5 * ||r(x)||^2 for least squares, or the objective value otherwise.
+    // ||r(x)||^2 for least squares (every backend), or the objective value otherwise.
     double objective = 0.0;
 
     // Reported quantities at the returned iterate. Optional where an adapter

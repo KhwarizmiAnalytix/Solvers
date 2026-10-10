@@ -102,12 +102,11 @@ inline void copy_row_major(double* destination, const matrix_type& source)
 }
 
 // -- linear solves ------------------------------------------------------------
-// Wraps the one dense decomposition this library needs (the LM
-// normal-equation step). Keeping the factorization object alive across
-// solve() calls (as levenberg_marquardt_solver does for its geodesic
-// acceleration correction) avoids refactorizing the same matrix twice.
-// solve() returns a fully materialized vector_type rather than a lazy
-// expression, so it is always safe to assign into one of its own inputs.
+// General dense solve by partial-pivoting LU (the Gauss-Newton step). The
+// factorization object stays alive across solve() calls, so one matrix is
+// never factorized twice. solve() returns a fully materialized vector_type
+// rather than a lazy expression, so it is always safe to assign into one of
+// its own inputs.
 class linear_system_solver
 {
 public:
@@ -120,9 +119,11 @@ private:
 };
 
 // -- damped least-squares step (Levenberg-Marquardt) ------------------------------
-// Solves  (J^T J + diag(damping)) * delta = J^T y  for the LM step, in one of
-// two ways. Both are reached through this class, so solver code keeps a single
-// dense-algebra boundary.
+// Solves  (J^T J + diag(damping)) * delta = J^T y  in one of two ways. Both are
+// reached through this class, so solver code keeps a single dense-algebra
+// boundary. `damping` is lambda times the diagonal of the scaling S, so with
+// y = r the LM velocity is v = -delta, and with y = r_vv the geodesic
+// acceleration is a = -delta, from the same factorization.
 //   normal_ldlt   LDLT of the normal-equations matrix; fastest for m >> n.
 //   augmented_qr  QR of [J; diag(sqrt(damping))], solving the same system as the
 //                 least-squares problem  min || [J; sqrt(D)] delta - [y; 0] ||.

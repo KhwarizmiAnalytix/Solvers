@@ -237,10 +237,11 @@ rank-revealing solve, factorization status, or a linear-system residual check.
 Finite trial checks help but do not establish accuracy for ill-conditioned
 problems. An augmented QR/SVD solve remains a separate numerical improvement.
 
-`function_tolerance` is an absolute residual-norm threshold, not a relative
-objective-change tolerance. Gradient tolerance is an absolute norm of `J^T r`;
+`function_tolerance` is an absolute threshold on `F = 0.5 * ||r||^2`, not a
+relative objective-change tolerance. Gradient tolerance is an absolute norm of `J^T r`;
 parameter tolerance tests `||s|| <= tol*(||theta_new||+tol)`. The defaults for
-gradient and parameter tolerance are zero. The numerical Jacobian uses an
+gradient and parameter tolerance are `std::numeric_limits<double>::epsilon()`.
+The numerical Jacobian uses an
 absolute bump and can lose accuracy across widely varying parameter scales.
 Callback dimensions and finite residual/Jacobian inputs are not fully validated
 at this native boundary; callback exceptions propagate.

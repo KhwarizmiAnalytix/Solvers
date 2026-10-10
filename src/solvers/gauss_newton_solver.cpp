@@ -123,7 +123,7 @@ native_result gauss_newton_solver::solve(
         for (size_t line_search_iter = 0; line_search_iter < options.max_line_search_iterations();
             ++line_search_iter)
         {
-            trial = parameters - step_scale * step;
+            trial            = parameters - step_scale * step;
             bool trial_valid = false;
 
             function_(trial, y_trial);

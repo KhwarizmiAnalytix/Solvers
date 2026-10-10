@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
 project(Solvers VERSION 1.0.0 LANGUAGES C CXX)
 
+# Xcode links with -no_adhoc_codesign and signs bundles and shared libraries
+# afterwards. A command-line tool gets no sign step, and macOS kills the
+# unsigned binary, which makes gtest discovery fail. Linker ad-hoc signing
+# keeps every product runnable.
+if(APPLE AND CMAKE_GENERATOR STREQUAL "Xcode")
+    set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/Cmake")
 option(SOLVERS_ENABLE_TESTING "Build the GoogleTest solver suite" ${PROJECT_IS_TOP_LEVEL})
 option(SOLVERS_ENABLE_CERES "Build the optional Ceres backend" OFF)

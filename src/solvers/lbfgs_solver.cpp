@@ -35,7 +35,7 @@ public:
         const vector_type&         xp,
         const solver_options_bfgs& param)
     {
-        const auto expansion = static_cast<scalar_type>(5.);
+        const auto expansion = param.line_search_expansion();
         const auto fx_init   = fx;
         const auto dg_init   = -grad.dot(direction);
         SOLVERS_CHECK(dg_init <= 0, "the moving direction increases the objective function value");
@@ -159,8 +159,8 @@ public:
         const vector_type&         xp,
         const solver_options_bfgs& param)
     {
-        const scalar_type dec = 0.5;
-        const scalar_type inc = 2.1;
+        const scalar_type dec = param.backtracking_decrease();
+        const scalar_type inc = param.backtracking_increase();
 
         SOLVERS_CHECK(step > scalar_type(0), "'step' must be positive");
 
@@ -345,12 +345,15 @@ lbfgs_solver::lbfgs_solver(size_type num_parameters,
 }
 
 lbfgs_solver::lbfgs_solver(size_type num_parameters,
-    objective_type                       objective,
-    gradient_type                        gradient,
-    double                               bump,
-    finite_difference_scale              difference_scale)
-    : num_parameters_(num_parameters), num_residuals_(0), fd_step_(bump), fd_scale_(difference_scale),
-      objective_(std::move(objective)), gradient_(std::move(gradient)), scalar_mode_(true) {}
+    objective_type                   objective,
+    gradient_type                    gradient,
+    double                           bump,
+    finite_difference_scale          difference_scale)
+    : num_parameters_(num_parameters), num_residuals_(0), fd_step_(bump),
+      fd_scale_(difference_scale), objective_(std::move(objective)), gradient_(std::move(gradient)),
+      scalar_mode_(true)
+{
+}
 
 native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
 {
@@ -457,7 +460,7 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
     for (; !x2_converged && iter < options.max_num_iterations(); ++iter)
     {
         const scalar_type previous_fx = fx;
-        scalar_type       step        = 0.5;
+        scalar_type       step        = options.initial_step();
 
         switch (options.type())
         {

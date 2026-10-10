@@ -26,6 +26,17 @@ cc_test(
 )
 
 cc_test(
+    name = "TestLevenbergMarquardt",
+    size = "medium",
+    srcs = ["TestLevenbergMarquardt.cpp"],
+    deps = [
+        "//:Solvers",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "TestRncLmSolver",
     size = "medium",
     srcs = ["TestRncLmSolver.cpp"],

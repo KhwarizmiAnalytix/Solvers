@@ -47,30 +47,30 @@ public:
     SOLVER_API double                                 diagonal_scaling_floor() const;
     SOLVER_API double                                 roundoff_noise_factor() const;
     SOLVER_API double                                 finite_difference_step() const;
-    SOLVER_API finite_difference_scale               difference_scale() const;
+    SOLVER_API finite_difference_scale                difference_scale() const;
     SOLVER_API levenberg_marquardt_solver_enum        type() const;
     SOLVER_API levenberg_marquardt_linear_solver_enum linear_solver() const;
 
 private:
     solver_options_lm();
 
-    bool   bold_acceptance_                     = false;
-    double bold_acceptance_exponent_            = 2.0;
-    bool   geodesic_acceleration_               = true;
-    double geodesic_acceleration_threshold_     = 0.75;
-    double initial_damping_                     = 1e-4;
-    double initial_rejection_multiplier_        = 2.0;
-    double damping_decrease_factor_             = 9.0;
-    double damping_increase_factor_             = 11.0;
-    double damping_floor_                       = 1e-7;
-    double nielsen_damping_floor_               = 1e-15;
-    double damping_ceiling_                     = 1e12;
-    double levenberg_marquardt_damping_ceiling_ = 1e7;
-    double diagonal_scaling_floor_              = 1e-12;
-    double roundoff_noise_factor_               = 8.0;
-    double geodesic_acceleration_step_          = 0.05;
-    double                   finite_difference_step_ = 0.00001;
-    finite_difference_scale  difference_scale_       = finite_difference_scale::absolute;
+    bool                    bold_acceptance_                     = false;
+    double                  bold_acceptance_exponent_            = 2.0;
+    bool                    geodesic_acceleration_               = true;
+    double                  geodesic_acceleration_threshold_     = 0.75;
+    double                  initial_damping_                     = 1e-4;
+    double                  initial_rejection_multiplier_        = 2.0;
+    double                  damping_decrease_factor_             = 9.0;
+    double                  damping_increase_factor_             = 11.0;
+    double                  damping_floor_                       = 1e-7;
+    double                  nielsen_damping_floor_               = 1e-15;
+    double                  damping_ceiling_                     = 1e12;
+    double                  levenberg_marquardt_damping_ceiling_ = 1e7;
+    double                  diagonal_scaling_floor_              = 1e-12;
+    double                  roundoff_noise_factor_               = 8.0;
+    double                  geodesic_acceleration_step_          = 0.05;
+    double                  finite_difference_step_              = 0.00001;
+    finite_difference_scale difference_scale_ = finite_difference_scale::absolute;
 
     levenberg_marquardt_solver_enum        type_ = levenberg_marquardt_solver_enum::NIELSEN;
     levenberg_marquardt_linear_solver_enum linear_solver_ =

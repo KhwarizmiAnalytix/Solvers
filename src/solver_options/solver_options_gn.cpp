@@ -4,9 +4,18 @@ namespace solverslib
 {
 solver_options_gn::solver_options_gn() : solver_options(solver_enum::GAUSS_NEWTON) {}
 
-double solver_options_gn::bump() const { return bump_; }
-finite_difference_scale solver_options_gn::difference_scale() const { return difference_scale_; }
-size_t solver_options_gn::max_line_search_iterations() const { return max_line_search_iterations_; }
+double solver_options_gn::bump() const
+{
+    return bump_;
+}
+finite_difference_scale solver_options_gn::difference_scale() const
+{
+    return difference_scale_;
+}
+size_t solver_options_gn::max_line_search_iterations() const
+{
+    return max_line_search_iterations_;
+}
 double solver_options_gn::line_search_backtracking_factor() const
 {
     return line_search_backtracking_factor_;

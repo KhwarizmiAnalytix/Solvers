@@ -24,15 +24,17 @@ root_finding_options tight_options()
 }
 
 // f(x) = x² - 2,  root at √2
-const scalar_function f_x2m2 = [](double x) { return x * x - 2.0; };
-const scalar_function_gradient f_x2m2_grad = [](double x, double& df) -> double {
+const scalar_function          f_x2m2      = [](double x) { return x * x - 2.0; };
+const scalar_function_gradient f_x2m2_grad = [](double x, double& df) -> double
+{
     df = 2.0 * x;
     return x * x - 2.0;
 };
 
 // f(x) = sin(x),  root at π ∈ [3, 4]
 const scalar_function          f_sin      = [](double x) { return std::sin(x); };
-const scalar_function_gradient f_sin_grad = [](double x, double& df) -> double {
+const scalar_function_gradient f_sin_grad = [](double x, double& df) -> double
+{
     df = std::cos(x);
     return std::sin(x);
 };
@@ -149,11 +151,11 @@ TEST(Brent, FunctionOffset)
     // solve x² = 3 via offset — same as f(x) = x² with target = 3
     const scalar_function f    = [](double x) { return x * x; };
     auto                  opts = root_finding_options_builder()
-                     .with_tolerance_function(1e-12)
-                     .with_tolerance_parameter(1e-12)
-                     .with_max_iterations(100)
-                     .with_function_offset(3.0)
-                     .build();
+                    .with_tolerance_function(1e-12)
+                    .with_tolerance_parameter(1e-12)
+                    .with_max_iterations(100)
+                    .with_function_offset(3.0)
+                    .build();
     const auto r = run_brent(f, 1.0, 2.0, opts);
     EXPECT_EQ(r.outcome, root_outcome::converged);
     EXPECT_NEAR(r.root, std::sqrt(3.0), kTol);
@@ -215,7 +217,8 @@ TEST(NewtonRaphson, ConvergesOnPi)
 TEST(NewtonRaphson, VanishingDerivativeThrows)
 {
     // f(x) = x² - 4, roots at ±2; derivative vanishes at x=0 while f(0)=-4 ≠ 0
-    const scalar_function_gradient f = [](double x, double& df) -> double {
+    const scalar_function_gradient f = [](double x, double& df) -> double
+    {
         df = 2.0 * x;
         return x * x - 4.0;
     };
@@ -279,8 +282,7 @@ TEST(ThirdDegreePolynomial, SingleRealRoot)
 TEST(ThirdDegreePolynomial, ThreeRealRootsReturnsLargest)
 {
     // (x-1)(x-2)(x-3) = x³ - 6x² + 11x - 6 → largest root = 3
-    EXPECT_NEAR(
-        polynomial_solver::third_degree_polynomial_solver(-6.0, 11.0, -6.0), 3.0, 1e-9);
+    EXPECT_NEAR(polynomial_solver::third_degree_polynomial_solver(-6.0, 11.0, -6.0), 3.0, 1e-9);
 }
 
 TEST(FourthDegreePolynomial, LargestRoot)

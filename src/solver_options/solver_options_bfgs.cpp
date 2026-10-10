@@ -1,5 +1,7 @@
 #include "solver_options/solver_options_bfgs.h"
 
+#include <cmath>
+
 #include "detail/support.h"
 
 namespace solverslib
@@ -8,25 +10,78 @@ solver_options_bfgs::solver_options_bfgs() : solver_options(solver_enum::LBFGS) 
 
 void solver_options_bfgs::validate() const
 {
-    SOLVERS_CHECK(
-        linesearch_tolerance_ > 0 && linesearch_tolerance_ < 0.5,
+    SOLVERS_CHECK(linesearch_tolerance_ > 0 && linesearch_tolerance_ < 0.5,
         "'linesearch_tolerance_' must satisfy 0 < linesearch_tolerance_ < 0.5");
 
-    SOLVERS_CHECK(
-        linesearch_wolfe_ > linesearch_tolerance_ && linesearch_wolfe_ < 1.,
+    SOLVERS_CHECK(linesearch_wolfe_ > linesearch_tolerance_ && linesearch_wolfe_ < 1.,
         "'linesearch_wolfe_' must satisfy linesearch_tolerance_ < linesearch_wolfe_ < 1");
+    SOLVERS_CHECK(std::isfinite(initial_step_) && initial_step_ > 0.,
+        "'initial_step_' must be finite and positive");
+    SOLVERS_CHECK(std::isfinite(backtracking_decrease_) && backtracking_decrease_ > 0. &&
+                      backtracking_decrease_ < 1.,
+        "'backtracking_decrease_' must satisfy 0 < backtracking_decrease_ < 1");
+    SOLVERS_CHECK(std::isfinite(backtracking_increase_) && backtracking_increase_ > 1.,
+        "'backtracking_increase_' must be finite and greater than 1");
+    SOLVERS_CHECK(std::isfinite(line_search_expansion_) && line_search_expansion_ > 1.,
+        "'line_search_expansion_' must be finite and greater than 1");
 }
 
-lbfgs_line_search_method_type solver_options_bfgs::method_type() const { return method_type_; }
-lbfgs_line_search_type        solver_options_bfgs::type() const { return type_; }
-size_t                        solver_options_bfgs::tau() const { return tau_; }
-size_t solver_options_bfgs::max_iteration_linesearch() const { return max_iteration_linesearch_; }
-double solver_options_bfgs::step_min() const { return step_min_; }
-double solver_options_bfgs::step_max() const { return step_max_; }
-double solver_options_bfgs::linesearch_tolerance() const { return linesearch_tolerance_; }
-double solver_options_bfgs::linesearch_wolfe() const { return linesearch_wolfe_; }
-double solver_options_bfgs::bump() const { return bump_; }
-finite_difference_scale solver_options_bfgs::difference_scale() const { return difference_scale_; }
+lbfgs_line_search_method_type solver_options_bfgs::method_type() const
+{
+    return method_type_;
+}
+lbfgs_line_search_type solver_options_bfgs::type() const
+{
+    return type_;
+}
+size_t solver_options_bfgs::tau() const
+{
+    return tau_;
+}
+size_t solver_options_bfgs::max_iteration_linesearch() const
+{
+    return max_iteration_linesearch_;
+}
+double solver_options_bfgs::step_min() const
+{
+    return step_min_;
+}
+double solver_options_bfgs::step_max() const
+{
+    return step_max_;
+}
+double solver_options_bfgs::linesearch_tolerance() const
+{
+    return linesearch_tolerance_;
+}
+double solver_options_bfgs::linesearch_wolfe() const
+{
+    return linesearch_wolfe_;
+}
+double solver_options_bfgs::initial_step() const
+{
+    return initial_step_;
+}
+double solver_options_bfgs::backtracking_decrease() const
+{
+    return backtracking_decrease_;
+}
+double solver_options_bfgs::backtracking_increase() const
+{
+    return backtracking_increase_;
+}
+double solver_options_bfgs::line_search_expansion() const
+{
+    return line_search_expansion_;
+}
+double solver_options_bfgs::bump() const
+{
+    return bump_;
+}
+finite_difference_scale solver_options_bfgs::difference_scale() const
+{
+    return difference_scale_;
+}
 
 solver_options_bfgs_builder::solver_options_bfgs_builder()
     : options_(std::shared_ptr<solver_options_bfgs>(new solver_options_bfgs()))
@@ -99,6 +154,26 @@ solver_options_bfgs_builder& solver_options_bfgs_builder::with_linesearch_wolfe(
     options_->linesearch_wolfe_ = val;
     return *this;
 }
+solver_options_bfgs_builder& solver_options_bfgs_builder::with_initial_step(double val)
+{
+    options_->initial_step_ = val;
+    return *this;
+}
+solver_options_bfgs_builder& solver_options_bfgs_builder::with_backtracking_decrease(double val)
+{
+    options_->backtracking_decrease_ = val;
+    return *this;
+}
+solver_options_bfgs_builder& solver_options_bfgs_builder::with_backtracking_increase(double val)
+{
+    options_->backtracking_increase_ = val;
+    return *this;
+}
+solver_options_bfgs_builder& solver_options_bfgs_builder::with_line_search_expansion(double val)
+{
+    options_->line_search_expansion_ = val;
+    return *this;
+}
 solver_options_bfgs_builder& solver_options_bfgs_builder::with_bump(double val)
 {
     options_->bump_ = val;
@@ -118,6 +193,7 @@ solver_options_bfgs_builder& solver_options_bfgs_builder::with_log_file(const st
 
 std::shared_ptr<const solver_options_bfgs> solver_options_bfgs_builder::build() const
 {
+    options_->validate();
     return options_;
 }
 }  // namespace solverslib
