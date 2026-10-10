@@ -17,7 +17,10 @@ root_run run_bisection(
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
-    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
+    if (f1 * f2 > 0.)
+    {
+        SOLVERS_THROW("f1={} f2={}", f1, f2);
+    }
 
     if (std::fabs(f1) < options.tolerance_function())
     {
@@ -62,7 +65,10 @@ root_run run_false_position(
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
-    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
+    if (f1 * f2 > 0.)
+    {
+        SOLVERS_THROW("f1={} f2={}", f1, f2);
+    }
 
     if (std::fabs(f1) < options.tolerance_function())
     {
@@ -121,7 +127,10 @@ root_run run_ridders(
 {
     auto f1 = func(x1) - options.function_offset();
     auto f2 = func(x2) - options.function_offset();
-    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
+    if (f1 * f2 > 0.)
+    {
+        SOLVERS_THROW("f1={} f2={}", f1, f2);
+    }
 
     if (std::fabs(f1) < options.tolerance_function())
     {
@@ -211,7 +220,10 @@ root_run run_dekker(
     auto         f1       = func(x1, df_dx) - f_offset;
     auto         f2       = func(x2, df_dx) - f_offset;
 
-    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
+    if (f1 * f2 > 0.)
+    {
+        SOLVERS_THROW("f1={} f2={}", f1, f2);
+    }
 
     if (std::abs(f1) < tolerance_function)
     {
@@ -284,7 +296,10 @@ root_run run_brent(  // NOLINT
 
     auto f1 = func(x1) - f_0;
     auto f2 = func(x2) - f_0;
-    SOLVERS_CHECK(f1 * f2 <= 0., "f1={} f2={}", f1, f2);
+    if (f1 * f2 > 0.)
+    {
+        SOLVERS_THROW("f1={} f2={}", f1, f2);
+    }
 
     auto   c  = x2;
     double d  = 0.;
