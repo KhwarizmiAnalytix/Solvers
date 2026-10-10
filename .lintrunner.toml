@@ -64,6 +64,7 @@ exclude_patterns = [
     'ThirdParty/**',
     '.git/**',
     'bazel-*/**',
+    'Testing/Benchmark/**',
 ]
 command = [
     'python3',

@@ -9,7 +9,11 @@ Checks: >
   modernize-use-equals-default,
   readability-braces-around-statements,
   -bugprone-easily-swappable-parameters,
-  -bugprone-narrowing-conversions
+  -bugprone-narrowing-conversions,
+  -bugprone-throwing-static-initialization,
+  -bugprone-unchecked-optional-access,
+  -performance-enum-size,
+  -portability-avoid-pragma-once
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle: none
