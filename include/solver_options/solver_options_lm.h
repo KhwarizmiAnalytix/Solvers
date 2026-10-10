@@ -47,6 +47,7 @@ public:
     SOLVER_API double                                 diagonal_scaling_floor() const;
     SOLVER_API double                                 roundoff_noise_factor() const;
     SOLVER_API double                                 finite_difference_step() const;
+    SOLVER_API finite_difference_scale               difference_scale() const;
     SOLVER_API levenberg_marquardt_solver_enum        type() const;
     SOLVER_API levenberg_marquardt_linear_solver_enum linear_solver() const;
 
@@ -68,7 +69,8 @@ private:
     double diagonal_scaling_floor_              = 1e-12;
     double roundoff_noise_factor_               = 8.0;
     double geodesic_acceleration_step_          = 0.05;
-    double finite_difference_step_              = 0.00001;
+    double                   finite_difference_step_ = 0.00001;
+    finite_difference_scale  difference_scale_       = finite_difference_scale::absolute;
 
     levenberg_marquardt_solver_enum        type_ = levenberg_marquardt_solver_enum::NIELSEN;
     levenberg_marquardt_linear_solver_enum linear_solver_ =
@@ -101,6 +103,7 @@ public:
     SOLVER_API solver_options_lm_builder& with_diagonal_scaling_floor(double val);
     SOLVER_API solver_options_lm_builder& with_roundoff_noise_factor(double val);
     SOLVER_API solver_options_lm_builder& with_finite_difference_step(double val);
+    SOLVER_API solver_options_lm_builder& with_difference_scale(finite_difference_scale val);
     SOLVER_API solver_options_lm_builder& with_type(levenberg_marquardt_solver_enum val);
     SOLVER_API solver_options_lm_builder& with_linear_solver(
         levenberg_marquardt_linear_solver_enum val);

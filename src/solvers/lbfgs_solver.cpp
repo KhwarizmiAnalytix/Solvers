@@ -312,14 +312,45 @@ public:
 lbfgs_solver::lbfgs_solver(size_type num_parameters,
     size_type                        num_residuals,
     function_type                    function,
-    jacobian_type                    jacobian)
+    jacobian_type                    jacobian,
+    double                           bump,
+    finite_difference_scale          difference_scale)
     : function_(std::move(function)), jacobian_(std::move(jacobian)),
-      num_parameters_(num_parameters), num_residuals_(num_residuals) {};
+      num_parameters_(num_parameters), num_residuals_(num_residuals), fd_step_(bump),
+      fd_scale_(difference_scale)
+{
+    if (jacobian_)
+    {
+        return;
+    }
 
-lbfgs_solver::lbfgs_solver(
-    size_type num_parameters, objective_type objective, gradient_type gradient)
-    : num_parameters_(num_parameters), num_residuals_(0), objective_(std::move(objective)),
-      gradient_(std::move(gradient)), scalar_mode_(true) {};
+    fd_parameters_.resize(static_cast<index_type>(num_parameters_));
+    fd_residual_.resize(static_cast<index_type>(num_residuals_));
+    fd_base_.resize(static_cast<index_type>(num_residuals_));
+    // Forward bump-and-run. absolute: h = step. relative: h = step * |x_j|.
+    jacobian_ = [this](vector_type const& x, matrix_type& jacobian_matrix)
+    {
+        function_(x, fd_base_);
+        fd_parameters_ = x;
+        for (size_t j = 0; j < num_parameters_; ++j)
+        {
+            const double h = finite_difference_increment(fd_scale_, fd_step_, x[j]);
+            SOLVERS_CHECK(h > 0.0, "finite-difference step is not positive");
+            fd_parameters_[j] = x[j] + h;
+            function_(fd_parameters_, fd_residual_);
+            jacobian_matrix.col(static_cast<index_type>(j)) = (fd_residual_ - fd_base_) / h;
+            fd_parameters_[j]                               = x[j];
+        }
+    };
+}
+
+lbfgs_solver::lbfgs_solver(size_type num_parameters,
+    objective_type                       objective,
+    gradient_type                        gradient,
+    double                               bump,
+    finite_difference_scale              difference_scale)
+    : num_parameters_(num_parameters), num_residuals_(0), fd_step_(bump), fd_scale_(difference_scale),
+      objective_(std::move(objective)), gradient_(std::move(gradient)), scalar_mode_(true) {}
 
 native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
 {
@@ -354,13 +385,13 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
             }
             else
             {
-                // Finite difference approximation of gradient
-                const double h       = options.bump() * std::max(1.0, std::abs(x.norm()));
-                vector_type  x_trial = x;
+                vector_type x_trial = x;
                 grad.resize(num_parameters_);
 
                 for (size_t j = 0; j < num_parameters_; ++j)
                 {
+                    const double h = finite_difference_increment(fd_scale_, fd_step_, x[j]);
+                    SOLVERS_CHECK(h > 0.0, "finite-difference step is not positive");
                     x_trial[j]      = x[j] + h;
                     double fx_plus  = objective_(x_trial);
                     x_trial[j]      = x[j] - h;
@@ -384,25 +415,7 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
             double fx = l2_norm(y_p);
             fx *= fx;
 
-            if (jacobian_)
-            {
-                jacobian_(x, J);
-            }
-            else
-            {
-                // Finite difference approximation of Jacobian
-                const double h       = options.bump() * std::max(1.0, x.norm() / num_parameters_);
-                vector_type  x_trial = x;
-                vector_type  y_trial(num_residuals_);
-
-                for (size_t j = 0; j < num_parameters_; ++j)
-                {
-                    x_trial[j] = x[j] + h;
-                    function_(x_trial, y_trial);
-                    J.col(j)   = (y_trial - y_p) / h;
-                    x_trial[j] = x[j];
-                }
-            }
+            jacobian_(x, J);
             SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian values");
             grad = 2. * (J.transpose() * y_p);
 

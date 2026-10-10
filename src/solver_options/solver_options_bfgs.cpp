@@ -26,6 +26,7 @@ double solver_options_bfgs::step_max() const { return step_max_; }
 double solver_options_bfgs::linesearch_tolerance() const { return linesearch_tolerance_; }
 double solver_options_bfgs::linesearch_wolfe() const { return linesearch_wolfe_; }
 double solver_options_bfgs::bump() const { return bump_; }
+finite_difference_scale solver_options_bfgs::difference_scale() const { return difference_scale_; }
 
 solver_options_bfgs_builder::solver_options_bfgs_builder()
     : options_(std::shared_ptr<solver_options_bfgs>(new solver_options_bfgs()))
@@ -101,6 +102,12 @@ solver_options_bfgs_builder& solver_options_bfgs_builder::with_linesearch_wolfe(
 solver_options_bfgs_builder& solver_options_bfgs_builder::with_bump(double val)
 {
     options_->bump_ = val;
+    return *this;
+}
+solver_options_bfgs_builder& solver_options_bfgs_builder::with_difference_scale(
+    finite_difference_scale val)
+{
+    options_->difference_scale_ = val;
     return *this;
 }
 solver_options_bfgs_builder& solver_options_bfgs_builder::with_log_file(const std::string& val)

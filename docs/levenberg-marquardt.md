@@ -126,7 +126,8 @@ spending the remaining iterations, and is no longer reported as `max_iterations`
 | `levenberg_marquardt_damping_ceiling` | 1e7 | Maximum Marquardt damping |
 | `diagonal_scaling_floor` | 1e-12 | Lower bound for Marquardt diagonal scaling |
 | `roundoff_noise_factor` | 8 | Multiplier for the geodesic finite-difference roundoff guard |
-| `finite_difference_step` | 1e-5 | Relative central-difference step, `h_j = step * max(1, abs(x_j))` (legacy kernel constructors only; `api::solve` uses the shared evaluator default) |
+| `finite_difference_step` | 1e-5 | Forward-difference magnitude `step` |
+| `difference_scale` | `absolute` | `absolute`: `h = step`. `relative`: `h_j = step * abs(x_j)` |
 | `type` | `NIELSEN` | Coupled scaling and damping policy |
 
 Each option has a `with_...` builder method. The strategy enum contains only

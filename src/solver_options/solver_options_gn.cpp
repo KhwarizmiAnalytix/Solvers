@@ -5,6 +5,7 @@ namespace solverslib
 solver_options_gn::solver_options_gn() : solver_options(solver_enum::GAUSS_NEWTON) {}
 
 double solver_options_gn::bump() const { return bump_; }
+finite_difference_scale solver_options_gn::difference_scale() const { return difference_scale_; }
 size_t solver_options_gn::max_line_search_iterations() const { return max_line_search_iterations_; }
 double solver_options_gn::line_search_backtracking_factor() const
 {
@@ -48,6 +49,12 @@ solver_options_gn_builder& solver_options_gn_builder::with_verbose(bool val)
 solver_options_gn_builder& solver_options_gn_builder::with_bump(double val)
 {
     options_->bump_ = val;
+    return *this;
+}
+solver_options_gn_builder& solver_options_gn_builder::with_difference_scale(
+    finite_difference_scale val)
+{
+    options_->difference_scale_ = val;
     return *this;
 }
 solver_options_gn_builder& solver_options_gn_builder::with_max_line_search_iterations(size_t val)

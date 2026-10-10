@@ -40,6 +40,23 @@
 
 namespace solverslib
 {
+// absolute: h = step. relative: h = step * |x|. These are not combined.
+enum class finite_difference_scale : int
+{
+    absolute = 0,
+    relative = 1
+};
+
+inline double finite_difference_increment(
+    finite_difference_scale scale, double step, double coordinate)
+{
+    if (scale == finite_difference_scale::relative)
+    {
+        return step * std::abs(coordinate);
+    }
+    return step;
+}
+
 // Common callback types used across all solvers.
 using function_type = std::function<void(vector_type const&, vector_type&)>;
 using jacobian_type = std::function<void(vector_type const&, matrix_type&)>;

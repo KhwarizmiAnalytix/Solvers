@@ -199,9 +199,14 @@ solver_result solve(
         {
         case algorithm::levenberg_marquardt:
         {
-            levenberg_marquardt_solver solver(
-                problem.num_parameters, problem.num_residuals, problem.residuals, jacobian);
-            const auto out = solver.solve(x, static_cast<const solver_options_lm&>(options));
+            const auto& lm_options = static_cast<const solver_options_lm&>(options);
+            levenberg_marquardt_solver solver(problem.num_parameters,
+                problem.num_residuals,
+                problem.residuals,
+                jacobian,
+                lm_options.finite_difference_step(),
+                lm_options.difference_scale());
+            const auto out = solver.solve(x, lm_options);
 
             result.status         = translate_native(out.status);
             result.parameters     = x;
@@ -218,9 +223,14 @@ solver_result solve(
 
         case algorithm::gauss_newton:
         {
-            gauss_newton_solver solver(
-                problem.num_parameters, problem.num_residuals, problem.residuals, jacobian);
-            const auto out = solver.solve(x, static_cast<const solver_options_gn&>(options));
+            const auto& gn_options = static_cast<const solver_options_gn&>(options);
+            gauss_newton_solver solver(problem.num_parameters,
+                problem.num_residuals,
+                problem.residuals,
+                jacobian,
+                gn_options.bump(),
+                gn_options.difference_scale());
+            const auto out = solver.solve(x, gn_options);
 
             result.status         = translate_native(out.status);
             result.parameters     = x;
@@ -389,8 +399,13 @@ solver_result solve(
         result.algorithm  = algorithm::lbfgs;
 
         gradient_type gradient = problem.gradient ? *problem.gradient : nullptr;
-        lbfgs_solver  solver(problem.num_parameters, problem.objective, gradient);
-        const auto    out = solver.solve(x, static_cast<const solver_options_bfgs&>(options));
+        const auto&   bfgs_options = static_cast<const solver_options_bfgs&>(options);
+        lbfgs_solver  solver(problem.num_parameters,
+            problem.objective,
+            gradient,
+            bfgs_options.bump(),
+            bfgs_options.difference_scale());
+        const auto    out = solver.solve(x, bfgs_options);
 
         result.status         = translate_native(out.status);
         result.iterations     = out.iterations;

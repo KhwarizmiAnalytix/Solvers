@@ -38,10 +38,36 @@ template <typename T> inline double l2_norm(T const& h)
 gauss_newton_solver::gauss_newton_solver(size_t num_parameters,
     size_t                                      num_residuals,
     function_type                               function,
-    jacobian_type                               jacobian)
+    jacobian_type                               jacobian,
+    double                                      bump,
+    finite_difference_scale                     difference_scale)
     : function_(std::move(function)), jacobian_(std::move(jacobian)),
-      num_parameters_(num_parameters), num_residuals_(num_residuals)
+      num_parameters_(num_parameters), num_residuals_(num_residuals), fd_step_(bump),
+      fd_scale_(difference_scale)
 {
+    if (jacobian_)
+    {
+        return;
+    }
+
+    fd_parameters_.resize(static_cast<index_type>(num_parameters_));
+    fd_residual_.resize(static_cast<index_type>(num_residuals_));
+    fd_base_.resize(static_cast<index_type>(num_residuals_));
+    // Forward bump-and-run. absolute: h = step. relative: h = step * |x_j|.
+    jacobian_ = [this](vector_type const& x, matrix_type& jacobian_matrix)
+    {
+        function_(x, fd_base_);
+        fd_parameters_ = x;
+        for (size_t j = 0; j < num_parameters_; ++j)
+        {
+            const double h = finite_difference_increment(fd_scale_, fd_step_, x[j]);
+            SOLVERS_CHECK(h > 0.0, "finite-difference step is not positive");
+            fd_parameters_[j] = x[j] + h;
+            function_(fd_parameters_, fd_residual_);
+            jacobian_matrix.col(static_cast<index_type>(j)) = (fd_residual_ - fd_base_) / h;
+            fd_parameters_[j]                               = x[j];
+        }
+    };
 }
 
 native_result gauss_newton_solver::solve(
@@ -76,25 +102,7 @@ native_result gauss_newton_solver::solve(
     for (; !x2_converged && !parameters_converged && !gradient_converged && iteration < max_iter;
         ++iteration)
     {
-        if (jacobian_)
-        {
-            jacobian_(parameters, J);
-        }
-        else
-        {
-            // Finite difference approximation of Jacobian
-            const double h       = options.bump() * std::max(1.0, parameters.norm() / n);
-            vector_type  x_trial = parameters;
-            vector_type  y_trial_temp(m);
-
-            for (size_t j = 0; j < n; ++j)
-            {
-                x_trial[j] = parameters[j] + h;
-                function_(x_trial, y_trial_temp);
-                J.col(j)   = (y_trial_temp - y_p) / h;
-                x_trial[j] = parameters[j];
-            }
-        }
+        jacobian_(parameters, J);
         SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian");
         gradient            = J.transpose() * y_p;
         final_gradient_norm = gradient.norm();

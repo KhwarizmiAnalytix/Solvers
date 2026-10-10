@@ -38,6 +38,7 @@ public:
     SOLVER_API double                        linesearch_tolerance() const;
     SOLVER_API double                        linesearch_wolfe() const;
     SOLVER_API double                        bump() const;
+    SOLVER_API finite_difference_scale       difference_scale() const;
 
 private:
     solver_options_bfgs();
@@ -52,6 +53,7 @@ private:
     double                        linesearch_tolerance_ = std::numeric_limits<double>::epsilon();
     double                        linesearch_wolfe_     = 0.9;
     double                        bump_                 = 0.000001;
+    finite_difference_scale       difference_scale_     = finite_difference_scale::absolute;
 };
 
 class SOLVER_VISIBILITY solver_options_bfgs_builder
@@ -73,6 +75,7 @@ public:
     SOLVER_API solver_options_bfgs_builder& with_linesearch_tolerance(double val);
     SOLVER_API solver_options_bfgs_builder& with_linesearch_wolfe(double val);
     SOLVER_API solver_options_bfgs_builder& with_bump(double val);
+    SOLVER_API solver_options_bfgs_builder& with_difference_scale(finite_difference_scale val);
     SOLVER_API solver_options_bfgs_builder& with_log_file(const std::string& val);
     SOLVER_API std::shared_ptr<const solver_options_bfgs> build() const;
 

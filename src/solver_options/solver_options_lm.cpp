@@ -76,6 +76,10 @@ double solver_options_lm::finite_difference_step() const
 {
     return finite_difference_step_;
 }
+finite_difference_scale solver_options_lm::difference_scale() const
+{
+    return difference_scale_;
+}
 levenberg_marquardt_solver_enum solver_options_lm::type() const
 {
     return type_;
@@ -194,6 +198,12 @@ solver_options_lm_builder& solver_options_lm_builder::with_finite_difference_ste
     options_->finite_difference_step_ = val;
     return *this;
 }
+solver_options_lm_builder& solver_options_lm_builder::with_difference_scale(
+    finite_difference_scale val)
+{
+    options_->difference_scale_ = val;
+    return *this;
+}
 solver_options_lm_builder& solver_options_lm_builder::with_type(levenberg_marquardt_solver_enum val)
 {
     options_->type_ = val;
@@ -237,7 +247,9 @@ std::shared_ptr<const solver_options_lm> solver_options_lm_builder::build() cons
         options_->damping_floor_ >= options_->levenberg_marquardt_damping_ceiling_ ||
         static_cast<int>(options_->type_) < 0 || static_cast<int>(options_->type_) > 2 ||
         static_cast<int>(options_->linear_solver_) < 0 ||
-        static_cast<int>(options_->linear_solver_) > 1)
+        static_cast<int>(options_->linear_solver_) > 1 ||
+        static_cast<int>(options_->difference_scale_) < 0 ||
+        static_cast<int>(options_->difference_scale_) > 1)
     {
         throw std::invalid_argument("Invalid Levenberg-Marquardt options");
     }

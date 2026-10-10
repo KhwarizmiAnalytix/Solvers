@@ -38,10 +38,36 @@ template <typename T> inline double l2_norm(T const& h)
 levenberg_marquardt_solver::levenberg_marquardt_solver(size_t num_parameters,
     size_t                                                    num_residuals,
     function_type                                             function,
-    jacobian_type                                             jacobian)
+    jacobian_type                                             jacobian,
+    double                                                    finite_difference_step,
+    finite_difference_scale                                   difference_scale)
     : function_(std::move(function)), jacobian_(std::move(jacobian)),
-      num_parameters_(num_parameters), num_residuals_(num_residuals)
+      num_parameters_(num_parameters), num_residuals_(num_residuals),
+      fd_step_(finite_difference_step), fd_scale_(difference_scale)
 {
+    if (jacobian_)
+    {
+        return;
+    }
+
+    fd_parameters_.resize(static_cast<index_type>(num_parameters_));
+    fd_residual_.resize(static_cast<index_type>(num_residuals_));
+    fd_base_.resize(static_cast<index_type>(num_residuals_));
+    // Forward bump-and-run. absolute: h = step. relative: h = step * |x_j|.
+    jacobian_ = [this](vector_type const& x, matrix_type& jacobian_matrix)
+    {
+        function_(x, fd_base_);
+        fd_parameters_ = x;
+        for (size_t j = 0; j < num_parameters_; ++j)
+        {
+            const double h = finite_difference_increment(fd_scale_, fd_step_, x[j]);
+            SOLVERS_CHECK(h > 0.0, "finite-difference step is not positive");
+            fd_parameters_[j] = x[j] + h;
+            function_(fd_parameters_, fd_residual_);
+            jacobian_matrix.col(static_cast<index_type>(j)) = (fd_residual_ - fd_base_) / h;
+            fd_parameters_[j]                               = x[j];
+        }
+    };
 }
 
 native_result levenberg_marquardt_solver::solve(
@@ -124,25 +150,7 @@ native_result levenberg_marquardt_solver::solve(
 
     if (!x2_converged)
     {
-        if (jacobian_)
-        {
-            jacobian_(parameters, J);
-        }
-        else
-        {
-            // Finite difference approximation
-            const double h = options.finite_difference_step() * std::max(1.0, parameters.norm() / n);
-            vector_type  x_trial = parameters;
-            vector_type  y_trial(m);
-
-            for (size_t j = 0; j < n; ++j)
-            {
-                x_trial[j] = parameters[j] + h;
-                function_(x_trial, y_trial);
-                J.col(j)   = (y_trial - y_p) / h;
-                x_trial[j] = parameters[j];
-            }
-        }
+        jacobian_(parameters, J);
         SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian at the initial point");
 
         refresh_normal_terms();
@@ -357,26 +365,7 @@ native_result levenberg_marquardt_solver::solve(
                     break;
                 }
 
-                if (jacobian_)
-                {
-                    jacobian_(parameters, J);
-                }
-                else
-                {
-                    // Finite difference approximation
-                    const double h =
-                        options.finite_difference_step() * std::max(1.0, parameters.norm() / n);
-                    vector_type x_trial = parameters;
-                    vector_type y_trial(m);
-
-                    for (size_t j = 0; j < n; ++j)
-                    {
-                        x_trial[j] = parameters[j] + h;
-                        function_(x_trial, y_trial);
-                        J.col(j)   = (y_trial - y_p) / h;
-                        x_trial[j] = parameters[j];
-                    }
-                }
+                jacobian_(parameters, J);
                 SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian at an accepted point");
 
                 refresh_normal_terms();

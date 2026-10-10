@@ -41,9 +41,9 @@ changes that callers can observe are listed first.
   least squares reports `finite_difference` (it used to report `automatic`).
   Objective problems still require an explicit gradient unless
   `derivative_mode::finite_difference` is requested.
-- **Finite-difference step is relative:** `h_j = step * max(1, |x_j|)`, one shared
-  implementation (bounds-aware) used by the native kernels, the providers and the
-  dispatcher.
+- **Finite-difference step is absolute by default:** `h = step`. Set
+  `difference_scale` to `relative` for `h_j = step * |x_j|`. The two scales are
+  not combined.
 - **LM uses LDLT on the normal equations** instead of `PartialPivLU`, and a
   breakdown of the factorization is a rejected step, not a failure.
 
