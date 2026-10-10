@@ -66,6 +66,7 @@ void rosenbrock_jacobian(const vector_type& x, matrix_type& j)
 }
 }  // namespace
 
+// Documents the default strategy, linear solver, damping, scaling, and acceleration settings.
 TEST(LmOptions, DefaultsMatchTheSources)
 {
     const auto options = solver_options_lm_builder().build();
@@ -90,6 +91,7 @@ TEST(LmOptions, DefaultsMatchTheSources)
     EXPECT_EQ(options->difference_scale(), finite_difference_scale::absolute);
 }
 
+// Ensures invalid damping, acceleration, tolerance, and iteration settings are rejected.
 TEST(LmOptions, RejectsInvalidValues)
 {
     EXPECT_THROW(
@@ -108,6 +110,7 @@ TEST(LmOptions, RejectsInvalidValues)
         solver_options_lm_builder().with_max_iterations(-1).build(), std::invalid_argument);
 }
 
+// Checks that function tolerance uses half the squared residual norm and honors its strict bound.
 TEST(LmStopping, FunctionToleranceIsHalfTheSquaredResidual)
 {
     const auto residuals = [](const vector_type& x, vector_type& r) { r[0] = x[0]; };
@@ -142,6 +145,7 @@ TEST(LmStopping, FunctionToleranceIsHalfTheSquaredResidual)
     EXPECT_EQ(already.residual_norm, 0.5);
 }
 
+// Checks that all damping strategies stop at a stationary point even when residuals remain.
 TEST(LmStopping, StationaryStartWithNonzeroResidual)
 {
     const auto residuals = [](const vector_type& x, vector_type& r)
@@ -170,6 +174,7 @@ TEST(LmStopping, StationaryStartWithNonzeroResidual)
     }
 }
 
+// Checks gradient convergence against the norm of J-transpose times the residual.
 TEST(LmStopping, GradientToleranceBoundsJtR)
 {
     const auto residuals = [](const vector_type& x, vector_type& r) { r[0] = x[0] - 1.; };
@@ -187,6 +192,7 @@ TEST(LmStopping, GradientToleranceBoundsJtR)
     EXPECT_EQ(*run.gradient_norm, 1.);
 }
 
+// Ensures exhausting the iteration budget stays non-converged in both native and public API results.
 TEST(LmTermination, IterationBudgetIsNotReportedAsConverged)
 {
     const auto  options = loose(strategy_enum::NIELSEN, 3).build();
@@ -208,6 +214,7 @@ TEST(LmTermination, IterationBudgetIsNotReportedAsConverged)
     EXPECT_EQ(result.message.find("converged"), std::string::npos) << result.message;
 }
 
+// Checks that a zero iteration budget returns without changing the initial parameters.
 TEST(LmTermination, ZeroIterationBudgetLeavesTheStartingPoint)
 {
     const auto  options = loose(strategy_enum::NIELSEN, 0).build();
@@ -220,6 +227,7 @@ TEST(LmTermination, ZeroIterationBudgetLeavesTheStartingPoint)
     EXPECT_NEAR(run.residual_norm, 0.99, 1e-14);
 }
 
+// Checks that a rejected step at the damping ceiling reports a stall without moving the iterate.
 TEST(LmTermination, StallsWhenDampingIsAlreadyAtTheCeiling)
 {
     const auto options = loose(strategy_enum::NIELSEN, 50)
@@ -238,6 +246,7 @@ TEST(LmTermination, StallsWhenDampingIsAlreadyAtTheCeiling)
     EXPECT_NEAR(run.residual_norm, 0.99, 1e-12);
 }
 
+// Ensures non-finite callback values, non-finite initial parameters, and wrong dimensions throw.
 TEST(LmSafeguards, InvalidCallbackOutputsThrow)
 {
     const auto options = solver_options_lm_builder().build();
@@ -265,6 +274,7 @@ TEST(LmSafeguards, InvalidCallbackOutputsThrow)
     }
 }
 
+// Checks that a non-finite trial is rejected while subsequent valid steps can still converge.
 TEST(LmSafeguards, NonFiniteTrialIsRejected)
 {
     const auto residuals = [](const vector_type& x, vector_type& r)
@@ -284,6 +294,7 @@ TEST(LmSafeguards, NonFiniteTrialIsRejected)
     EXPECT_GE(run.rejected_steps, 1u);
 }
 
+// Ensures relative finite differences reject a zero-valued parameter where scaling is undefined.
 TEST(LmSafeguards, RelativeDifferenceAtZeroThrows)
 {
     const auto residuals = [](const vector_type& x, vector_type& r)
@@ -298,6 +309,7 @@ TEST(LmSafeguards, RelativeDifferenceAtZeroThrows)
             .solve(x, *options));
 }
 
+// Checks convergence from a nonzero start using both absolute and relative finite differences.
 TEST(LmSafeguards, FiniteDifferencesConvergeFromANonzeroStart)
 {
     const auto residuals = [](const vector_type& x, vector_type& r)
@@ -321,6 +333,7 @@ TEST(LmSafeguards, FiniteDifferencesConvergeFromANonzeroStart)
     }
 }
 
+// Ensures parameters with inactive Jacobian columns retain their initial values for each strategy.
 TEST(LmSafeguards, InactiveColumnStaysPut)
 {
     const auto residuals = [](const vector_type& x, vector_type& r)
@@ -354,6 +367,7 @@ class LmCombination
 {
 };
 
+// Checks Rosenbrock convergence across strategies, extensions, and linear solver backends.
 TEST_P(LmCombination, ConvergesOnRosenbrock)
 {
     const auto [strategy, geodesic, bold, linear] = GetParam();
@@ -387,6 +401,7 @@ INSTANTIATE_TEST_SUITE_P(AllStrategiesAndExtensions,
         ::testing::Bool(),
         ::testing::Values(linear_enum::NORMAL_LDLT, linear_enum::AUGMENTED_QR)));
 
+// Verifies the public least-squares objective is half the squared residual norm for LM and GN.
 TEST(LmApi, ObjectiveIsTheSquaredResidualNorm)
 {
     api::least_squares_problem problem;
@@ -412,6 +427,7 @@ TEST(LmApi, ObjectiveIsTheSquaredResidualNorm)
     EXPECT_NEAR(gn.objective, 2., 1e-12);
 }
 
+// Ensures the API reports bounds as unsupported and preserves the supplied starting parameters.
 TEST(LmApi, BoundsAreRejectedExplicitly)
 {
     api::least_squares_problem problem;

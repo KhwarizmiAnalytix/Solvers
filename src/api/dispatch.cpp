@@ -11,6 +11,7 @@
 #include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_ipopt.h"
 #include "solver_options/solver_options_lm.h"
+#include "solver_options/solver_options_nlopt.h"
 #include "solver_options/solver_options_petsc.h"
 #include "solver_options/solver_options_rnc_lm.h"
 #include "solvers/ceres_solver.h"
@@ -18,6 +19,7 @@
 #include "solvers/ipopt_solver.h"
 #include "solvers/lbfgs_solver.h"
 #include "solvers/levenberg_marquardt_solver.h"
+#include "solvers/nlopt_solver.h"
 #include "solvers/petsc_tao_solver.h"
 #include "solvers/rnc_lm_solver.h"
 
@@ -326,6 +328,41 @@ solver_result solve(const least_squares_problem& problem,
         result.objective = objective(result.parameters);
         return result;
     }
+    case solver_enum::NLOPT:
+    {
+        if (!nlopt_solver::is_supported())
+        {
+            return failed(
+                solver_status::backend_unavailable, "NLopt backend not compiled in", initial_guess);
+        }
+        // Scalar view of F(x) = 0.5 * ||r(x)||^2 with gradient J^T r.
+        const auto objective = [&problem](const vector_type& x)
+        {
+            vector_type residual(problem.num_residuals);
+            problem.residuals(x, residual);
+            return .5 * residual.squaredNorm();
+        };
+        const auto gradient = problem.jacobian
+            ? std::function<void(const vector_type&, vector_type&)>(
+                  [&problem](const vector_type& x, vector_type& g)
+                  {
+                      vector_type residual(problem.num_residuals);
+                      problem.residuals(x, residual);
+                      matrix_type jacobian(problem.num_residuals, problem.num_parameters);
+                      (*problem.jacobian)(x, jacobian);
+                      g = jacobian.transpose() * residual;
+                  })
+            : nullptr;
+        nlopt_solver        solver(
+            problem.num_parameters, objective, gradient, problem.bounds.lower, problem.bounds.upper);
+        std::vector<double> x      = to_std(initial_guess);
+        solver_result       result = from_backend(
+            solver.solve_with_status(x, static_cast<const solver_options_nlopt&>(options)),
+            x,
+            backend::nlopt);
+        result.objective = objective(result.parameters);
+        return result;
+    }
     case solver_enum::PETSC_TAO:
     {
         if (!petsc_tao_solver::is_supported())
@@ -455,6 +492,32 @@ solver_result solve(const optimization_problem& problem,
             solver.solve_with_status(x, static_cast<const solver_options_ipopt&>(options)),
             x,
             backend::ipopt);
+        result.objective = problem.objective(result.parameters);
+        return result;
+    }
+    case solver_enum::NLOPT:
+    {
+        if (!nlopt_solver::is_supported())
+        {
+            return failed(
+                solver_status::backend_unavailable, "NLopt backend not compiled in", initial_guess);
+        }
+        if (!problem.gradient)
+        {
+            return failed(solver_status::unsupported_capability,
+                "NLopt optimization requires a gradient callback",
+                initial_guess);
+        }
+        nlopt_solver        solver(problem.num_parameters,
+            problem.objective,
+            *problem.gradient,
+            problem.bounds.lower,
+            problem.bounds.upper);
+        std::vector<double> x      = to_std(initial_guess);
+        solver_result       result = from_backend(
+            solver.solve_with_status(x, static_cast<const solver_options_nlopt&>(options)),
+            x,
+            backend::nlopt);
         result.objective = problem.objective(result.parameters);
         return result;
     }

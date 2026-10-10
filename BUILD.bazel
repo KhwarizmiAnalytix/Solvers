@@ -18,6 +18,7 @@ cc_library(
     defines = [
         "SOLVERS_HAS_CERES=0",
         "SOLVERS_HAS_IPOPT=0",
+        "SOLVERS_HAS_NLOPT=0",
         "SOLVERS_HAS_PETSC=0",
     ],
     # layering_check enforces that each translation unit only uses headers from

@@ -28,40 +28,10 @@ endif()
 # LoggingTargets.cmake (Solvers vendors it without EXCLUDE_FROM_ALL now, see
 # SolversDependencies.cmake, so Logging's own install rules run and its
 # package files land alongside Solvers'). find_dependency() it the standard
-# way instead of hand-reconstructing Logging::Logging.
+# way instead of hand-reconstructing Logging::Logging -- this also covers
+# loguru, which LoggingConfig.cmake.in reconstructs and wires in itself when
+# Logging was built STATIC with the LOGURU backend.
 find_dependency(Logging)
-
-# loguru: Logging's own LoggingTargets.cmake links loguru (and fmt) PRIVATE,
-# and -- verified empirically against the actual generated file -- CMake
-# drops that private dependency entirely from the exported
-# INTERFACE_LINK_LIBRARIES (it is not merely hidden behind $<LINK_ONLY:>,
-# the reference itself comes out empty). That is fine for a SHARED Logging,
-# where loguru's object code is baked directly into libLogging.so, but
-# Solvers forces Logging to build STATIC when vendoring it
-# (SolversDependencies.cmake), so loguru's objects are never merged into
-# libLogging.a: an external consumer linking the installed static
-# Solvers/Logging still needs loguru on the link line. There is no
-# LoguruConfig.cmake to find_dependency() against either, so Solvers
-# re-installs/re-exposes the archive itself (CMakeLists.txt) and
-# reconstructs the import here -- a deliberate, necessary fallback, not
-# something install(EXPORT) could have generated.
-if(NOT TARGET Loguru::loguru)
-  find_library(_solvers_loguru_path NAMES loguru logurud
-    PATHS "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_LIBDIR@" NO_DEFAULT_PATH)
-  if(_solvers_loguru_path)
-    find_dependency(Threads)
-    add_library(Loguru::loguru UNKNOWN IMPORTED)
-    set_target_properties(Loguru::loguru PROPERTIES
-      IMPORTED_LOCATION "${_solvers_loguru_path}"
-      INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@/loguru"
-      INTERFACE_LINK_LIBRARIES "Threads::Threads"
-    )
-    if(TARGET Logging::Logging)
-      set_property(TARGET Logging::Logging APPEND PROPERTY INTERFACE_LINK_LIBRARIES Loguru::loguru)
-    endif()
-  endif()
-  unset(_solvers_loguru_path)
-endif()
 
 # ---------------------------------------------------------------------------
 # Optional backends -- mirrors how Parallel reports Parallel_HAS_TBB /

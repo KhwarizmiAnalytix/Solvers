@@ -18,7 +18,8 @@ enum class solver_enum : int
     CERES        = 3,
     GAUSS_NEWTON = 4,
     IPOPT        = 5,
-    PETSC_TAO    = 6
+    NLOPT        = 6,
+    PETSC_TAO    = 7
 };
 
 class SOLVER_VISIBILITY solver_options

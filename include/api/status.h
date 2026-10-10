@@ -45,6 +45,7 @@ enum class backend : std::uint8_t
     automatic = 0,
     native,
     ipopt,
+    nlopt,
     petsc_tao,
     pounders,
     ceres
@@ -119,6 +120,8 @@ inline const char* to_string(backend value)
         return "native";
     case backend::ipopt:
         return "ipopt";
+    case backend::nlopt:
+        return "nlopt";
     case backend::petsc_tao:
         return "petsc_tao";
     case backend::pounders:
