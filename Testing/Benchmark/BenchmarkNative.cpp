@@ -36,21 +36,23 @@ const auto lm_options = solver_options_lm_builder()
                             .with_type(levenberg_marquardt_solver_enum::NIELSEN)
                             .build();
 
-const auto lm_options_marquardt = solver_options_lm_builder()
-                                       .with_max_iterations(400)
-                                       .with_function_tolerance(1e-14)
-                                       .with_gradient_tolerance(1e-12)
-                                       .with_parameter_tolerance(1e-14)
-                                       .with_type(levenberg_marquardt_solver_enum::LEVENBERG_MARQUARDT)
-                                       .build();
+const auto lm_options_marquardt =
+    solver_options_lm_builder()
+        .with_max_iterations(400)
+        .with_function_tolerance(1e-14)
+        .with_gradient_tolerance(1e-12)
+        .with_parameter_tolerance(1e-14)
+        .with_type(levenberg_marquardt_solver_enum::LEVENBERG_MARQUARDT)
+        .build();
 
-const auto lm_options_quadratic = solver_options_lm_builder()
-                                       .with_max_iterations(400)
-                                       .with_function_tolerance(1e-14)
-                                       .with_gradient_tolerance(1e-12)
-                                       .with_parameter_tolerance(1e-14)
-                                       .with_type(levenberg_marquardt_solver_enum::QUADRATIC_INTERPOLATION)
-                                       .build();
+const auto lm_options_quadratic =
+    solver_options_lm_builder()
+        .with_max_iterations(400)
+        .with_function_tolerance(1e-14)
+        .with_gradient_tolerance(1e-12)
+        .with_parameter_tolerance(1e-14)
+        .with_type(levenberg_marquardt_solver_enum::QUADRATIC_INTERPOLATION)
+        .build();
 
 const auto gn_options = solver_options_gn_builder()
                             .with_max_iterations(200)
@@ -162,31 +164,32 @@ const auto svi_rnc_order4 = solver_options_rnc_lm_builder()
 
 // Default: Armijo + Nocedal-Wright, tau=6
 const auto svi_lbfgs_armijo = solver_options_bfgs_builder()
-                                   .with_max_iterations(1000)
-                                   .with_function_tolerance(1e-12)
-                                   .with_gradient_tolerance(1e-10)
-                                   .with_method_type(lbfgs_line_search_method_type::ARMIJO)
-                                   .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
-                                   .with_tau(6)
-                                   .build();
-
-const auto svi_lbfgs_wolfe = solver_options_bfgs_builder()
                                   .with_max_iterations(1000)
                                   .with_function_tolerance(1e-12)
                                   .with_gradient_tolerance(1e-10)
-                                  .with_method_type(lbfgs_line_search_method_type::WOLFE)
+                                  .with_method_type(lbfgs_line_search_method_type::ARMIJO)
                                   .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
                                   .with_tau(6)
                                   .build();
 
-const auto svi_lbfgs_strong_wolfe = solver_options_bfgs_builder()
-                                        .with_max_iterations(1000)
-                                        .with_function_tolerance(1e-12)
-                                        .with_gradient_tolerance(1e-10)
-                                        .with_method_type(lbfgs_line_search_method_type::STRONG_WOLFE)
-                                        .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
-                                        .with_tau(6)
-                                        .build();
+const auto svi_lbfgs_wolfe = solver_options_bfgs_builder()
+                                 .with_max_iterations(1000)
+                                 .with_function_tolerance(1e-12)
+                                 .with_gradient_tolerance(1e-10)
+                                 .with_method_type(lbfgs_line_search_method_type::WOLFE)
+                                 .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
+                                 .with_tau(6)
+                                 .build();
+
+const auto svi_lbfgs_strong_wolfe =
+    solver_options_bfgs_builder()
+        .with_max_iterations(1000)
+        .with_function_tolerance(1e-12)
+        .with_gradient_tolerance(1e-10)
+        .with_method_type(lbfgs_line_search_method_type::STRONG_WOLFE)
+        .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
+        .with_tau(6)
+        .build();
 
 const auto svi_lbfgs_backtracking = solver_options_bfgs_builder()
                                         .with_max_iterations(1000)
@@ -198,31 +201,31 @@ const auto svi_lbfgs_backtracking = solver_options_bfgs_builder()
                                         .build();
 
 const auto svi_lbfgs_bracketing = solver_options_bfgs_builder()
-                                       .with_max_iterations(1000)
-                                       .with_function_tolerance(1e-12)
-                                       .with_gradient_tolerance(1e-10)
-                                       .with_method_type(lbfgs_line_search_method_type::ARMIJO)
-                                       .with_type(lbfgs_line_search_type::BRACKETING)
-                                       .with_tau(6)
-                                       .build();
+                                      .with_max_iterations(1000)
+                                      .with_function_tolerance(1e-12)
+                                      .with_gradient_tolerance(1e-10)
+                                      .with_method_type(lbfgs_line_search_method_type::ARMIJO)
+                                      .with_type(lbfgs_line_search_type::BRACKETING)
+                                      .with_tau(6)
+                                      .build();
 
 const auto svi_lbfgs_tau3 = solver_options_bfgs_builder()
+                                .with_max_iterations(1000)
+                                .with_function_tolerance(1e-12)
+                                .with_gradient_tolerance(1e-10)
+                                .with_method_type(lbfgs_line_search_method_type::ARMIJO)
+                                .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
+                                .with_tau(3)
+                                .build();
+
+const auto svi_lbfgs_tau10 = solver_options_bfgs_builder()
                                  .with_max_iterations(1000)
                                  .with_function_tolerance(1e-12)
                                  .with_gradient_tolerance(1e-10)
                                  .with_method_type(lbfgs_line_search_method_type::ARMIJO)
                                  .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
-                                 .with_tau(3)
+                                 .with_tau(10)
                                  .build();
-
-const auto svi_lbfgs_tau10 = solver_options_bfgs_builder()
-                                  .with_max_iterations(1000)
-                                  .with_function_tolerance(1e-12)
-                                  .with_gradient_tolerance(1e-10)
-                                  .with_method_type(lbfgs_line_search_method_type::ARMIJO)
-                                  .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
-                                  .with_tau(10)
-                                  .build();
 
 const auto svi_rnc_problem = make_svi_rnc_ls();
 
@@ -353,7 +356,8 @@ static void BM_SVI_NativeLM_Analytic_NoGeodesic_Marquardt(benchmark::State& stat
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve(svi_ls_unbounded_analytic, x0, *svi_lm_no_geodesic_marquardt));
+        benchmark::DoNotOptimize(
+            solve(svi_ls_unbounded_analytic, x0, *svi_lm_no_geodesic_marquardt));
 }
 BENCHMARK(BM_SVI_NativeLM_Analytic_NoGeodesic_Marquardt);
 
@@ -369,7 +373,8 @@ static void BM_SVI_NativeLM_Analytic_Bold_NoGeodesic_Marquardt(benchmark::State&
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve(svi_ls_unbounded_analytic, x0, *svi_lm_bold_no_geodesic_marquardt));
+        benchmark::DoNotOptimize(
+            solve(svi_ls_unbounded_analytic, x0, *svi_lm_bold_no_geodesic_marquardt));
 }
 BENCHMARK(BM_SVI_NativeLM_Analytic_Bold_NoGeodesic_Marquardt);
 
@@ -385,7 +390,8 @@ static void BM_SVI_NativeLM_Analytic_NoGeodesic_Quadratic(benchmark::State& stat
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve(svi_ls_unbounded_analytic, x0, *svi_lm_no_geodesic_quadratic));
+        benchmark::DoNotOptimize(
+            solve(svi_ls_unbounded_analytic, x0, *svi_lm_no_geodesic_quadratic));
 }
 BENCHMARK(BM_SVI_NativeLM_Analytic_NoGeodesic_Quadratic);
 
@@ -401,7 +407,8 @@ static void BM_SVI_NativeLM_Analytic_Bold_NoGeodesic_Quadratic(benchmark::State&
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve(svi_ls_unbounded_analytic, x0, *svi_lm_bold_no_geodesic_quadratic));
+        benchmark::DoNotOptimize(
+            solve(svi_ls_unbounded_analytic, x0, *svi_lm_bold_no_geodesic_quadratic));
 }
 BENCHMARK(BM_SVI_NativeLM_Analytic_Bold_NoGeodesic_Quadratic);
 
@@ -469,7 +476,8 @@ static void BM_SVI_NativeLM_FiniteDiff_Bold_NoGeodesic_Marquardt(benchmark::Stat
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve(svi_ls_unbounded_fd, x0, *svi_lm_bold_no_geodesic_marquardt));
+        benchmark::DoNotOptimize(
+            solve(svi_ls_unbounded_fd, x0, *svi_lm_bold_no_geodesic_marquardt));
 }
 BENCHMARK(BM_SVI_NativeLM_FiniteDiff_Bold_NoGeodesic_Marquardt);
 
@@ -501,7 +509,8 @@ static void BM_SVI_NativeLM_FiniteDiff_Bold_NoGeodesic_Quadratic(benchmark::Stat
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve(svi_ls_unbounded_fd, x0, *svi_lm_bold_no_geodesic_quadratic));
+        benchmark::DoNotOptimize(
+            solve(svi_ls_unbounded_fd, x0, *svi_lm_bold_no_geodesic_quadratic));
 }
 BENCHMARK(BM_SVI_NativeLM_FiniteDiff_Bold_NoGeodesic_Quadratic);
 

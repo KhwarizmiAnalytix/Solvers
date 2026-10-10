@@ -64,10 +64,10 @@ static double infer_forward()
     double mean_k = 0.0, mean_parity = 0.0;
     for (const auto& q : kPaperQuotes)
     {
-        mean_k      += q.strike;
+        mean_k += q.strike;
         mean_parity += q.call - q.put;
     }
-    mean_k      /= static_cast<double>(kSviN);
+    mean_k /= static_cast<double>(kSviN);
     mean_parity /= static_cast<double>(kSviN);
 
     double cov = 0.0, var = 0.0;
@@ -85,21 +85,22 @@ static const svi_data& svi_problem_data()
 {
     static const svi_data data = []()
     {
-        svi_data d;
+        svi_data     d;
         const double forward = infer_forward();
 
         double min_w = 1e30, max_w = 0.0, min_k = 1e30, max_k = -1e30;
         for (std::size_t i = 0; i < kSviN; ++i)
         {
-            d.log_moneyness[i]  = std::log(kPaperQuotes[i].strike / forward);
+            d.log_moneyness[i]   = std::log(kPaperQuotes[i].strike / forward);
             d.market_variance[i] = kPaperQuotes[i].market_total_variance;
-            min_w = std::min(min_w, d.market_variance[i]);
-            max_w = std::max(max_w, d.market_variance[i]);
-            min_k = std::min(min_k, d.log_moneyness[i]);
-            max_k = std::max(max_k, d.log_moneyness[i]);
+            min_w                = std::min(min_w, d.market_variance[i]);
+            max_w                = std::max(max_w, d.market_variance[i]);
+            min_k                = std::min(min_k, d.log_moneyness[i]);
+            max_k                = std::max(max_k, d.log_moneyness[i]);
         }
 
-        // Box bounds: a in (0, max_w], b in (0,1], rho in (-1,1], m in [2*min_k, 2*max_k], sigma in (0,1]
+        // Box bounds: a in (0, max_w], b in (0,1], rho in (-1,1], m in [2*min_k, 2*max_k], sigma in
+        // (0,1]
         d.lower = {1e-5, 0.001, -1.0, 2.0 * min_k, 0.01};
         d.upper = {max_w, 1.0, 1.0, 2.0 * max_k, 1.0};
 
@@ -122,8 +123,7 @@ inline void svi_residuals(const vector_type& p, vector_type& r)
     for (std::size_t i = 0; i < kSviN; ++i)
     {
         r[static_cast<int>(i)] =
-            svi_model(d.log_moneyness[i], p[0], p[1], p[2], p[3], p[4]) -
-            d.market_variance[i];
+            svi_model(d.log_moneyness[i], p[0], p[1], p[2], p[3], p[4]) - d.market_variance[i];
     }
 }
 
@@ -137,11 +137,11 @@ inline void svi_jacobian(const vector_type& p, matrix_type& j)
         const double c    = d.log_moneyness[i] - p[3];
         const double root = std::sqrt(c * c + p[4] * p[4]);
         const int    row  = static_cast<int>(i);
-        j(row, 0) = 1.0;
-        j(row, 1) = p[2] * c + root;
-        j(row, 2) = p[1] * c;
-        j(row, 3) = p[1] * (-p[2] - c / root);
-        j(row, 4) = p[1] * p[4] / root;
+        j(row, 0)         = 1.0;
+        j(row, 1)         = p[2] * c + root;
+        j(row, 2)         = p[1] * c;
+        j(row, 3)         = p[1] * (-p[2] - c / root);
+        j(row, 4)         = p[1] * p[4] / root;
     }
 }
 
@@ -163,7 +163,7 @@ inline void svi_gradient(const vector_type& p, vector_type& g)
 
 inline api::least_squares_problem make_svi_ls(bool with_jacobian)
 {
-    const auto& d = svi_problem_data();
+    const auto&                d = svi_problem_data();
     api::least_squares_problem problem;
     problem.num_parameters = 5;
     problem.num_residuals  = kSviN;
@@ -177,7 +177,7 @@ inline api::least_squares_problem make_svi_ls(bool with_jacobian)
 
 inline api::optimization_problem make_svi_opt(bool with_gradient)
 {
-    const auto& d = svi_problem_data();
+    const auto&               d = svi_problem_data();
     api::optimization_problem problem;
     problem.num_parameters = 5;
     problem.objective      = svi_objective;
@@ -195,11 +195,13 @@ inline api::optimization_problem make_svi_opt(bool with_gradient)
 
 inline api::rnc_derivative_function svi_curve_deriv()
 {
-    return [](const vector_type& base, const std::vector<vector_type>& coeffs,
-              int order, api::rnc_curve_derivatives& out)
+    return [](const vector_type&               base,
+               const std::vector<vector_type>& coeffs,
+               int                             order,
+               api::rnc_curve_derivatives&     out)
     {
-        const auto& d  = svi_problem_data();
-        const int   m  = static_cast<int>(kSviN);
+        const auto& d = svi_problem_data();
+        const int   m = static_cast<int>(kSviN);
 
         const double a0   = base[0];
         const double b0   = base[1];
@@ -218,8 +220,8 @@ inline api::rnc_derivative_function svi_curve_deriv()
         out.jacobian[0].resize(m, 5);
         for (int i = 0; i < m; ++i)
         {
-            const double c    = d.log_moneyness[i] - m0;
-            const double root = std::sqrt(c * c + s0 * s0);
+            const double c        = d.log_moneyness[i] - m0;
+            const double root     = std::sqrt(c * c + s0 * s0);
             out.residual[0][i]    = a0 + b0 * (rho0 * c + root) - d.market_variance[i];
             out.jacobian[0](i, 0) = 1.0;
             out.jacobian[0](i, 1) = rho0 * c + root;
@@ -254,13 +256,9 @@ inline api::rnc_derivative_function svi_curve_deriv()
                     const double root = std::sqrt(c * c + s0 * s0);
                     const double r3   = root * root * root;
                     out.residual[2][i] =
-                        c * v1 * v2 +
-                        (-rho0 - c / root) * v1 * v3 +
-                        (s0 / root) * v1 * v4 +
-                        (-b0) * v2 * v3 +
-                        0.5 * (b0 * s0 * s0 / r3) * v3 * v3 +
-                        (b0 * c * s0 / r3) * v3 * v4 +
-                        0.5 * (b0 * c * c / r3) * v4 * v4;
+                        c * v1 * v2 + (-rho0 - c / root) * v1 * v3 + (s0 / root) * v1 * v4 +
+                        (-b0) * v2 * v3 + 0.5 * (b0 * s0 * s0 / r3) * v3 * v3 +
+                        (b0 * c * s0 / r3) * v3 * v4 + 0.5 * (b0 * c * c / r3) * v4 * v4;
                 }
             }
         }
@@ -303,14 +301,10 @@ inline api::rnc_derivative_function svi_curve_deriv()
                         const double u2 = coeffs[1][2];
                         const double u3 = coeffs[1][3];
                         const double u4 = coeffs[1][4];
-                        out.residual[3][i] +=
-                            c * (v1 * u2 + v2 * u1) +
-                            h13 * (v1 * u3 + v3 * u1) +
-                            h14 * (v1 * u4 + v4 * u1) +
-                            (-b0) * (v2 * u3 + v3 * u2) +
-                            h33 * v3 * u3 +
-                            h34 * (v3 * u4 + v4 * u3) +
-                            h44 * v4 * u4;
+                        out.residual[3][i] += c * (v1 * u2 + v2 * u1) + h13 * (v1 * u3 + v3 * u1) +
+                                              h14 * (v1 * u4 + v4 * u1) +
+                                              (-b0) * (v2 * u3 + v3 * u2) + h33 * v3 * u3 +
+                                              h34 * (v3 * u4 + v4 * u3) + h44 * v4 * u4;
                     }
 
                     // (1/6) * sum T[j,k,l] c1_j c1_k c1_l — non-zero T values:
@@ -318,10 +312,8 @@ inline api::rnc_derivative_function svi_curve_deriv()
                     //   T[3,3,3]=3b*c*s^2/r5, T[3,3,4]=b*s*(2c^2-s^2)/r5,
                     //   T[3,4,4]=b*c*(c^2-2s^2)/r5, T[4,4,4]=-3b*c^2*s/r5
                     out.residual[3][i] +=
-                        -v1 * v2 * v3 +
-                        0.5 * (s0 * s0 / r3) * v1 * v3 * v3 +
-                        (c * s0 / r3) * v1 * v3 * v4 +
-                        0.5 * (c * c / r3) * v1 * v4 * v4 +
+                        -v1 * v2 * v3 + 0.5 * (s0 * s0 / r3) * v1 * v3 * v3 +
+                        (c * s0 / r3) * v1 * v3 * v4 + 0.5 * (c * c / r3) * v1 * v4 * v4 +
                         0.5 * (b0 * c * s0 * s0 / r5) * v3 * v3 * v3 +
                         0.5 * (b0 * s0 * (2.0 * c * c - s0 * s0) / r5) * v3 * v3 * v4 +
                         0.5 * (b0 * c * (c * c - 2.0 * s0 * s0) / r5) * v3 * v4 * v4 +
@@ -334,7 +326,7 @@ inline api::rnc_derivative_function svi_curve_deriv()
         {
             // Higher-order corrections are zero-approximated; the solver degrades
             // gracefully to the order-3 curve when these are zero.
-            out.residual[4]  = vector_type::Zero(m);
+            out.residual[4] = vector_type::Zero(m);
             out.jacobian[2] = matrix_type::Zero(m, 5);
         }
     };
@@ -344,9 +336,9 @@ inline api::rnc_derivative_function svi_curve_deriv()
 inline api::least_squares_problem make_svi_rnc_ls()
 {
     api::least_squares_problem problem;
-    problem.num_parameters   = 5;
-    problem.num_residuals    = kSviN;
-    problem.residuals        = svi_residuals;
+    problem.num_parameters    = 5;
+    problem.num_residuals     = kSviN;
+    problem.residuals         = svi_residuals;
     problem.curve_derivatives = std::make_optional(svi_curve_deriv());
     return problem;
 }
@@ -364,7 +356,7 @@ inline const auto svi_ls_analytic           = make_svi_ls(true);
 inline const auto svi_ls_fd                 = make_svi_ls(false);
 inline const auto svi_ls_unbounded_analytic = make_svi_unbounded_ls(true);
 inline const auto svi_ls_unbounded_fd       = make_svi_unbounded_ls(false);
-inline const auto svi_opt_grad    = make_svi_opt(true);
-inline const auto svi_opt_fd      = make_svi_opt(false);
+inline const auto svi_opt_grad              = make_svi_opt(true);
+inline const auto svi_opt_fd                = make_svi_opt(false);
 
 }  // namespace solverslib::svi

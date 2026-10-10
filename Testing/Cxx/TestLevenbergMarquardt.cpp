@@ -92,16 +92,20 @@ TEST(LmOptions, DefaultsMatchTheSources)
 
 TEST(LmOptions, RejectsInvalidValues)
 {
-    EXPECT_THROW(solver_options_lm_builder().with_initial_damping(0.).build(), std::invalid_argument);
-    EXPECT_THROW(solver_options_lm_builder().with_initial_damping(kNaN).build(), std::invalid_argument);
     EXPECT_THROW(
-        solver_options_lm_builder().with_geodesic_acceleration_step(0.).build(), std::invalid_argument);
+        solver_options_lm_builder().with_initial_damping(0.).build(), std::invalid_argument);
+    EXPECT_THROW(
+        solver_options_lm_builder().with_initial_damping(kNaN).build(), std::invalid_argument);
+    EXPECT_THROW(solver_options_lm_builder().with_geodesic_acceleration_step(0.).build(),
+        std::invalid_argument);
     EXPECT_THROW(solver_options_lm_builder().with_initial_rejection_multiplier(1.).build(),
         std::invalid_argument);
+    EXPECT_THROW(solver_options_lm_builder().with_damping_increase_factor(1.).build(),
+        std::invalid_argument);
     EXPECT_THROW(
-        solver_options_lm_builder().with_damping_increase_factor(1.).build(), std::invalid_argument);
-    EXPECT_THROW(solver_options_lm_builder().with_function_tolerance(-1.).build(), std::invalid_argument);
-    EXPECT_THROW(solver_options_lm_builder().with_max_iterations(-1).build(), std::invalid_argument);
+        solver_options_lm_builder().with_function_tolerance(-1.).build(), std::invalid_argument);
+    EXPECT_THROW(
+        solver_options_lm_builder().with_max_iterations(-1).build(), std::invalid_argument);
 }
 
 TEST(LmStopping, FunctionToleranceIsHalfTheSquaredResidual)
@@ -117,9 +121,9 @@ TEST(LmStopping, FunctionToleranceIsHalfTheSquaredResidual)
                            .with_gradient_tolerance(0.)
                            .with_parameter_tolerance(0.)
                            .build();
-    vector_type not_yet_x = vec({0.5});
+    vector_type                not_yet_x = vec({0.5});
     levenberg_marquardt_solver solver(1, 1, residuals, jacobian);
-    const auto not_yet = solver.solve(not_yet_x, *equal);
+    const auto                 not_yet = solver.solve(not_yet_x, *equal);
     EXPECT_GE(not_yet.iterations, 1u);
     EXPECT_EQ(not_yet.status, native_convergence::function_converged);
     EXPECT_LT(0.5 * not_yet.residual_norm * not_yet.residual_norm, half_squared);
@@ -154,9 +158,8 @@ TEST(LmStopping, StationaryStartWithNonzeroResidual)
     {
         const auto options =
             solver_options_lm_builder().with_type(strategy).with_gradient_tolerance(0.).build();
-        vector_type x = vec({0., 0.});
-        const auto  run =
-            levenberg_marquardt_solver(2, 2, residuals, jacobian).solve(x, *options);
+        vector_type x   = vec({0., 0.});
+        const auto  run = levenberg_marquardt_solver(2, 2, residuals, jacobian).solve(x, *options);
         EXPECT_EQ(run.status, native_convergence::gradient_converged);
         EXPECT_EQ(run.iterations, 0u);
         EXPECT_EQ(x[0], 0.);
@@ -175,7 +178,7 @@ TEST(LmStopping, GradientToleranceBoundsJtR)
                              .with_function_tolerance(0.)
                              .with_gradient_tolerance(1.5)
                              .build();
-    vector_type x = vec({0.});
+    vector_type x   = vec({0.});
     const auto  run = levenberg_marquardt_solver(1, 1, residuals, jacobian).solve(x, *options);
     EXPECT_EQ(run.status, native_convergence::gradient_converged);
     EXPECT_EQ(run.iterations, 0u);
@@ -186,10 +189,10 @@ TEST(LmStopping, GradientToleranceBoundsJtR)
 
 TEST(LmTermination, IterationBudgetIsNotReportedAsConverged)
 {
-    const auto options = loose(strategy_enum::NIELSEN, 3).build();
-    vector_type x = vec({-1.2, 1.});
-    const auto run =
-        levenberg_marquardt_solver(2, 2, rosenbrock_residual, rosenbrock_jacobian).solve(x, *options);
+    const auto  options = loose(strategy_enum::NIELSEN, 3).build();
+    vector_type x       = vec({-1.2, 1.});
+    const auto  run     = levenberg_marquardt_solver(2, 2, rosenbrock_residual, rosenbrock_jacobian)
+                         .solve(x, *options);
     EXPECT_EQ(run.status, native_convergence::not_converged);
     EXPECT_EQ(run.iterations, 3u);
     EXPECT_EQ(run.message.find("converged"), std::string::npos) << run.message;
@@ -207,9 +210,9 @@ TEST(LmTermination, IterationBudgetIsNotReportedAsConverged)
 
 TEST(LmTermination, ZeroIterationBudgetLeavesTheStartingPoint)
 {
-    const auto options = loose(strategy_enum::NIELSEN, 0).build();
-    vector_type x = vec({0.1});
-    const auto run =
+    const auto  options = loose(strategy_enum::NIELSEN, 0).build();
+    vector_type x       = vec({0.1});
+    const auto  run =
         levenberg_marquardt_solver(1, 1, parabola_residual, parabola_jacobian).solve(x, *options);
     EXPECT_EQ(run.status, native_convergence::not_converged);
     EXPECT_EQ(run.iterations, 0u);
@@ -224,7 +227,7 @@ TEST(LmTermination, StallsWhenDampingIsAlreadyAtTheCeiling)
                              .with_damping_ceiling(1e-4)
                              .build();
     vector_type x = vec({0.1});
-    const auto run =
+    const auto  run =
         levenberg_marquardt_solver(1, 1, parabola_residual, parabola_jacobian).solve(x, *options);
     EXPECT_EQ(run.status, native_convergence::stalled);
     EXPECT_FALSE(run.converged());
@@ -274,7 +277,7 @@ TEST(LmSafeguards, NonFiniteTrialIsRejected)
                              .with_parameter_tolerance(0.)
                              .build();
     vector_type x = vec({0.1});
-    const auto run =
+    const auto  run =
         levenberg_marquardt_solver(1, 1, residuals, parabola_jacobian).solve(x, *options);
     EXPECT_TRUE(run.converged()) << run.message;
     EXPECT_NEAR(x[0], 1., 1e-8);
@@ -288,8 +291,8 @@ TEST(LmSafeguards, RelativeDifferenceAtZeroThrows)
         r[0] = x[0] - 2.;
         r[1] = 3. * x[1] - 9.;
     };
-    const auto options = solver_options_lm_builder().with_geodesic_acceleration(false).build();
-    vector_type x = vec({0., 0.});
+    const auto  options = solver_options_lm_builder().with_geodesic_acceleration(false).build();
+    vector_type x       = vec({0., 0.});
     EXPECT_ANY_THROW(levenberg_marquardt_solver(
         2, 2, residuals, nullptr, 1e-6, finite_difference_scale::relative)
             .solve(x, *options));
@@ -338,9 +341,8 @@ TEST(LmSafeguards, InactiveColumnStaysPut)
                                  .with_gradient_tolerance(0.)
                                  .with_parameter_tolerance(0.)
                                  .build();
-        vector_type x = vec({5., 7.});
-        const auto  run =
-            levenberg_marquardt_solver(2, 2, residuals, jacobian).solve(x, *options);
+        vector_type x   = vec({5., 7.});
+        const auto  run = levenberg_marquardt_solver(2, 2, residuals, jacobian).solve(x, *options);
         EXPECT_TRUE(run.converged()) << run.message;
         EXPECT_NEAR(x[0], 1., 1e-8);
         EXPECT_EQ(x[1], 7.);
@@ -365,9 +367,9 @@ TEST_P(LmCombination, ConvergesOnRosenbrock)
                              .with_gradient_tolerance(0.)
                              .with_parameter_tolerance(0.)
                              .build();
-    vector_type x = vec({-1.2, 1.});
-    const auto run =
-        levenberg_marquardt_solver(2, 2, rosenbrock_residual, rosenbrock_jacobian).solve(x, *options);
+    vector_type x   = vec({-1.2, 1.});
+    const auto  run = levenberg_marquardt_solver(2, 2, rosenbrock_residual, rosenbrock_jacobian)
+                         .solve(x, *options);
     EXPECT_EQ(run.status, native_convergence::function_converged) << run.message;
     EXPECT_NEAR(x[0], 1., 1e-6);
     EXPECT_NEAR(x[1], 1., 1e-6);
