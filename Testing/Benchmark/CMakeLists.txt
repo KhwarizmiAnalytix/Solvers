@@ -20,6 +20,12 @@ function(solvers_add_benchmark target)
   else()
     target_link_libraries(${target} PRIVATE Solvers benchmark::benchmark)
   endif()
+  if(WIN32 AND BUILD_SHARED_LIBS)
+    add_custom_command(
+      TARGET ${target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:Solvers>
+              $<TARGET_FILE_DIR:${target}>)
+  endif()
 endfunction()
 
 solvers_add_benchmark(BenchmarkNative)

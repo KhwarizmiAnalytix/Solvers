@@ -80,7 +80,8 @@ struct least_squares_problem
     // Optional: Derivatives along a curve for RNC-LM (analytic or Taylor AD).
     std::optional<rnc_derivative_function> curve_derivatives;
 
-    bounds bounds;
+    // Qualified so the member name does not hide the type (GCC -Wchanges-meaning).
+    solverslib::api::bounds bounds;
 };
 
 // General objective min f(x)
@@ -94,8 +95,8 @@ struct optimization_problem
     // Optional: gradient callback. If absent, finite differences will be used.
     std::optional<gradient_function> gradient;
 
-    bounds      bounds;
-    constraints constraints;
+    solverslib::api::bounds      bounds;
+    solverslib::api::constraints constraints;
 };
 
 
