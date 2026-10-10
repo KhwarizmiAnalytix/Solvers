@@ -1,5 +1,9 @@
 # Solvers
 
+[![CI](https://github.com/KhwarizmiAnalytix/Solvers/actions/workflows/ci.yml/badge.svg)](https://github.com/KhwarizmiAnalytix/Solvers/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/KhwarizmiAnalytix/Solvers/branch/main/graph/badge.svg)](https://codecov.io/gh/KhwarizmiAnalytix/Solvers)
+[![License: GPL v3 / Commercial](https://img.shields.io/badge/license-GPL--3.0--or--later%20%2F%20commercial-blue.svg)](LICENSE)
+
 High-performance native numerical solvers for C++, with optional integrations for automatic differentiation, bound-constrained optimization, and large-scale workloads.
 
 - **Native core** — root finding, least squares and L-BFGS with no external dependencies beyond Eigen.
