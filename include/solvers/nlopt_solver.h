@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 
+#include "detail/api_access.h"
 #include "detail/backend_status.h"
 #include "detail/eigen_support.h"
 #include "detail/support.h"
@@ -21,17 +22,20 @@ class solver_options_nlopt;
 // is false and solve() is a no-op the dispatcher never reaches.
 class nlopt_solver
 {
+    SOLVERS_FRIEND_API_SOLVE
+
 public:
     using objective_type = std::function<double(const vector_type&)>;
     using gradient_type  = std::function<void(const vector_type&, vector_type&)>;
 
+    SOLVER_API static bool is_supported();
+
+private:
     SOLVER_API nlopt_solver(size_t num_parameters,
         objective_type             objective,
         gradient_type              gradient,
         std::vector<double>        lower_bounds = {},
         std::vector<double>        upper_bounds = {});
-
-    SOLVER_API static bool is_supported();
 
     // Returns true when NLopt reports successful optimization.
     SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_nlopt& options);
@@ -41,7 +45,6 @@ public:
     SOLVER_API backend_solve_status solve_with_status(
         std::vector<double>& parameters, const solver_options_nlopt& options);
 
-private:
     size_t              num_parameters_;
     objective_type      objective_;
     gradient_type       gradient_;

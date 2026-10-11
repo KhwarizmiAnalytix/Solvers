@@ -14,7 +14,6 @@
 #include "solver_options/solver_options_gn.h"
 #include "solver_options/solver_options_lm.h"
 #include "solver_options/solver_options_rnc_lm.h"
-#include "solvers/rnc_lm_solver.h"
 
 using namespace solverslib;
 using namespace solverslib::api;
@@ -542,7 +541,7 @@ static void BM_SVI_RncLM_Order1(benchmark::State& state)
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve_rnc_lm(svi_rnc_problem, x0, *svi_rnc_order1));
+        benchmark::DoNotOptimize(solve(svi_rnc_problem, x0, *svi_rnc_order1));
 }
 BENCHMARK(BM_SVI_RncLM_Order1);
 
@@ -550,7 +549,7 @@ static void BM_SVI_RncLM_Order2(benchmark::State& state)
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve_rnc_lm(svi_rnc_problem, x0, *svi_rnc_order2));
+        benchmark::DoNotOptimize(solve(svi_rnc_problem, x0, *svi_rnc_order2));
 }
 BENCHMARK(BM_SVI_RncLM_Order2);
 
@@ -558,7 +557,7 @@ static void BM_SVI_RncLM_Order3(benchmark::State& state)
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve_rnc_lm(svi_rnc_problem, x0, *svi_rnc_order3));
+        benchmark::DoNotOptimize(solve(svi_rnc_problem, x0, *svi_rnc_order3));
 }
 BENCHMARK(BM_SVI_RncLM_Order3);
 
@@ -566,7 +565,7 @@ static void BM_SVI_RncLM_Order4(benchmark::State& state)
 {
     const auto& x0 = svi_problem_data().x0;
     for (auto _ : state)
-        benchmark::DoNotOptimize(solve_rnc_lm(svi_rnc_problem, x0, *svi_rnc_order4));
+        benchmark::DoNotOptimize(solve(svi_rnc_problem, x0, *svi_rnc_order4));
 }
 BENCHMARK(BM_SVI_RncLM_Order4);
 

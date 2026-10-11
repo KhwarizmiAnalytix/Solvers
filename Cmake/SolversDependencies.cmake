@@ -53,9 +53,32 @@ function(solvers_add_optional_dependencies)
         file(WRITE "${Eigen3_DIR}/Eigen3Config.cmake"
              "set(Eigen3_FOUND TRUE)\nset(EIGEN3_VERSION_STRING 3.4.0)\n"
         )
-        include(CMakePackageConfigHelpers)
-        write_basic_package_version_file(
-            "${Eigen3_DIR}/Eigen3ConfigVersion.cmake" VERSION 3.4.0 COMPATIBILITY SameMajorVersion
+        # Ceres requests Eigen3 3.3.4...5. A SameMajorVersion file rejects that
+        # range, because its upper bound is a different major, and CMake warns
+        # before Ceres retries without the range.
+        file(
+            WRITE "${Eigen3_DIR}/Eigen3ConfigVersion.cmake"
+            [=[
+set(PACKAGE_VERSION "3.4.0")
+set(PACKAGE_VERSION_COMPATIBLE FALSE)
+set(PACKAGE_VERSION_EXACT FALSE)
+if(PACKAGE_FIND_VERSION_RANGE)
+    if(PACKAGE_VERSION VERSION_GREATER_EQUAL PACKAGE_FIND_VERSION_MIN)
+        if(PACKAGE_FIND_VERSION_RANGE_MAX STREQUAL "INCLUDE"
+           AND PACKAGE_VERSION VERSION_LESS_EQUAL PACKAGE_FIND_VERSION_MAX)
+            set(PACKAGE_VERSION_COMPATIBLE TRUE)
+        elseif(NOT PACKAGE_FIND_VERSION_RANGE_MAX STREQUAL "INCLUDE"
+               AND PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION_MAX)
+            set(PACKAGE_VERSION_COMPATIBLE TRUE)
+        endif()
+    endif()
+elseif(NOT PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION)
+    set(PACKAGE_VERSION_COMPATIBLE TRUE)
+endif()
+if(PACKAGE_FIND_VERSION STREQUAL PACKAGE_VERSION)
+    set(PACKAGE_VERSION_EXACT TRUE)
+endif()
+]=]
         )
         # Force Ceres and abseil-cpp as static libraries: abseil shared DLLs on
         # Windows fail to link (undefined AbslInternalSpinLockDelay/Wake symbols).

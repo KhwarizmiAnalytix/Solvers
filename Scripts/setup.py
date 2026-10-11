@@ -772,6 +772,33 @@ class SolversFlags:
         return None
 
 
+def _solvers_test_executables(build_dir, module_name, ctest_tests=None):
+    """Return each test executable CTest labels with this module, once.
+
+    gtest_discover_tests registers many tests that share one binary and the
+    Solvers label. Coverage has to run each binary, not the first test entry.
+    """
+    import coverage_tool.common as common
+
+    tests = ctest_tests if ctest_tests is not None else common.discover_tests_via_ctest(build_dir)
+    module_lower = module_name.lower()
+    executables = []
+    seen = set()
+    for info in tests.values():
+        labels = [label.lower() for label in info.get("labels", [])]
+        if module_lower not in labels or not info.get("command"):
+            continue
+        exe = common.resolve_multi_config_artifact(Path(info["command"][0]))
+        if exe is None:
+            continue
+        key = str(exe.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        executables.append(exe)
+    return executables
+
+
 class SolversConfiguration:
     def __init__(self, args_list):
         # Check dependencies first
@@ -1171,30 +1198,60 @@ class SolversConfiguration:
             )
             return 1
 
-        # coverage_tool.find_library only looks for shared libraries (.dylib/.so).
-        # Solvers can be built as a static library; in that case the test executable
-        # carries all instrumented symbols (static linking), so fall back to it.
+        # coverage-tool runs one CTest entry per module. Every test here shares
+        # the Solvers label, so that entry is whichever binary CTest lists first
+        # and the rest of the suite never contributes profile data. A static
+        # build also has no libSolvers shared library for find_library to open;
+        # each test executable carries the instrumented objects.
         _orig_find_library = _ct_common.find_library
+        _orig_prepare = _ct_clang.prepare_llvm_coverage
 
         def _find_library_with_static_fallback(build_dir, lib_folder, module_name, dll_extension):
             result = _orig_find_library(build_dir, lib_folder, module_name, dll_extension)
             if result is not None:
                 return result
-            # Use the test executable CTest registers for the module (LABELS in
-            # Testing/Cxx/CMakeLists.txt) — it statically links the instrumented library.
-            matched = _ct_common.find_test_for_module(
-                _ct_common.discover_tests_via_ctest(build_dir),
-                module_name,
-                _ct_common.get_config()["test_exe_pattern"],
-            )
-            if matched and matched["command"]:
-                exe = _ct_common.resolve_multi_config_artifact(Path(matched["command"][0]))
-                if exe is not None:
-                    return str(exe)
-            return None
+            executables = _solvers_test_executables(build_dir, module_name)
+            return str(executables[0]) if executables else None
+
+        def _prepare_all_solvers_tests(
+            build_dir, module_name, binaries_list, profraw_list, ctest_tests=None
+        ):
+            executables = _solvers_test_executables(build_dir, module_name, ctest_tests)
+            if not executables:
+                return _orig_prepare(
+                    build_dir, module_name, binaries_list, profraw_list, ctest_tests
+                )
+
+            coverage_dir = Path(build_dir) / _ct_common.get_config()["coverage_report_dir"]
+            coverage_dir.mkdir(exist_ok=True)
+            wrote = False
+            for exe in executables:
+                profraw = coverage_dir / f"{exe.name}.profraw"
+                env = os.environ.copy()
+                env["LLVM_PROFILE_FILE"] = str(profraw)
+                subprocess.run(
+                    [str(exe)],
+                    env=env,
+                    check=False,
+                    cwd=str(exe.parent),
+                    capture_output=True,
+                    text=True,
+                )
+                if not profraw.exists():
+                    print(f"Warning: No profraw generated for {exe.name}")
+                    continue
+                with open(binaries_list, "a", encoding="utf-8") as binaries:
+                    print(f"Adding {exe} to binaries list")
+                    binaries.write(f"-object={exe}\n")
+                with open(profraw_list, "a", encoding="utf-8") as profiles:
+                    print(f"Adding {profraw} to profraw list")
+                    profiles.write(f"{profraw}\n")
+                wrote = True
+            return wrote
 
         _ct_common.find_library = _find_library_with_static_fallback
         _ct_clang.find_library = _find_library_with_static_fallback
+        _ct_clang.prepare_llvm_coverage = _prepare_all_solvers_tests
 
         try:
             coverage_result = get_coverage(
@@ -1209,6 +1266,7 @@ class SolversConfiguration:
         finally:
             _ct_common.find_library = _orig_find_library
             _ct_clang.find_library = _orig_find_library
+            _ct_clang.prepare_llvm_coverage = _orig_prepare
         if coverage_result == 0:
             print_status("Coverage collection completed successfully", "SUCCESS")
             self.summary_reporter.add_coverage_report(build_path, 0)

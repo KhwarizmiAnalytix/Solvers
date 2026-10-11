@@ -121,13 +121,15 @@ else()
   message(STATUS "IWYU will analyze include dependencies for XSigma targets only")
   message(STATUS "IWYU analysis will be logged to: ${IWYU_LOG_FILE}")
 
-  # Run configure header detection analysis
-  if(EXISTS "${CONFIGURE_DETECTOR_SCRIPT}")
+  # Run configure header detection analysis. The detector looks for XSigma's
+  # Library tree; this repository has no such directory.
+  set(_configure_scan_root "${PROJECT_SOURCE_DIR}/Library")
+  if(EXISTS "${CONFIGURE_DETECTOR_SCRIPT}" AND EXISTS "${_configure_scan_root}")
     message(STATUS "Running XSigma configure header detection...")
     execute_process(
       COMMAND
         ${CMAKE_COMMAND} -E env python "${CONFIGURE_DETECTOR_SCRIPT}"
-        "${PROJECT_SOURCE_DIR}/Library" --log-file "${PROJECT_BINARY_DIR}/configure_detection.log"
+        "${_configure_scan_root}" --log-file "${PROJECT_BINARY_DIR}/configure_detection.log"
         --report-file "${PROJECT_BINARY_DIR}/configure_analysis_report.txt" --recursive
       WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
       RESULT_VARIABLE CONFIGURE_DETECTION_RESULT
@@ -145,6 +147,8 @@ else()
     endif()
 
     message(STATUS "Configure analysis report: ${PROJECT_BINARY_DIR}/configure_analysis_report.txt")
+  elseif(EXISTS "${CONFIGURE_DETECTOR_SCRIPT}")
+    message(STATUS "Configure header detection skipped: ${_configure_scan_root} is not in this project")
   else()
     message(WARNING "Configure detector script not found: ${CONFIGURE_DETECTOR_SCRIPT}")
   endif()

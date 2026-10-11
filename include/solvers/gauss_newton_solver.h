@@ -7,6 +7,7 @@
 #include <limits>
 #include <stdexcept>
 
+#include "detail/api_access.h"
 #include "detail/native_result.h"
 #include "detail/support.h"
 
@@ -32,6 +33,8 @@ class solver_options_gn;
  */
 class gauss_newton_solver
 {
+    SOLVERS_FRIEND_API_SOLVE
+
     using scalar_type = double;
 
     function_type function_;
@@ -46,7 +49,6 @@ class gauss_newton_solver
     mutable vector_type           fd_residual_;
     mutable vector_type           fd_base_;
 
-public:
     SOLVER_API gauss_newton_solver(size_t num_parameters,
         size_t                            num_residuals,
         function_type                     function,

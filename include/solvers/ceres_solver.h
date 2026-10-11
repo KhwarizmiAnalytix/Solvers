@@ -2,6 +2,7 @@
 #include <functional>
 #include <vector>
 
+#include "detail/api_access.h"
 #include "detail/support.h"
 
 namespace solverslib
@@ -11,7 +12,12 @@ class solver_options_ceres;
 
 class ceres_solver
 {
+    SOLVERS_FRIEND_API_SOLVE
+
 public:
+    SOLVER_API static bool is_supported();
+
+private:
     // Constructor with explicit Jacobian callback.
     SOLVER_API ceres_solver(size_t num_parameters,
         size_t                              num_residuals,
@@ -28,9 +34,6 @@ public:
         const solver_options_ceres&    options,
         void*                          summary_ptr);  // ceres::Solver::Summary*
 
-    SOLVER_API static bool is_supported();
-
-private:
     function_type              cost_function_;
     jacobian_type              jacobian_callback_;
     std::vector<double>        lower_bounds_;

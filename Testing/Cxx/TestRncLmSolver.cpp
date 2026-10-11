@@ -6,7 +6,6 @@
 
 #include "api/dispatch.h"
 #include "solver_options/solver_options_rnc_lm.h"
-#include "solvers/rnc_lm_solver.h"
 
 using namespace solverslib;
 using namespace solverslib::api;
@@ -128,7 +127,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().with_order(0).build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::invalid_problem);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::invalid_problem);
     }
     {
         SCOPED_TRACE("InvalidOptionsOrderTooHigh");
@@ -136,7 +135,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().with_order(5).build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::invalid_problem);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::invalid_problem);
     }
     {
         SCOPED_TRACE("InvalidOptionsAcceptanceThresholdAtOne");
@@ -144,7 +143,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().with_acceptance_threshold(1.0).build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::invalid_problem);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::invalid_problem);
     }
     {
         SCOPED_TRACE("NoResidualsCallback");
@@ -158,7 +157,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::invalid_problem);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::invalid_problem);
     }
     {
         SCOPED_TRACE("WrongInitialGuessSize");
@@ -166,7 +165,7 @@ TEST(RncLm, Solve)
         vector_type x0(3);
         x0 << 1.0, 2.0, 3.0;
         const auto opts = solver_options_rnc_lm_builder().build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::invalid_problem);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::invalid_problem);
     }
     {
         SCOPED_TRACE("NaNInitialGuess");
@@ -174,7 +173,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << kNaN;
         const auto opts = solver_options_rnc_lm_builder().build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::invalid_problem);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::invalid_problem);
     }
     {
         SCOPED_TRACE("BoundsNotSupported");
@@ -183,7 +182,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::unsupported_capability);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::unsupported_capability);
     }
     {
         SCOPED_TRACE("BadBaseDerivativesWrongSize");
@@ -201,7 +200,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().with_order(1).build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::numerical_failure);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::numerical_failure);
     }
     {
         SCOPED_TRACE("BadBaseDerivativesNaN");
@@ -225,7 +224,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().with_order(1).build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::numerical_failure);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::numerical_failure);
     }
     {
         SCOPED_TRACE("ConvergedAtStart");
@@ -240,7 +239,7 @@ TEST(RncLm, Solve)
 
         const auto opts =
             solver_options_rnc_lm_builder().with_function_tolerance(1e-6).with_order(1).build();
-        const auto result = solve_rnc_lm(p, target, *opts);
+        const auto result = solve(p, target, *opts);
 
         EXPECT_EQ(result.status, solver_status::converged);
         EXPECT_EQ(result.iterations, 0u);
@@ -251,7 +250,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 5.0;
 
-        const auto result = solve_rnc_lm(p, x0, *tight_opts(1));
+        const auto result = solve(p, x0, *tight_opts(1));
 
         EXPECT_EQ(result.status, solver_status::converged);
         EXPECT_NEAR(result.parameters[0], 2.0, 1e-9);
@@ -264,9 +263,9 @@ TEST(RncLm, Solve)
         auto        p = make_linear_1d(2.0);
         vector_type x0(1);
         x0 << 5.0;
-        EXPECT_EQ(solve_rnc_lm(p, x0, *tight_opts(2)).status, solver_status::converged);
-        EXPECT_EQ(solve_rnc_lm(p, x0, *tight_opts(3)).status, solver_status::converged);
-        EXPECT_EQ(solve_rnc_lm(p, x0, *tight_opts(4)).status, solver_status::converged);
+        EXPECT_EQ(solve(p, x0, *tight_opts(2)).status, solver_status::converged);
+        EXPECT_EQ(solve(p, x0, *tight_opts(3)).status, solver_status::converged);
+        EXPECT_EQ(solve(p, x0, *tight_opts(4)).status, solver_status::converged);
     }
     {
         SCOPED_TRACE("RosenbrockOrder3");
@@ -291,7 +290,7 @@ TEST(RncLm, Solve)
                                 .with_order(3)
                                 .with_verbose(true)
                                 .build();
-        const auto result = solve_rnc_lm(p, x0, *opts);
+        const auto result = solve(p, x0, *opts);
 
         EXPECT_EQ(result.status, solver_status::converged);
         EXPECT_NEAR(result.parameters[0], 1.0, 1e-4);
@@ -311,7 +310,7 @@ TEST(RncLm, Solve)
                                 .with_parameter_tolerance(1.0)
                                 .with_order(1)
                                 .build();
-        const auto result = solve_rnc_lm(p, x0, *opts);
+        const auto result = solve(p, x0, *opts);
         EXPECT_EQ(result.status, solver_status::converged);
         EXPECT_NE(result.message.find("parameter tolerance"), std::string::npos);
     }
@@ -328,7 +327,7 @@ TEST(RncLm, Solve)
                               .with_parameter_tolerance(0.0)
                               .with_order(1)
                               .build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::max_iterations);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::max_iterations);
     }
     {
         SCOPED_TRACE("ExhaustedDamping");
@@ -356,7 +355,7 @@ TEST(RncLm, Solve)
                                 .with_function_tolerance(0.0)
                                 .with_gradient_tolerance(0.0)
                                 .build();
-        const auto result = solve_rnc_lm(p, x0, *opts);
+        const auto result = solve(p, x0, *opts);
 
         EXPECT_EQ(result.status, solver_status::numerical_failure);
         EXPECT_NE(result.message.find("exhausted damping"), std::string::npos);
@@ -378,7 +377,7 @@ TEST(RncLm, Solve)
         vector_type x0(1);
         x0 << 3.0;
         const auto opts = solver_options_rnc_lm_builder().with_order(1).build();
-        EXPECT_THROW(solve_rnc_lm(p, x0, *opts), std::runtime_error);
+        EXPECT_THROW(solve(p, x0, *opts), std::runtime_error);
     }
     {
         SCOPED_TRACE("InvalidDerivativesAfterAcceptedStep");
@@ -421,7 +420,7 @@ TEST(RncLm, Solve)
                                 .with_parameter_tolerance(0.0)
                                 .with_order(1)
                                 .build();
-        const auto result = solve_rnc_lm(p, x0, *opts);
+        const auto result = solve(p, x0, *opts);
 
         EXPECT_EQ(result.status, solver_status::numerical_failure);
         EXPECT_NE(result.message.find("accepted point"), std::string::npos);
@@ -465,6 +464,6 @@ TEST(RncLm, Solve)
                               .with_parameter_tolerance(0.0)
                               .with_order(2)
                               .build();
-        EXPECT_EQ(solve_rnc_lm(p, x0, *opts).status, solver_status::max_iterations);
+        EXPECT_EQ(solve(p, x0, *opts).status, solver_status::max_iterations);
     }
 }

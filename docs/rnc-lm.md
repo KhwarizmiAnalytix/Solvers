@@ -39,8 +39,8 @@ The moving-tangent contributions distinguish RNC-LM from Brooks’s
 ## Implementation choices and limits
 
 The public interface is `api::solve` with
-`api::algorithm::riemann_normal_coordinate_lm`. The native entry point is
-`solve_rnc_lm`. Both use the same implementation.
+`api::algorithm::riemann_normal_coordinate_lm`. That call is the only entry
+into the native kernel.
 
 This is a dense, CPU implementation. The Taylor adapter uses nested forward AD
 and materializes the directional Jacobian derivatives. It evaluates the same

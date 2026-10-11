@@ -6,6 +6,7 @@
 #include <limits>
 #include <stdexcept>
 
+#include "detail/api_access.h"
 #include "detail/native_result.h"
 #include "detail/support.h"
 
@@ -14,6 +15,8 @@ namespace solverslib
 class solver_options_bfgs;
 class lbfgs_solver
 {
+    SOLVERS_FRIEND_API_SOLVE
+
     using size_type   = size_t;
     using scalar_type = double;
 
@@ -38,7 +41,6 @@ class lbfgs_solver
 
     native_result run(vector_type& parameters, const solver_options_bfgs& options) const;
 
-public:
     SOLVER_API lbfgs_solver(size_type num_parameters,
         size_type                     num_residuals,
         function_type                 function,

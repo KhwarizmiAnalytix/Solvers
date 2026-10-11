@@ -44,7 +44,7 @@ bool valid_derivatives(const rnc_curve_derivatives& d, int order, index_type m, 
 }
 }  // namespace
 
-solver_result solve_rnc_lm(
+solver_result rnc_lm_solver::run(
     const least_squares_problem& problem,
     const vector_type&           initial_guess,
     const solver_options_rnc_lm& cfg)

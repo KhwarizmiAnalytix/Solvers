@@ -64,13 +64,6 @@ enum class dense_linear_algebra_library_enum : int16_t
     INVALID = -1
 };
 
-enum class logging_enum : int16_t
-{
-    SILENT                  = 0,
-    PER_MINIMIZER_ITERATION = 1,
-    INVALID                 = -1
-};
-
 enum class minimizer_enum : int16_t
 {
     LINE_SEARCH  = 0,
@@ -114,20 +107,6 @@ enum class dogleg_enum : int16_t
     INVALID            = -1
 };
 
-enum class callback_return_enum : int16_t
-{
-    SOLVER_CONTINUE              = 0,
-    SOLVER_ABORT                 = 1,
-    SOLVER_TERMINATE_SUCCESSFULLY = 2,
-    INVALID                      = -1
-};
-
-enum class dimension_enum : int16_t
-{
-    DYNAMIC = 0,
-    INVALID = -1
-};
-
 enum class numeric_diff_method_enum : int16_t
 {
     CENTRAL = 0,
@@ -141,13 +120,6 @@ enum class line_search_interpolation_enum : int16_t
     BISECTION = 0,
     QUADRATIC = 1,
     CUBIC     = 2,
-    INVALID   = -1
-};
-
-enum class covariance_algorithm_enum : int16_t
-{
-    DENSE_SVD = 0,
-    SPARSE_QR = 1,
     INVALID   = -1
 };
 

@@ -250,7 +250,7 @@ solver_result solve(const least_squares_problem& problem,
 
         case algorithm::riemann_normal_coordinate_lm:
         {
-            return solve_rnc_lm(
+            return rnc_lm_solver::run(
                 problem, initial_guess, static_cast<const solver_options_rnc_lm&>(options));
         }
 

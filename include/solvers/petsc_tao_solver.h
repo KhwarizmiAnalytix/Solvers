@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 
+#include "detail/api_access.h"
 #include "detail/backend_status.h"
 #include "detail/eigen_support.h"
 #include "detail/support.h"
@@ -20,12 +21,17 @@ class solver_options_petsc;
 // SOLVERS_HAS_PETSC is set; otherwise is_supported() is false.
 class petsc_tao_solver
 {
+    SOLVERS_FRIEND_API_SOLVE
+
 public:
     using objective_type = std::function<double(const vector_type&)>;
     using gradient_type  = std::function<void(const vector_type&, vector_type&)>;
     using hessian_type   = std::function<void(const vector_type&, matrix_type&)>;
     using residual_type  = std::function<void(const vector_type&, vector_type&)>;
 
+    SOLVER_API static bool is_supported();
+
+private:
     // General objective mode: minimize f(x) with optional Hessian and bounds.
     SOLVER_API petsc_tao_solver(size_t num_parameters,
         objective_type                 objective,
@@ -42,8 +48,6 @@ public:
         std::vector<double>            lower_bounds = {},
         std::vector<double>            upper_bounds = {});
 
-    SOLVER_API static bool is_supported();
-
     // Returns true when TAO reports a converged termination reason.
     SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_petsc& options);
 
@@ -52,7 +56,6 @@ public:
     SOLVER_API backend_solve_status solve_with_status(
         std::vector<double>& parameters, const solver_options_petsc& options);
 
-private:
     bool                is_least_squares_;
     size_t              num_parameters_;
     size_t              num_residuals_;
