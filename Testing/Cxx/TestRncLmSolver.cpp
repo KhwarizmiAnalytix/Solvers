@@ -298,6 +298,46 @@ TEST(RncLm, Solve)
         EXPECT_GT(*result.rejected_steps, 0u);
     }
     {
+        SCOPED_TRACE("RosenbrockOrder3AllOptionsSet");
+        least_squares_problem p;
+        p.num_parameters = 2;
+        p.num_residuals  = 2;
+        p.residuals      = [](const vector_type& x, vector_type& r)
+        {
+            r.resize(2);
+            r[0] = 10.0 * (x[1] - x[0] * x[0]);
+            r[1] = 1.0 - x[0];
+        };
+        p.curve_derivatives = std::make_optional(rosenbrock_curve_deriv());
+
+        vector_type x0(2);
+        x0 << -1.2, 1.0;
+
+        const auto opts   = solver_options_rnc_lm_builder()
+                                .with_max_iterations(1500)
+                                .with_function_tolerance(1e-10)
+                                .with_gradient_tolerance(1e-10)
+                                .with_parameter_tolerance(1e-13)
+                                .with_verbose(true)
+                                .with_log_file("rnc_lm_all_options.log")
+                                .with_order(3)
+                                .with_max_curve_trials(6)
+                                .with_acceptance_threshold(1e-3)
+                                .with_contraction_min(0.2)
+                                .with_contraction_max(0.6)
+                                .with_initial_damping(1e-3)
+                                .with_damping_floor(1e-14)
+                                .with_damping_ceiling(1e11)
+                                .with_diagonal_scaling_floor(1e-11)
+                                .build();
+        const auto result = solve(p, x0, *opts);
+
+        EXPECT_EQ(result.status, solver_status::converged);
+        EXPECT_NEAR(result.parameters[0], 1.0, 1e-4);
+        EXPECT_NEAR(result.parameters[1], 1.0, 1e-4);
+        EXPECT_EQ(result.algorithm, algorithm::riemann_normal_coordinate_lm);
+    }
+    {
         SCOPED_TRACE("ParameterToleranceStop");
         auto        p = make_linear_1d(2.0);
         vector_type x0(1);

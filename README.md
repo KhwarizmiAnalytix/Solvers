@@ -2,320 +2,333 @@
 
 [![CI](https://github.com/KhwarizmiAnalytix/Solvers/actions/workflows/ci.yml/badge.svg)](https://github.com/KhwarizmiAnalytix/Solvers/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/KhwarizmiAnalytix/Solvers/branch/master/graph/badge.svg)](https://codecov.io/gh/KhwarizmiAnalytix/Solvers)
-[![License: GPL v3 / Commercial](https://img.shields.io/badge/license-GPL--3.0--or--later%20%2F%20commercial-blue.svg)](LICENSE)
 
-High-performance native numerical solvers for C++, with optional integrations for automatic differentiation, bound-constrained optimization, and large-scale workloads.
+C++ numerical solvers for scalar roots, nonlinear least squares, and scalar-objective optimization. The native solvers use Eigen for dense linear algebra and the bundled Logging library for diagnostics. Ceres, Ipopt, NLopt, and PETSc/TAO are optional backends.
 
-- **Native core** — root finding, least squares and L-BFGS with no external dependencies beyond Eigen.
-- **Advanced backends** — optional Ipopt, PETSc/TAO, POUNDERS, and Ceres integrations where they add capabilities the native layer cannot cover.
-- **Quant & scientific focus** — designed for calibration, bootstrapping, and pricing workloads.
+## Implemented solvers
 
----
+| Problem | Implementation | Options / entry point |
+| --- | --- | --- |
+| Scalar roots | Bisection, false position, Ridders, Brent, Dekker, Newton-Raphson, secant | `detail::run_*` with `root_finding_options` |
+| Polynomial roots | Quadratic, cubic, and quartic convenience functions | `polynomial_solver` |
+| Nonlinear least squares | Native Levenberg–Marquardt | `solver_options_lm_builder` |
+| Nonlinear least squares | Native Gauss–Newton with backtracking | `solver_options_gn_builder` |
+| Nonlinear least squares | Native Riemann-normal-coordinate LM (RNC-LM), orders 1–4 | `solver_options_rnc_lm_builder` |
+| Scalar-objective optimization | Native L-BFGS | `solver_options_bfgs_builder` |
+| Least squares with optional box bounds | Ceres | `solver_options_ceres_builder` |
+| Least squares or scalar objectives with optional box bounds | Ipopt | `solver_options_ipopt_builder` |
+| Least squares or scalar objectives | NLopt: L-BFGS, MMA, SLSQP, CCSAQ, Nelder–Mead, Subplex | `solver_options_nlopt_builder` |
+| Least squares or scalar objectives | PETSc/TAO: POUNDERS, BRGN, NLS, NTR, NTL, LMVM, BQNLS, BNLS | `solver_options_petsc_builder` |
 
-## What It Solves
+All names above live in `solverslib`, except the unified problem and result types, which live in `solverslib::api`. Least-squares and optimization problems are passed to `api::solve(problem, initial_guess, options)`.
 
-| Problem | Solver | Engine |
-|---|---|---|
-| Scalar root finding | Brent, Newton, Ridders, Bisection, Secant, Dekker, False Position | Native |
-| Polynomial roots | Companion-matrix solver | Native |
-| Nonlinear least squares | Levenberg-Marquardt, Gauss-Newton | Native |
-| Unconstrained optimization | L-BFGS | Native |
-| Bound-constrained scalar optimization | Interior-point method | Ipopt |
-| Large-scale optimization | Newton-Krylov, trust-region | PETSc/TAO |
-| Derivative-free least squares | POUNDERS | PETSc/TAO |
+## Build
 
----
-
-## Architecture
-
-```text
-                        Problem
-                           │
-              ┌────────────┴─────────────┐
-              │                          │
-       Least Squares               General Objective
-              │                          │
-       Derivative source?          Bounds / constraints?
-         /          \               /         \
-       yes           no           yes          no
-        │             │            │            │
-   Large scale?   PETSc built?    Ipopt     Large scale?
-     /      \      /     \                    /      \
-   yes      no   yes      no                yes       no
-    │        │    │        │                 │         │
-   TAO   Native  POUNDERS  Native LM       TAO    Native L-BFGS
-         LM/GN             (finite diff.)
-```
-
-Selection is table-driven: each (backend, algorithm) pair is one row with the capabilities it supports, and automatic mode only picks rows whose backend is built into this binary. A request nothing can serve is reported as `unsupported_capability` naming the missing capability.
-
-Scalar root-finding problems use the native root-solving layer directly.
-
-The common API rejects capabilities a selected backend cannot enforce. Ipopt is
-currently used for box bounds; general nonlinear constraints are reported as
-`unsupported_capability` until constraint callback contracts are implemented.
-
----
-
-## Quick Start
-
-### Root Finding
-
-```cpp
-#include <solvers/root_finding_algorithms.h>
-
-double root = 0.0;
-
-auto options = solverslib::root_finding_options_builder()
-    .with_tolerance_function(1e-12)
-    .with_tolerance_parameter(1e-12)
-    .with_max_iterations(100)
-    .build();
-
-auto f = [](double x) { return x * x - 2.0; };
-
-bool converged = solverslib::root_finding_algorithms::brent(
-    f, 0.0, 2.0, root, options);
-```
-
-For a status, counts and the best estimate instead of a `bool`, use the structured form:
-
-```cpp
-#include <api/roots.h>
-
-using namespace solverslib::api;
-
-root_options opts;
-opts.max_iterations = 200;
-const root_result result = find_root(root_method::brent, scalar_function(f), 0.0, 2.0, opts);
-if (result.converged()) {
-    // result.root, result.residual, result.iterations, result.evaluations
-}
-
-// Every real root of x^3 - 6x^2 + 11x - 6, then an explicit selection policy.
-const auto roots = real_roots_cubic(-6.0, 11.0, -6.0);          // {1, 2, 3}
-const auto first = smallest_positive_root(roots.roots);          // 1
-```
-
-### Least-Squares Calibration
-
-Everything goes through `api::solve`. Describe the problem, call `solve`, and read one structured result.
-
-```cpp
-#include "api/dispatch.h"
-
-using namespace solverslib;
-using namespace solverslib::api;
-
-least_squares_problem problem;
-problem.num_parameters = num_parameters;
-problem.num_residuals  = num_residuals;
-problem.residuals = [](const vector_type& params, vector_type& r) {
-    // r_i = model(params, market_i) - market_i
-};
-// Optional: without it the solver differentiates numerically.
-problem.set_jacobian([](const vector_type& params, matrix_type& J) {
-    // fill J with dr_i / dparam_j
-});
-
-solver_options options;
-options.max_iterations = 100;
-
-const solver_result result = solve(problem, initial_guess, options);
-if (result.converged()) {
-    // result.parameters holds the calibrated values
-}
-```
-
-All Eigen usage is confined to `include/detail/eigen_support.h` (types, sizing helpers, dense factorizations), so the linear-algebra backend is a one-file change; solver code relies only on the member API of `vector_type`/`matrix_type`.
-
-A problem carries one derivative slot (a provider): `set_jacobian(...)` for a callback, `derivatives(auto_diff())` for Ceres AD, `set_jacobian_provider(finite_difference(...))` for a custom stencil. Algorithm-specific tuning lives next to the common options, for example `options.lm` for the native Levenberg–Marquardt damping, geodesic and variant controls.
-
-`solver_result::status` is one closed vocabulary across backends: `converged`, `max_iterations` (budget used up, iterate usable), `stalled` (no acceptable step; the last accepted point is valid), and the failure statuses. Work counters (`residual_evaluations`, `jacobian_evaluations`, `accepted_steps`, ...) are `std::optional`: an empty value means the backend does not report it, an engaged zero means it measured zero.
-
-> The `solver_options_*` builders and the native kernel classes (`levenberg_marquardt_solver`, `gauss_newton_solver`, `lbfgs_solver`) are the internal layer behind `api::solve`. New options are only added to `api::solver_options`.
-
-### Automatic Differentiation with Ceres
-
-For problems where hand-coded Jacobians are expensive or error-prone, define a templated residual functor and attach it to a least-squares problem. Ceres uses Jet-based forward automatic differentiation to compute the Jacobian.
-
-```cpp
-#include <iostream>
-#include "api/dispatch.h"
-#include "solvers/integrations/autodiff_provider.h"
-
-struct MyResiduals {
-    template <typename T>
-    bool operator()(const T* parameters, T* residuals) const {
-        residuals[0] = parameters[0] * parameters[0] - T(4.0);
-        return true;
-    }
-};
-
-int main() {
-    using namespace solverslib;
-    using namespace solverslib::api;
-
-    auto problem = least_squares(MyResiduals{}, 1, 1);
-    problem.derivatives(api::auto_diff());
-
-    solver_options options;
-    options.backend = backend::ceres;
-    options.derivatives = derivative_mode::automatic_differentiation;
-
-    vector_type initial_guess(1);
-    initial_guess[0] = 3.0;
-
-    const solver_result result = solve(problem, initial_guess, options);
-    if (!result.converged()) {
-        std::cerr << result.message << '\n';
-        return 1;
-    }
-    std::cout << "solution: " << result.parameters[0] << '\n';
-}
-```
-
-The convenience factory stores the model and dimensions; `derivatives(auto_diff())` creates the Ceres provider. The Ceres backend must be enabled at configure time.
-
-**Derivative policy** controls how Jacobians are computed:
-- `automatic` (default): uses the attached provider's own source (supplied, AD or finite difference); with no provider, numerical differentiation
-- `supplied`: requires a callback or analytic provider; `invalid_problem` if missing
-- `automatic_differentiation`: requires an AD provider (Ceres); `unsupported_capability` if unavailable
-- `finite_difference`: forces numerical differentiation even if other sources exist
-
-Every backend resolves the policy the same way, and `solver_result::effective_derivative_source` reports what was actually used.
-
-**Enable Ceres AD** with:
-```bash
-cmake -S . -B build -DSOLVERS_ENABLE_CERES=ON
-```
-
-This requires Ceres as a dependency; see [ceres-solver.org](http://ceres-solver.org).
-
----
-
-## Why Solvers
-
-- **Native first** — root finding, LM, Gauss-Newton and L-BFGS are implemented directly. No external optimizer needed for common calibration problems.
-- **No redundant backends** — third-party libraries are added only when they introduce a genuinely new capability (constraints, large-scale, derivative-free).
-- **Lightweight core** — a native-only build requires only C++17, CMake, and Eigen.
-- **Common results** — the unified API reports convergence status, iterations, objective values, and diagnostics available from the selected backend.
-
----
-
-## Quant Finance Use Cases
-
-| Use Case | Recommended Solver |
-|---|---|
-| Yield-curve / hazard-rate bootstrap | Brent / Newton |
-| Implied volatility | Brent / Newton |
-| Vol-surface calibration | Native LM / Gauss-Newton |
-| Interest-rate model calibration | Native LM / L-BFGS |
-| Box-constrained parameter calibration | Ipopt |
-| Large-scale PDE calibration | PETSc/TAO |
-| Expensive model without derivatives | POUNDERS |
-
----
-
-## Performance
-
-All benchmarks are sections of one executable, `SolversBenchmark`
-(`Testing/Cxx/Benchmark*.cpp`), built with `-DSOLVERS_ENABLE_BENCHMARKS=ON`. Every
-section times the same way (warmup, then best-of and median in microseconds) and prints
-the same table layout:
-
-| Section | What it measures |
-|---|---|
-| `solvers` | every dispatch path of the decision tree across native, Ceres, Ipopt and PETSc/TAO |
-| `root-finders` | every root-finding method, plus LM on the same scalar problems |
-| `lm-linear-solvers` | native LM under `normal_ldlt` and `augmented_qr` |
-| `rnc-lm` | RNC-LM on the generalized Rosenbrock valley, by curve order |
-| `svi-calibration` | the EURO STOXX 50 raw-SVI example from [Ferhati (2020)](https://doi.org/10.2139/ssrn.3543766) with native, Ceres, Ipopt, PETSc/TAO, and POUNDERS |
-| `ceres-autodiff` | analytic, Ceres AD, finite-difference and native-LM-with-AD derivatives (Ceres builds only) |
+Clone with submodules, including the nested dependencies of Logging:
 
 ```bash
-cmake --build build --target SolversBenchmark
-./build/Testing/Cxx/SolversBenchmark                    # every section
-./build/Testing/Cxx/SolversBenchmark root-finders svi-calibration
-./build/Testing/Cxx/SolversBenchmark --list
-```
-
-See the dedicated SVI calibration example in [svi_calib.md](svi_calib.md).
-
----
-
-## Installation
-
-### Native-only build (no external dependencies beyond Eigen)
-
-```bash
-git clone https://github.com/KhwarizmiAnalytix/Solvers.git
+git clone --recurse-submodules https://github.com/KhwarizmiAnalytix/Solvers.git
 cd Solvers
+# For an existing checkout:
+git submodule update --init --recursive
+```
+
+The top-level project requires CMake 3.20 or newer and declares C++17. The bundled Logging dependency defaults to C++20 for its own compilation, so the default build needs a compiler with C++20 support. Eigen and Logging are required bundled dependencies; GoogleTest is bundled and used when testing is enabled. The Python scripts are build tools, not Python bindings for the library.
+
+### Native build
+
+```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-### Optional: advanced backends
+Direct CMake builds default to static libraries, enable tests when Solvers is the top-level project, and disable optional solver backends and benchmarks. With a multi-configuration generator such as Xcode or Visual Studio, add `--config Release` to the build command and `-C Release` to CTest.
+
+The repository's setup helper, also used by CI, accepts dotted commands. Run it from `Scripts/`:
 
 ```bash
-cmake -S . -B build \
-    -DSOLVERS_ENABLE_CERES=ON \
-    -DSOLVERS_ENABLE_IPOPT=ON \
-    -DSOLVERS_ENABLE_PETSC=ON
+cd Scripts
+python3 setup.py --help
+python3 setup.py config.build.test.release.static
 ```
-
-- **Ipopt** requires BLAS/LAPACK and a sparse linear solver (e.g. MUMPS). The current adapter supports box bounds; general nonlinear constraints are reported as unsupported. See [coin-or/Ipopt](https://github.com/coin-or/Ipopt).
-- **PETSc/TAO** includes TAO and POUNDERS. On macOS: `brew install petsc`. See [petsc/petsc](https://github.com/petsc/petsc).
-- **Ceres** enables the automatic-differentiation integration shown above. See [ceres-solver.org](http://ceres-solver.org).
-
-Advanced backends are not required for the native core.
-
----
-
-## Project Status
-
-### Available now
-
-- Scalar root finding (Brent, Newton, Ridders, Bisection, Secant, Dekker, False Position)
-- Polynomial solver
-- Levenberg-Marquardt
-- Gauss-Newton
-- L-BFGS
-- Unified problem/solve API with structured results
-- Derivative providers for supplied, automatic-differentiation, and finite-difference paths
-- Capability validation for bounds, nonlinear constraints, backend/algorithm selection, and invalid inputs
-- Ceres automatic differentiation for templated least-squares residuals when `SOLVERS_ENABLE_CERES=ON`
 
 ### Optional backends
 
-- Ceres, Ipopt, PETSc/TAO, and POUNDERS adapters are implemented but optional; they require their system dependencies and return `backend_unavailable` when not compiled in.
+Enable only the backends you need:
 
-### In development
+```bash
+cmake -S . -B build-backends -DCMAKE_BUILD_TYPE=Release \
+    -DSOLVERS_ENABLE_CERES=ON \
+    -DSOLVERS_ENABLE_IPOPT=ON \
+    -DSOLVERS_ENABLE_NLOPT=ON \
+    -DSOLVERS_ENABLE_PETSC=ON
+cmake --build build-backends --parallel
+ctest --test-dir build-backends --output-on-failure
+```
 
-- Parameter and residual scaling
-- Reproducible benchmark suite with CI regression tracking
+| CMake option | Dependency discovery |
+| --- | --- |
+| `SOLVERS_ENABLE_CERES` | Builds `ThirdParty/ceres` (requires CMake 3.22 or newer) unless the parent project already provides `Ceres::ceres` |
+| `SOLVERS_ENABLE_IPOPT` | System library through pkg-config module `ipopt` |
+| `SOLVERS_ENABLE_NLOPT` | System library through pkg-config module `nlopt` |
+| `SOLVERS_ENABLE_PETSC` | System library through pkg-config module `PETSc`, plus MPI's C component |
+| `SOLVERS_ENABLE_BENCHMARKS` | System Google Benchmark through pkg-config or `find_package(benchmark)` |
 
-The common API explicitly reports unsupported capabilities. Positive
-`max_function_evaluations` budgets are rejected until every backend can account
-for evaluations from line searches and finite-difference derivatives
-consistently.
+Other top-level flags are `SOLVERS_ENABLE_TESTING`, `BUILD_SHARED_LIBS`, `SOLVERS_ENABLE_SANITIZER` (address and undefined behavior), `SOLVERS_ENABLE_COVERAGE`, `SOLVERS_ENABLE_CLANGTIDY`, and `SOLVERS_ENABLE_IWYU`.
 
----
+A request for a compiled-out optional backend returns `solver_status::backend_unavailable`. POUNDERS is a TAO algorithm, enabled by `SOLVERS_ENABLE_PETSC`; it has no separate build flag.
 
-## Documentation
+### CMake integration and installation
 
-- `docs/` — architecture and backend design notes.
+For a source checkout with initialized submodules:
 
----
+```cmake
+add_subdirectory(path/to/Solvers)
+target_link_libraries(my_app PRIVATE Solvers::Solvers)
+```
 
-## License
+To install a native build:
 
-See `LICENSE`.
+```bash
+cmake --install build --prefix "$PWD/install"
+```
 
-Native LM mathematics, literature references, advanced options, and review findings:
-[Levenberg–Marquardt](docs/levenberg-marquardt.md).
+The exported package is discoverable with `-DCMAKE_PREFIX_PATH=/path/to/Solvers/install`:
 
-[Riemann-normal-coordinate LM (RNC-LM)](docs/rnc-lm.md) implements the
-2026 higher-order curve method, with Taylor automatic differentiation and
-curve orders 1–4 through the unified solve API.
+```cmake
+find_package(Solvers CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE Solvers::Solvers)
+```
+
+Installation includes solver headers, the library, Eigen headers, and Logging's package files. **Current packaging limitation:** the default static installation omits Logging's Loguru link dependency. Package discovery succeeds, but consumer executables fail to link with unresolved `loguru::` symbols. Use the source-based `add_subdirectory` integration above until that dependency is exported or linked separately.
+
+A Ceres-enabled installed package also needs a separately installed Ceres dependency. For a static NLopt-enabled installation, the consumer currently needs to create `PkgConfig::NLOPT` before finding Solvers, because `SolversConfig.cmake` does not yet discover NLopt:
+
+```cmake
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(NLOPT REQUIRED IMPORTED_TARGET nlopt)
+find_package(Solvers CONFIG REQUIRED)
+```
+
+PETSc-enabled consumers should enable the C language so MPI's C target can be discovered.
+
+### Bazel
+
+The Bazel graph builds the native library, unit tests, and Google Benchmark executables. All optional backend macros are set to zero in `BUILD.bazel`; use CMake for optional backends. The repository pins Bazel 8.0.0 in `.bazelversion`.
+
+```bash
+bazel build //:Solvers
+bazel test //Testing/Cxx/...
+bazel test //Testing/Benchmark/...
+```
+
+The helper provides separate test and benchmark phases:
+
+```bash
+cd Scripts
+python3 setup_bazel.py build.test.release
+python3 setup_bazel.py build.benchmark.release
+```
+
+Bazel packaging targets are `//:solvers_pkg_tar` and `//:install`:
+
+```bash
+bazel build //:solvers_pkg_tar
+bazel run //:install -- --destdir=/path/to/staging
+```
+
+These stage solver headers and library artifacts; they do not produce the CMake package or bundle its dependency installation tree.
+
+## Usage
+
+### Scalar root finding
+
+The current root interface returns a `detail::root_run` containing `root`, `iterations`, and an `outcome` of `converged`, `iteration_limit`, or `degenerate`:
+
+```cpp
+#include <iostream>
+#include "solvers/root_finding_algorithms.h"
+
+int main() {
+    const auto options = solverslib::root_finding_options_builder()
+        .with_tolerance_function(1e-12)
+        .with_tolerance_parameter(1e-12)
+        .with_max_iterations(100)
+        .build();
+
+    const auto result = solverslib::detail::run_brent(
+        [](double x) { return x * x - 2.0; }, 0.0, 2.0, options);
+
+    std::cout << result.root << '\n';
+    return result.outcome == solverslib::detail::root_outcome::converged ? 0 : 1;
+}
+```
+
+Bracketing methods require a valid sign-changing bracket. Newton-Raphson and Dekker take a callback of signature `double(double x, double& derivative)`. Invalid brackets and vanishing derivatives or secant denominators can throw.
+
+`polynomial_solver` in `solvers/polynomial_solver.h` provides single-root convenience functions for monic quadratic, cubic, and quartic polynomials. These return one selected real root, not all roots. The quartic returns the largest real root clamped from below by its `threshold` argument.
+
+### Least squares with native LM
+
+Assign callbacks directly to the problem fields and select the solver through its options builder. `build()` returns a `std::shared_ptr<const solver_options_lm>`; pass `*options` to `solve`:
+
+```cpp
+#include <iostream>
+#include "api/dispatch.h"
+#include "solver_options/solver_options_lm.h"
+
+int main() {
+    using namespace solverslib;
+    using namespace solverslib::api;
+
+    least_squares_problem problem;
+    problem.num_parameters = 1;
+    problem.num_residuals = 1;
+    problem.residuals = [](const vector_type& x, vector_type& r) {
+        r.resize(1);
+        r[0] = x[0] * x[0] - 4.0;
+    };
+    problem.jacobian = [](const vector_type& x, matrix_type& j) {
+        j.resize(1, 1);
+        j(0, 0) = 2.0 * x[0];
+    };
+
+    const auto options = solver_options_lm_builder()
+        .with_max_iterations(100)
+        .with_function_tolerance(1e-10)
+        .with_gradient_tolerance(1e-10)
+        .with_parameter_tolerance(1e-10)
+        .build();
+
+    vector_type start(1);
+    start[0] = 3.0;
+    const auto result = solve(problem, start, *options);
+    std::cout << to_string(result.status) << ": " << result.parameters[0] << '\n';
+    return result.converged() ? 0 : 1;
+}
+```
+
+Omit `problem.jacobian` to use native LM's finite differences. Gauss–Newton uses the same problem structure with `solver_options_gn_builder`. Native LM supports Nielsen, Marquardt, and quadratic-interpolation damping, optional geodesic acceleration and bold acceptance, and `NORMAL_LDLT` or `AUGMENTED_QR` linear solves. Configure these through the builder's `with_...` methods.
+
+### Scalar-objective optimization with native L-BFGS
+
+```cpp
+#include <iostream>
+#include "api/dispatch.h"
+#include "solver_options/solver_options_bfgs.h"
+
+int main() {
+    using namespace solverslib;
+    using namespace solverslib::api;
+
+    optimization_problem problem;
+    problem.num_parameters = 1;
+    problem.objective = [](const vector_type& x) {
+        return (x[0] - 2.0) * (x[0] - 2.0);
+    };
+    problem.gradient = [](const vector_type& x, vector_type& g) {
+        g.resize(1);
+        g[0] = 2.0 * (x[0] - 2.0);
+    };
+
+    const auto options = solver_options_bfgs_builder()
+        .with_max_iterations(100)
+        .with_gradient_tolerance(1e-10)
+        .build();
+
+    vector_type start(1);
+    start[0] = 3.0;
+    const auto result = solve(problem, start, *options);
+    std::cout << to_string(result.status) << ": " << result.parameters[0] << '\n';
+    return result.converged() ? 0 : 1;
+}
+```
+
+Native L-BFGS can approximate a missing gradient with finite differences. Its builder configures history size, line-search strategy, step limits, and finite-difference scaling.
+
+## Solver selection and derivatives
+
+Dispatch uses `options.solver()` and the concrete options type. There is no automatic backend-selection policy in the current `solve` interface. To switch solvers, build the corresponding options and pass them to the same problem overload.
+
+| Solver | Derivative contract |
+| --- | --- |
+| Native LM / Gauss–Newton | Optional `problem.jacobian`; finite differences when absent |
+| Native L-BFGS | Optional `problem.gradient`; finite differences when absent |
+| RNC-LM | Requires `problem.curve_derivatives`; no numerical fallback |
+| Ceres | Optional `problem.jacobian`; numerical differentiation when absent |
+| Ipopt least squares | Requires `problem.jacobian`; dispatch constructs the scalar cost and gradient |
+| NLopt least squares | Supplied Jacobian gives a scalar-cost gradient; omit it only for derivative-free algorithms |
+| PETSc/TAO least squares | Residual callback and optional Jacobian; select an algorithm compatible with those callbacks |
+| Ipopt / NLopt / PETSc scalar objectives | Dispatch requires `problem.gradient`; an optional Hessian is passed to Ipopt and PETSc |
+
+The public problems currently store callbacks, not derivative-provider objects. There is no bundled `least_squares(...)` or `auto_diff()` factory in the current headers. Enabling Ceres builds its optimizer adapter; it does not automatically differentiate a templated residual model. An application may compute derivatives externally and supply them through the callbacks.
+
+For PETSc residual problems, select a residual algorithm explicitly, for example `.with_tao_type(tao_algorithm_enum::BRGN)` or `.with_tao_type(tao_algorithm_enum::POUNDERS)`. The default TAO options select `LMVM`.
+
+### RNC-LM curve derivatives
+
+Set `problem.curve_derivatives` to a callback with this signature:
+
+```cpp
+void(const solverslib::vector_type& base,
+     const std::vector<solverslib::vector_type>& coefficients,
+     int order,
+     solverslib::api::rnc_curve_derivatives& out);
+```
+
+It must fill `out.residual[0..order]` and `out.jacobian[0..max(0, order-2)]` with ordinary derivatives along the truncated curve. `coefficients[q-1]` is the unnormalized curve derivative `c_q`. An empty coefficient list at order 1 requests the residual and Jacobian at the base point.
+
+Select the method with `solver_options_rnc_lm_builder().with_order(3).build()` and pass the resulting options to `solve`. Orders 1–4 are supported; the default is 3. The current public interface requires a caller-supplied curve callback. See `Testing/Cxx/TestRncLmSolver.cpp` for analytic callback examples.
+
+## Results and current limits
+
+`api::solver_result` includes the parameters, status, message, objective, iteration count, backend and algorithm fields, optional norms, optional work counters, and optional backend status code. `converged()` checks for `solver_status::converged`; `has_usable_iterate()` also accepts `max_iterations`, `stalled`, and `user_stopped`.
+
+Missing diagnostics are represented by `std::nullopt`. Native LM, Gauss–Newton, and L-BFGS report their convergence reason; RNC-LM additionally fills evaluation and step counters. External adapters expose different subsets of diagnostics, and their algorithm field may remain `automatic`. Ceres currently maps its usable-solution boolean to the common status and does not preserve detailed termination or iteration diagnostics.
+
+The current least-squares objective convention differs by solver: native LM and Gauss–Newton return `||r||²`; RNC-LM and the external adapters return `0.5 * ||r||²`. Scalar optimization returns the supplied objective value. Account for that factor when comparing results across backends.
+
+Box bounds use `problem.bounds.lower` and `problem.bounds.upper`, each either empty or sized to `num_parameters`. Native LM and RNC-LM reject bounds. Native Gauss–Newton and L-BFGS currently do not enforce the bounds fields; use a compatible external algorithm for bounded problems. External bounds support depends on the selected algorithm.
+
+General nonlinear constraints are not implemented: `optimization_problem.constraints` carries counts but no evaluation callbacks, and nonempty counts return `unsupported_capability`. There is no common evaluation-budget or parameter/residual-scaling option. NLopt maps `with_max_iterations(...)` to its function-evaluation limit.
+
+## Benchmarks
+
+Benchmarks use Google Benchmark and are separate from the GoogleTest suite. Enable `SOLVERS_ENABLE_BENCHMARKS` and make a system Google Benchmark installation discoverable:
+
+```bash
+cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release \
+    -DSOLVERS_ENABLE_BENCHMARKS=ON
+cmake --build build-bench --parallel --target \
+    BenchmarkNative BenchmarkExternal BenchmarkRootFinding
+
+./build-bench/Testing/Benchmark/BenchmarkRootFinding
+./build-bench/Testing/Benchmark/BenchmarkNative --benchmark_filter=SVI
+./build-bench/Testing/Benchmark/BenchmarkNative --benchmark_list_tests=true
+./build-bench/Testing/Benchmark/BenchmarkExternal
+```
+
+| Executable | Coverage |
+| --- | --- |
+| `BenchmarkRootFinding` | All seven scalar root methods and quadratic/cubic/quartic convenience solvers |
+| `BenchmarkNative` | Rosenbrock and raw-SVI calibration with LM variants, Gauss–Newton, L-BFGS, and SVI RNC-LM orders 1–4 |
+| `BenchmarkExternal` | Rosenbrock and raw-SVI calibration with Ceres, Ipopt, and PETSc BRGN/LMVM; unavailable backends are skipped |
+
+Enable the corresponding backend flags in the benchmark build to run external cases. The current external benchmark executable does not register NLopt or POUNDERS cases. Google Benchmark options such as `--benchmark_filter`, `--benchmark_repetitions`, and `--benchmark_out` control selection, repetition, and export.
+
+The setup helper can build and run all three executables with `python3 setup.py config.build.benchmark.release.static` from `Scripts/`.
+
+## Source layout and documentation
+
+- [`include/api/`](include/api/) — problem definitions, dispatch declarations, result and status types.
+- [`include/solver_options/`](include/solver_options/) — solver-specific options and builders.
+- [`include/solvers/`](include/solvers/) and [`src/solvers/`](src/solvers/) — native kernels, scalar roots, polynomial solvers, and optional adapters.
+- [`src/api/dispatch.cpp`](src/api/dispatch.cpp) — current selection and callback requirements.
+- [`Testing/Cxx/`](Testing/Cxx/) — four test executables: backend integration, roots, RNC-LM, and LM.
+- [`Testing/Benchmark/`](Testing/Benchmark/) — benchmarks and the SVI fixture.
+- [`docs/levenberg-marquardt.md`](docs/levenberg-marquardt.md) — native LM mathematics and damping policies.
+- [`docs/rnc-lm.md`](docs/rnc-lm.md) — RNC-LM mathematics and implementation notes.
+- [`svi_calib.md`](svi_calib.md) — SVI calibration background.
+
+Some API examples and benchmark commands in the longer design notes predate the current callback/builder interface. Use the headers and the examples in this README for the current API.
