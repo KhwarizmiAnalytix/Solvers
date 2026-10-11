@@ -401,46 +401,49 @@ INSTANTIATE_TEST_SUITE_P(AllStrategiesAndExtensions,
         ::testing::Bool(),
         ::testing::Values(linear_enum::NORMAL_LDLT, linear_enum::AUGMENTED_QR)));
 
-// Verifies the public least-squares objective is half the squared residual norm for LM and GN.
-TEST(LmApi, ObjectiveIsTheSquaredResidualNorm)
+TEST(LmApi, Solve)
 {
-    api::least_squares_problem problem;
-    problem.num_parameters = 1;
-    problem.num_residuals  = 2;
-    problem.residuals      = [](const vector_type& x, vector_type& r)
     {
-        r[0] = x[0] - 1.;
-        r[1] = x[0] + 1.;
-    };
-    problem.jacobian = [](const vector_type&, matrix_type& j) { j << 1., 1.; };
+        SCOPED_TRACE("ObjectiveIsTheSquaredResidualNorm");
+        api::least_squares_problem problem;
+        problem.num_parameters = 1;
+        problem.num_residuals  = 2;
+        problem.residuals      = [](const vector_type& x, vector_type& r)
+        {
+            r[0] = x[0] - 1.;
+            r[1] = x[0] + 1.;
+        };
+        problem.jacobian = [](const vector_type&, matrix_type& j) { j << 1., 1.; };
 
-    const auto lm = api::solve(
-        problem, vec({3.}), *solver_options_lm_builder().with_gradient_tolerance(1e-8).build());
-    EXPECT_TRUE(lm.converged()) << lm.message;
-    EXPECT_NEAR(lm.parameters[0], 0., 1e-8);
-    EXPECT_NEAR(lm.objective, 2., 1e-12);
-    ASSERT_TRUE(lm.residual_norm.has_value());
-    EXPECT_NEAR(*lm.residual_norm, std::sqrt(2.), 1e-12);
+        const auto lm = api::solve(problem,
+            vec({3.}),
+            *solver_options_lm_builder().with_gradient_tolerance(1e-8).build());
+        EXPECT_TRUE(lm.converged()) << lm.message;
+        EXPECT_NEAR(lm.parameters[0], 0., 1e-8);
+        EXPECT_NEAR(lm.objective, 2., 1e-12);
+        ASSERT_TRUE(lm.residual_norm.has_value());
+        EXPECT_NEAR(*lm.residual_norm, std::sqrt(2.), 1e-12);
 
-    const auto gn = api::solve(
-        problem, vec({3.}), *solver_options_gn_builder().with_gradient_tolerance(1e-8).build());
-    EXPECT_NEAR(gn.objective, 2., 1e-12);
-}
+        const auto gn = api::solve(problem,
+            vec({3.}),
+            *solver_options_gn_builder().with_gradient_tolerance(1e-8).build());
+        EXPECT_NEAR(gn.objective, 2., 1e-12);
+    }
+    {
+        SCOPED_TRACE("BoundsAreRejectedExplicitly");
+        api::least_squares_problem problem;
+        problem.num_parameters = 2;
+        problem.num_residuals  = 2;
+        problem.residuals      = rosenbrock_residual;
+        problem.jacobian       = rosenbrock_jacobian;
+        problem.bounds.lower   = {-2., -2.};
+        problem.bounds.upper   = {0.5, 2.};
 
-// Ensures the API reports bounds as unsupported and preserves the supplied starting parameters.
-TEST(LmApi, BoundsAreRejectedExplicitly)
-{
-    api::least_squares_problem problem;
-    problem.num_parameters = 2;
-    problem.num_residuals  = 2;
-    problem.residuals      = rosenbrock_residual;
-    problem.jacobian       = rosenbrock_jacobian;
-    problem.bounds.lower   = {-2., -2.};
-    problem.bounds.upper   = {0.5, 2.};
-
-    const auto result = api::solve(problem, vec({-1.2, 1.}), *solver_options_lm_builder().build());
-    EXPECT_EQ(result.status, api::solver_status::unsupported_capability);
-    EXPECT_NE(result.message.find("bounds"), std::string::npos) << result.message;
-    EXPECT_EQ(result.parameters[0], -1.2);
-    EXPECT_EQ(result.parameters[1], 1.);
+        const auto result =
+            api::solve(problem, vec({-1.2, 1.}), *solver_options_lm_builder().build());
+        EXPECT_EQ(result.status, api::solver_status::unsupported_capability);
+        EXPECT_NE(result.message.find("bounds"), std::string::npos) << result.message;
+        EXPECT_EQ(result.parameters[0], -1.2);
+        EXPECT_EQ(result.parameters[1], 1.);
+    }
 }
