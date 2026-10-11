@@ -19,6 +19,10 @@ struct solver_result
 {
     solver_status status = solver_status::invalid_problem;
 
+    // Which criterion a converged native run actually satisfied. nullopt for
+    // external backends and for any non-converged status.
+    std::optional<convergence_reason> convergence;
+
     // Final iterate. Always the last *accepted* point; a rejected trial never
     // replaces it (review invariant 2).
     vector_type parameters;

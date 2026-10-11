@@ -70,7 +70,7 @@ levenberg_marquardt_solver::levenberg_marquardt_solver(size_t num_parameters,
     };
 }
 
-native_result levenberg_marquardt_solver::solve(
+api::solver_result levenberg_marquardt_solver::solve(
     vector_type& parameters, const solver_options_lm& options) const
 {
     std::string failure;  // non-empty once an evaluation fails fatally
@@ -484,35 +484,50 @@ native_result levenberg_marquardt_solver::solve(
         (gradient_converged ? "GRADIENT_CONVERGED " : ""),
         (iteration >= max_iter ? "MAX_ITERATIONS_REACHED " : ""));
 
-    native_result result;
-    result.iterations    = iteration;
-    result.residual_norm = l2_norm(y_p);
-    if (!failure.empty())
-    {
-        result.status  = native_convergence::numerical_failure;
-        result.message = failure;
-    }
-    else if (x2_converged)
-    {
-        result.status = native_convergence::function_converged;
-    }
-    else if (parameters_converged)
-    {
-        result.status = native_convergence::parameter_converged;
-    }
-    else if (gradient_converged)
-    {
-        result.status = native_convergence::gradient_converged;
-    }
-    else if (stalled)
-    {
-        result.status  = native_convergence::stalled;
-        result.message = "damping reached its ceiling without finding an acceptable step";
-    }
+    api::solver_result result;
+    result.parameters     = parameters;
+    result.backend        = api::backend::native;
+    result.algorithm      = api::algorithm::levenberg_marquardt;
+    result.iterations     = iteration;
+    result.residual_norm  = l2_norm(y_p);
+    result.objective      = *result.residual_norm * *result.residual_norm;
     result.accepted_steps = accepted_steps;
     result.rejected_steps = rejected_steps;
     result.step_norm      = last_step_norm;
     result.gradient_norm  = final_gradient_norm;
+
+    if (!failure.empty())
+    {
+        result.status  = api::solver_status::numerical_failure;
+        result.message = failure;
+    }
+    else if (x2_converged)
+    {
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::function;
+        result.message     = "objective function value converged";
+    }
+    else if (parameters_converged)
+    {
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::parameter;
+        result.message     = "parameter step converged";
+    }
+    else if (gradient_converged)
+    {
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::gradient;
+        result.message     = "gradient norm converged";
+    }
+    else if (stalled)
+    {
+        result.status  = api::solver_status::stalled;
+        result.message = "damping reached its ceiling without finding an acceptable step";
+    }
+    else
+    {
+        result.status = api::solver_status::max_iterations;
+    }
 
     return result;
 }

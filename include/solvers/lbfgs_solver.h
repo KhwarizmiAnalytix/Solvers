@@ -6,8 +6,9 @@
 #include <limits>
 #include <stdexcept>
 
+#include "api/result.h"
+#include "api/status.h"
 #include "detail/api_access.h"
-#include "detail/native_result.h"
 #include "detail/support.h"
 
 namespace solverslib
@@ -39,8 +40,6 @@ class lbfgs_solver
     gradient_type  gradient_;
     bool           scalar_mode_ = false;
 
-    native_result run(vector_type& parameters, const solver_options_bfgs& options) const;
-
     SOLVER_API lbfgs_solver(size_type num_parameters,
         size_type                     num_residuals,
         function_type                 function,
@@ -54,7 +53,7 @@ class lbfgs_solver
         double                        bump             = 1e-6,
         finite_difference_scale       difference_scale = finite_difference_scale::absolute);
 
-    SOLVER_API native_result solve(
+    SOLVER_API api::solver_result solve(
         vector_type& parameters, const solver_options_bfgs& options) const;
 };
 }  // namespace solverslib

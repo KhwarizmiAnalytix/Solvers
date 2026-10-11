@@ -9,8 +9,9 @@
 #include <limits>
 #include <vector>
 
+#include "api/result.h"
+#include "api/status.h"
 #include "detail/api_access.h"
-#include "detail/native_result.h"
 #include "detail/support.h"
 
 namespace solverslib
@@ -42,7 +43,8 @@ class levenberg_marquardt_solver
         double                                   finite_difference_step = 1e-5,
         finite_difference_scale difference_scale = finite_difference_scale::absolute);
 
-    SOLVER_API native_result solve(vector_type& parameters, const solver_options_lm& options) const;
+    SOLVER_API api::solver_result solve(
+        vector_type& parameters, const solver_options_lm& options) const;
 };
 }  // namespace solverslib
 

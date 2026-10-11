@@ -23,6 +23,22 @@
 #include "solvers/petsc_tao_solver.h"
 #include "solvers/rnc_lm_solver.h"
 
+// api::solve is the only call into a solver. Each overload checks the problem,
+// selects a kernel from the concrete options type, and copies that kernel's
+// outcome into solver_result.
+//
+// options.solver() names the library. Among native options the dynamic type
+// names the algorithm: solver_options_lm runs Levenberg-Marquardt,
+// solver_options_rnc_lm runs RNC-LM, solver_options_gn runs Gauss-Newton, and
+// solver_options_bfgs runs L-BFGS. Ceres, Ipopt, NLopt, and PETSc/TAO are
+// selected by solver() alone.
+//
+// A rejected request returns before any callback runs, with parameters left
+// equal to the caller's guess. A compiled-out library returns
+// backend_unavailable. A library that is present but cannot honor the request
+// (bounds on native LM, a missing Jacobian for Ipopt least squares, nonlinear
+// constraints) returns unsupported_capability.
+
 namespace solverslib::api
 {
 namespace
@@ -30,24 +46,7 @@ namespace
 using jacobian_type = std::function<void(const vector_type&, matrix_type&)>;
 using gradient_type = std::function<void(const vector_type&, vector_type&)>;
 
-solver_status translate_native(native_convergence status)
-{
-    switch (status)
-    {
-    case native_convergence::gradient_converged:
-    case native_convergence::parameter_converged:
-    case native_convergence::function_converged:
-        return solver_status::converged;
-    case native_convergence::not_converged:
-        return solver_status::max_iterations;
-    case native_convergence::numerical_failure:
-        return solver_status::numerical_failure;
-    case native_convergence::stalled:
-        return solver_status::stalled;
-    }
-    return solver_status::numerical_failure;
-}
-
+// Early rejection. parameters is the guess the caller passed in.
 solver_result failed(solver_status status, const std::string& message, const vector_type& x)
 {
     solver_result result;
@@ -57,6 +56,7 @@ solver_result failed(solver_status status, const std::string& message, const vec
     return result;
 }
 
+// Ipopt, NLopt, and PETSc/TAO take std::vector<double>. Native kernels take Eigen.
 vector_type to_vector(const std::vector<double>& values)
 {
     return Eigen::Map<const vector_type>(values.data(), static_cast<index_type>(values.size()));
@@ -67,6 +67,8 @@ std::vector<double> to_std(const vector_type& values)
     return std::vector<double>(values.data(), values.data() + values.size());
 }
 
+// External adapters keep budget, stall, infeasibility, and a caller stop apart,
+// and from_backend copies the library's own status code into backend_status.
 solver_status translate_backend(backend_outcome outcome)
 {
     switch (outcome)
@@ -103,10 +105,11 @@ solver_result from_backend(
     return result;
 }
 
+// solver_options_rnc_lm derives from solver_options_lm, so both report
+// solver() == LM. The dynamic_cast is what sends that object to RNC-LM.
+// External options return automatic; their solve branches switch on solver().
 algorithm resolve_algorithm(const solver_options& options)
 {
-    // Keyed on the options type: the native LS branch static_casts `options`
-    // to the matching concrete class, so the algorithm must agree with it.
     switch (options.solver())
     {
     case solver_enum::LM:
@@ -123,6 +126,7 @@ algorithm resolve_algorithm(const solver_options& options)
 }
 }  // namespace
 
+// Structural summary only. inspect does not call residuals or solve.
 problem_traits inspect(const least_squares_problem& problem)
 {
     problem_traits traits;
@@ -146,6 +150,10 @@ problem_traits inspect(const optimization_problem& problem)
     return traits;
 }
 
+// Least squares. Native LM and Gauss-Newton store objective as ||r||^2 and
+// residual_norm as ||r||. Ceres, Ipopt, NLopt, and PETSc/TAO store the scalar
+// cost 0.5 * ||r||^2. RNC-LM builds its own solver_result, including the
+// evaluation counters the other kernels leave unset.
 solver_result solve(const least_squares_problem& problem,
     const vector_type&                           initial_guess,
     const solver_options&                        options)
@@ -184,11 +192,7 @@ solver_result solve(const least_squares_problem& problem,
     case solver_enum::GAUSS_NEWTON:
     case solver_enum::LBFGS:
     {
-        vector_type   x = initial_guess;
-        solver_result result;
-        result.parameters = x;
-        result.backend    = backend::native;
-        result.algorithm  = chosen_algorithm;
+        vector_type x = initial_guess;
 
         jacobian_type jacobian = problem.jacobian ? *problem.jacobian : nullptr;
 
@@ -209,23 +213,12 @@ solver_result solve(const least_squares_problem& problem,
                 jacobian,
                 lm_options.finite_difference_step(),
                 lm_options.difference_scale());
-            const auto                 out = solver.solve(x, lm_options);
-
-            result.status         = translate_native(out.status);
-            result.parameters     = x;
-            result.residual_norm  = out.residual_norm;
-            result.objective      = out.residual_norm * out.residual_norm;
-            result.iterations     = out.iterations;
-            result.gradient_norm  = out.gradient_norm;
-            result.step_norm      = out.step_norm;
-            result.accepted_steps = out.accepted_steps;
-            result.rejected_steps = out.rejected_steps;
-            result.message = out.message.empty() && out.converged() ? "converged" : out.message;
-            return result;
+            return solver.solve(x, lm_options);
         }
 
         case algorithm::gauss_newton:
         {
+            // The kernel takes no bound vectors, so a bounds field is unused.
             const auto&         gn_options = static_cast<const solver_options_gn&>(options);
             gauss_newton_solver solver(problem.num_parameters,
                 problem.num_residuals,
@@ -233,31 +226,21 @@ solver_result solve(const least_squares_problem& problem,
                 jacobian,
                 gn_options.bump(),
                 gn_options.difference_scale());
-            const auto          out = solver.solve(x, gn_options);
-
-            result.status         = translate_native(out.status);
-            result.parameters     = x;
-            result.residual_norm  = out.residual_norm;
-            result.objective      = out.residual_norm * out.residual_norm;
-            result.iterations     = out.iterations;
-            result.gradient_norm  = out.gradient_norm;
-            result.step_norm      = out.step_norm;
-            result.accepted_steps = out.accepted_steps;
-            result.rejected_steps = out.rejected_steps;
-            result.message = out.message.empty() && out.converged() ? "converged" : out.message;
-            return result;
+            return solver.solve(x, gn_options);
         }
 
         case algorithm::riemann_normal_coordinate_lm:
         {
+            // The RNC kernel validates its own options and curve derivatives.
             return rnc_lm_solver::run(
                 problem, initial_guess, static_cast<const solver_options_rnc_lm&>(options));
         }
 
         default:
-            result.status  = solver_status::unsupported_capability;
-            result.message = "algorithm not supported by native backend";
-            return result;
+            // L-BFGS options reach this native block and have no residual kernel.
+            return failed(solver_status::unsupported_capability,
+                "algorithm not supported by native backend",
+                initial_guess);
         }
     }
     case solver_enum::CERES:
@@ -274,6 +257,8 @@ solver_result solve(const least_squares_problem& problem,
             problem.bounds.lower,
             problem.bounds.upper);
         std::vector<double> x = to_std(initial_guess);
+        // Ceres reports success as a bool, so a budget stop and a numerical
+        // failure both become numerical_failure. Iterations are not copied.
         const bool usable     = solver.solve(x, static_cast<const solver_options_ceres&>(options));
 
         solver_result result;
@@ -299,7 +284,8 @@ solver_result solve(const least_squares_problem& problem,
                 "IPOPT least-squares requires a Jacobian callback",
                 initial_guess);
         }
-        // Scalar view of F(x) = 0.5 * ||r(x)||^2 with gradient J^T r.
+        // Scalar view of F(x) = 0.5 * ||r(x)||^2 with gradient J^T r. Ipopt
+        // has no residual interface, so both are rebuilt from the callbacks.
         const auto objective = [&problem](const vector_type& x)
         {
             vector_type residual(problem.num_residuals);
@@ -322,7 +308,7 @@ solver_result solve(const least_squares_problem& problem,
             problem.bounds.upper);
         std::vector<double> x      = to_std(initial_guess);
         solver_result       result = from_backend(
-            solver.solve_with_status(x, static_cast<const solver_options_ipopt&>(options)),
+            solver.solve(x, static_cast<const solver_options_ipopt&>(options)),
             x,
             backend::ipopt);
         result.objective = objective(result.parameters);
@@ -335,7 +321,9 @@ solver_result solve(const least_squares_problem& problem,
             return failed(
                 solver_status::backend_unavailable, "NLopt backend not compiled in", initial_guess);
         }
-        // Scalar view of F(x) = 0.5 * ||r(x)||^2 with gradient J^T r.
+        // Same scalar cost as Ipopt. The gradient callback is present only when
+        // the problem supplies a Jacobian; derivative-free NLopt algorithms run
+        // with it empty.
         const auto objective = [&problem](const vector_type& x)
         {
             vector_type residual(problem.num_residuals);
@@ -357,7 +345,7 @@ solver_result solve(const least_squares_problem& problem,
             problem.num_parameters, objective, gradient, problem.bounds.lower, problem.bounds.upper);
         std::vector<double> x      = to_std(initial_guess);
         solver_result       result = from_backend(
-            solver.solve_with_status(x, static_cast<const solver_options_nlopt&>(options)),
+            solver.solve(x, static_cast<const solver_options_nlopt&>(options)),
             x,
             backend::nlopt);
         result.objective = objective(result.parameters);
@@ -371,6 +359,8 @@ solver_result solve(const least_squares_problem& problem,
                 "PETSc/TAO backend not compiled in",
                 initial_guess);
         }
+        // TAO receives the residual callback directly and chooses its algorithm
+        // from solver_options_petsc (POUNDERS, BRGN, NLS, and the rest).
         petsc_tao_solver    solver(problem.num_parameters,
             problem.num_residuals,
             problem.residuals,
@@ -379,7 +369,7 @@ solver_result solve(const least_squares_problem& problem,
             problem.bounds.upper);
         std::vector<double> x      = to_std(initial_guess);
         solver_result       result = from_backend(
-            solver.solve_with_status(x, static_cast<const solver_options_petsc&>(options)),
+            solver.solve(x, static_cast<const solver_options_petsc&>(options)),
             x,
             backend::petsc_tao);
         vector_type residual(problem.num_residuals);
@@ -393,6 +383,10 @@ solver_result solve(const least_squares_problem& problem,
     }
 }
 
+// Scalar optimization. Native L-BFGS is the only native kernel. Ceres is
+// least-squares only. Ipopt, NLopt, and PETSc/TAO each require a gradient
+// callback. Nonlinear constraints are rejected; the constraints struct carries
+// counts and no callback for a kernel to evaluate.
 solver_result solve(const optimization_problem& problem,
     const vector_type&                          initial_guess,
     const solver_options&                       options)
@@ -437,11 +431,6 @@ solver_result solve(const optimization_problem& problem,
     {
         vector_type x = initial_guess;
 
-        solver_result result;
-        result.parameters = x;
-        result.backend    = backend::native;
-        result.algorithm  = algorithm::lbfgs;
-
         gradient_type gradient     = problem.gradient ? *problem.gradient : nullptr;
         const auto&   bfgs_options = static_cast<const solver_options_bfgs&>(options);
         lbfgs_solver  solver(problem.num_parameters,
@@ -449,18 +438,7 @@ solver_result solve(const optimization_problem& problem,
             gradient,
             bfgs_options.bump(),
             bfgs_options.difference_scale());
-        const auto    out = solver.solve(x, bfgs_options);
-
-        result.status         = translate_native(out.status);
-        result.iterations     = out.iterations;
-        result.parameters     = x;
-        result.objective      = problem.objective(x);
-        result.gradient_norm  = out.gradient_norm;
-        result.step_norm      = out.step_norm;
-        result.accepted_steps = out.accepted_steps;
-        result.rejected_steps = out.rejected_steps;
-        result.message        = out.message.empty() ? "converged" : out.message;
-        return result;
+        return solver.solve(x, bfgs_options);
     }
     case solver_enum::CERES:
     {
@@ -489,7 +467,7 @@ solver_result solve(const optimization_problem& problem,
             problem.bounds.upper);
         std::vector<double> x      = to_std(initial_guess);
         solver_result       result = from_backend(
-            solver.solve_with_status(x, static_cast<const solver_options_ipopt&>(options)),
+            solver.solve(x, static_cast<const solver_options_ipopt&>(options)),
             x,
             backend::ipopt);
         result.objective = problem.objective(result.parameters);
@@ -515,7 +493,7 @@ solver_result solve(const optimization_problem& problem,
             problem.bounds.upper);
         std::vector<double> x      = to_std(initial_guess);
         solver_result       result = from_backend(
-            solver.solve_with_status(x, static_cast<const solver_options_nlopt&>(options)),
+            solver.solve(x, static_cast<const solver_options_nlopt&>(options)),
             x,
             backend::nlopt);
         result.objective = problem.objective(result.parameters);
@@ -543,13 +521,14 @@ solver_result solve(const optimization_problem& problem,
             problem.bounds.upper);
         std::vector<double> x      = to_std(initial_guess);
         solver_result       result = from_backend(
-            solver.solve_with_status(x, static_cast<const solver_options_petsc&>(options)),
+            solver.solve(x, static_cast<const solver_options_petsc&>(options)),
             x,
             backend::petsc_tao);
         result.objective = problem.objective(result.parameters);
         return result;
     }
     default:
+        // Native LM, Gauss-Newton, and RNC-LM options have no scalar kernel.
         return failed(
             solver_status::backend_unavailable, "unsupported solver backend", initial_guess);
     }

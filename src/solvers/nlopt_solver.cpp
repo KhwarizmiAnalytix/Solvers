@@ -59,13 +59,7 @@ double nlopt_objective_wrapper(
 }
 }  // namespace
 
-bool nlopt_solver::solve(std::vector<double>& parameters,
-    const solver_options_nlopt&      options)
-{
-    return solve_with_status(parameters, options).converged();
-}
-
-backend_solve_status nlopt_solver::solve_with_status(std::vector<double>& parameters,
+backend_solve_status nlopt_solver::solve(std::vector<double>& parameters,
     const solver_options_nlopt&         options)
 {
     backend_solve_status status;
@@ -160,13 +154,7 @@ backend_solve_status nlopt_solver::solve_with_status(std::vector<double>& parame
 }
 
 #else
-bool nlopt_solver::solve(std::vector<double>& /* parameters */,
-    const solver_options_nlopt& /* options */)
-{
-    return false;
-}
-
-backend_solve_status nlopt_solver::solve_with_status(std::vector<double>& /* parameters */,
+backend_solve_status nlopt_solver::solve(std::vector<double>& /* parameters */,
     const solver_options_nlopt& /* options */)
 {
     backend_solve_status status;

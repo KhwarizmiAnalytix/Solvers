@@ -161,12 +161,7 @@ bool petsc_tao_solver::is_supported()
 #endif
 }
 
-bool petsc_tao_solver::solve(std::vector<double>& parameters, const solver_options_petsc& options)
-{
-    return solve_with_status(parameters, options).converged();
-}
-
-backend_solve_status petsc_tao_solver::solve_with_status(
+backend_solve_status petsc_tao_solver::solve(
     SOLVERS_UNUSED std::vector<double>&        parameters,
     SOLVERS_UNUSED const solver_options_petsc& options)
 {

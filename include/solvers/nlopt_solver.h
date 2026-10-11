@@ -37,12 +37,9 @@ private:
         std::vector<double>        lower_bounds = {},
         std::vector<double>        upper_bounds = {});
 
-    // Returns true when NLopt reports successful optimization.
-    SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_nlopt& options);
-
-    // Same solve, reporting how it ended (budget vs. failure vs. infeasible) and
+    // Reports how the solve ended (budget vs. failure vs. infeasible) and
     // the raw NLopt result code in native_code.
-    SOLVER_API backend_solve_status solve_with_status(
+    SOLVER_API backend_solve_status solve(
         std::vector<double>& parameters, const solver_options_nlopt& options);
 
     size_t              num_parameters_;

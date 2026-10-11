@@ -355,12 +355,8 @@ lbfgs_solver::lbfgs_solver(size_type num_parameters,
 {
 }
 
-native_result lbfgs_solver::solve(vector_type& parameters, const solver_options_bfgs& options) const
-{
-    return run(parameters, options);
-}
-
-native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bfgs& options) const
+api::solver_result lbfgs_solver::solve(
+    vector_type& parameters, const solver_options_bfgs& options) const
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
 
@@ -554,23 +550,38 @@ native_result lbfgs_solver::run(vector_type& parameters, const solver_options_bf
         }
     }
 
-    native_result result;
+    api::solver_result result;
+    result.parameters     = parameters;
+    result.backend        = api::backend::native;
+    result.algorithm      = api::algorithm::lbfgs;
     result.iterations     = iter;
+    result.objective      = fx;
     result.residual_norm  = scalar_mode_ ? std::sqrt(std::fabs(fx)) : l2_norm(y_p);
     result.accepted_steps = accepted_steps;
     result.step_norm      = last_step_norm;
     result.gradient_norm  = l2_norm(grad);
+
     if (x2_converged)
     {
-        result.status = native_convergence::function_converged;
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::function;
+        result.message     = "objective function value converged";
     }
     else if (parameters_converged)
     {
-        result.status = native_convergence::parameter_converged;
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::parameter;
+        result.message     = "parameter step converged";
     }
     else if (gradient_converged)
     {
-        result.status = native_convergence::gradient_converged;
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::gradient;
+        result.message     = "gradient norm converged";
+    }
+    else
+    {
+        result.status = api::solver_status::max_iterations;
     }
 
     return result;

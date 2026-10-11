@@ -70,7 +70,7 @@ gauss_newton_solver::gauss_newton_solver(size_t num_parameters,
     };
 }
 
-native_result gauss_newton_solver::solve(
+api::solver_result gauss_newton_solver::solve(
     vector_type& parameters, const solver_options_gn& options) const
 {
     SOLVERS_CHECK(num_parameters_ == parameters.size());
@@ -206,30 +206,45 @@ native_result gauss_newton_solver::solve(
         (gradient_converged ? "GRADIENT_CONVERGED " : ""),
         (iteration >= max_iter ? "MAX_ITERATIONS_REACHED " : ""));
 
-    native_result result;
-    result.iterations    = iteration;
-    result.residual_norm = l2_norm(y_p);
-    if (x2_converged)
-    {
-        result.status = native_convergence::function_converged;
-    }
-    else if (parameters_converged)
-    {
-        result.status = native_convergence::parameter_converged;
-    }
-    else if (gradient_converged)
-    {
-        result.status = native_convergence::gradient_converged;
-    }
-    else if (stalled)
-    {
-        result.status  = native_convergence::stalled;
-        result.message = "line search failed to find a sufficient decrease";
-    }
+    api::solver_result result;
+    result.parameters     = parameters;
+    result.backend        = api::backend::native;
+    result.algorithm      = api::algorithm::gauss_newton;
+    result.iterations     = iteration;
+    result.residual_norm  = l2_norm(y_p);
+    result.objective      = *result.residual_norm * *result.residual_norm;
     result.accepted_steps = accepted_steps;
     result.rejected_steps = rejected_steps;
     result.step_norm      = last_step_norm;
     result.gradient_norm  = final_gradient_norm;
+
+    if (x2_converged)
+    {
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::function;
+        result.message     = "objective function value converged";
+    }
+    else if (parameters_converged)
+    {
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::parameter;
+        result.message     = "parameter step converged";
+    }
+    else if (gradient_converged)
+    {
+        result.status      = api::solver_status::converged;
+        result.convergence = api::convergence_reason::gradient;
+        result.message     = "gradient norm converged";
+    }
+    else if (stalled)
+    {
+        result.status  = api::solver_status::stalled;
+        result.message = "line search failed to find a sufficient decrease";
+    }
+    else
+    {
+        result.status = api::solver_status::max_iterations;
+    }
 
     return result;
 }

@@ -222,11 +222,6 @@ private:
 }  // namespace
 #endif  // SOLVERS_HAS_IPOPT
 
-bool ipopt_solver::solve(std::vector<double>& parameters, const solver_options_ipopt& options)
-{
-    return solve_with_status(parameters, options).converged();
-}
-
 #if SOLVERS_HAS_IPOPT
 namespace
 {
@@ -275,7 +270,7 @@ backend_solve_status classify(Ipopt::ApplicationReturnStatus status)
 }  // namespace
 #endif
 
-backend_solve_status ipopt_solver::solve_with_status(SOLVERS_UNUSED std::vector<double>& parameters,
+backend_solve_status ipopt_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
     SOLVERS_UNUSED const solver_options_ipopt&                                           options)
 {
 #if SOLVERS_HAS_IPOPT

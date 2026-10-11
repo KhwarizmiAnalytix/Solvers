@@ -7,8 +7,9 @@
 #include <limits>
 #include <stdexcept>
 
+#include "api/result.h"
+#include "api/status.h"
 #include "detail/api_access.h"
-#include "detail/native_result.h"
 #include "detail/support.h"
 
 namespace solverslib
@@ -56,7 +57,8 @@ class gauss_newton_solver
         double                            bump             = 1e-5,
         finite_difference_scale           difference_scale = finite_difference_scale::absolute);
 
-    SOLVER_API native_result solve(vector_type& parameters, const solver_options_gn& options) const;
+    SOLVER_API api::solver_result solve(
+        vector_type& parameters, const solver_options_gn& options) const;
 };
 }  // namespace solverslib
 

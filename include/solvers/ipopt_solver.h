@@ -18,8 +18,8 @@ class solver_options_ipopt;
 // (Ipopt::TNLP, SmartPtr, IpoptApplication) never cross this header - only
 // std::function callbacks and std::vector<double>, mirroring ceres_solver.
 // The implementation is compiled against Ipopt only when
-// SOLVERS_HAS_IPOPT is set; otherwise is_supported() is false and solve() is a
-// no-op the dispatcher never reaches.
+// SOLVERS_HAS_IPOPT is set; otherwise is_supported() is false and
+// solve() is a no-op the dispatcher never reaches.
 class ipopt_solver
 {
     SOLVERS_FRIEND_API_SOLVE
@@ -39,12 +39,9 @@ private:
         std::vector<double>        lower_bounds = {},
         std::vector<double>        upper_bounds = {});
 
-    // Returns true when Ipopt reports Solve_Succeeded or an acceptable point.
-    SOLVER_API bool solve(std::vector<double>& parameters, const solver_options_ipopt& options);
-
-    // Same solve, reporting how it ended (budget vs. failure vs. infeasible) and
+    // Reports how the solve ended (budget vs. failure vs. infeasible) and
     // the raw Ipopt::ApplicationReturnStatus in native_code.
-    SOLVER_API backend_solve_status solve_with_status(
+    SOLVER_API backend_solve_status solve(
         std::vector<double>& parameters, const solver_options_ipopt& options);
 
     size_t              num_parameters_;

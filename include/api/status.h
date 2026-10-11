@@ -24,6 +24,18 @@ enum class solver_status : std::uint8_t
     stalled                  // no acceptable step exists; the last accepted iterate is valid
 };
 
+// Which stopping criterion a converged native run actually satisfied. Only
+// native solvers (LM, Gauss-Newton, L-BFGS) distinguish these; external
+// backends collapse to solver_status::converged without a reason, so this
+// stays nullopt in solver_result for them.
+enum class convergence_reason : std::uint8_t
+{
+    none,       // status is not solver_status::converged, or the backend does not report a reason
+    function,   // the objective/residual value met its tolerance
+    parameter,  // the parameter step length met its tolerance
+    gradient    // the gradient (or JtWr) norm met its tolerance
+};
+
 // Which algorithm was actually run. Kept independent of the backend that ran
 // it (PyTorch/Eigen style: the mathematical method is named separately from the
 // storage/execution backend that realizes it).
@@ -82,6 +94,22 @@ inline const char* to_string(solver_status status)
         return "user_stopped";
     case solver_status::stalled:
         return "stalled";
+    }
+    return "unknown";
+}
+
+inline const char* to_string(convergence_reason value)
+{
+    switch (value)
+    {
+    case convergence_reason::none:
+        return "none";
+    case convergence_reason::function:
+        return "function";
+    case convergence_reason::parameter:
+        return "parameter";
+    case convergence_reason::gradient:
+        return "gradient";
     }
     return "unknown";
 }
