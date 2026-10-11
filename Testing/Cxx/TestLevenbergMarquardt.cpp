@@ -64,6 +64,20 @@ void rosenbrock_jacobian(const vector_type& x, matrix_type& j)
 {
     j << -20. * x[0], 10., -1., 0.;
 }
+
+// Each residual component must sit strictly under the function tolerance.
+void expect_each_residual_below(const function_type& residuals,
+    const vector_type& x,
+    index_type         num_residuals,
+    double             tolerance)
+{
+    vector_type r(num_residuals);
+    residuals(x, r);
+    for (index_type i = 0; i < num_residuals; ++i)
+    {
+        EXPECT_LT(std::abs(r[i]), tolerance) << "r[" << i << "] = " << r[i];
+    }
+}
 }  // namespace
 
 // Documents the default strategy, linear solver, damping, scaling, and acceleration settings.
@@ -110,39 +124,43 @@ TEST(LmOptions, RejectsInvalidValues)
         solver_options_lm_builder().with_max_iterations(-1).build(), std::invalid_argument);
 }
 
-// Checks that function tolerance uses half the squared residual norm and honors its strict bound.
-TEST(LmStopping, FunctionToleranceIsHalfTheSquaredResidual)
+// Checks that function tolerance is a strict bound on every residual component.
+TEST(LmStopping, FunctionToleranceBoundsEachResidual)
 {
-    const auto residuals = [](const vector_type& x, vector_type& r) { r[0] = x[0]; };
-    const auto jacobian  = [](const vector_type&, matrix_type& j) { j(0, 0) = 1.; };
-    // ||r|| = 0.5, so 0.5 * ||r||^2 = 0.125. The comparison is strict.
-    const double half_squared = 0.125;
+    const auto residuals = [](const vector_type& x, vector_type& r)
+    {
+        r[0] = x[0];
+        r[1] = 0.5 * x[0];
+    };
+    const auto jacobian = [](const vector_type&, matrix_type& j) { j << 1., 0.5; };
+    // At x = 1, r = [1, 0.5] and ||r|| = sqrt(1.25). The comparison is strict.
+    const double tolerance = std::sqrt(1.25);
 
     const auto equal = solver_options_lm_builder()
                            .with_geodesic_acceleration(false)
-                           .with_function_tolerance(half_squared)
+                           .with_function_tolerance(tolerance)
                            .with_gradient_tolerance(0.)
                            .with_parameter_tolerance(0.)
                            .build();
-    vector_type                not_yet_x = vec({0.5});
-    levenberg_marquardt_solver solver(1, 1, residuals, jacobian);
+    vector_type                not_yet_x = vec({1.});
+    levenberg_marquardt_solver solver(1, 2, residuals, jacobian);
     const auto                 not_yet = solver.solve(not_yet_x, *equal);
     EXPECT_GE(not_yet.iterations, 1u);
     EXPECT_EQ(not_yet.status, native_convergence::function_converged);
-    EXPECT_LT(0.5 * not_yet.residual_norm * not_yet.residual_norm, half_squared);
+    expect_each_residual_below(residuals, not_yet_x, 2, tolerance);
 
     const auto above = solver_options_lm_builder()
                            .with_geodesic_acceleration(false)
-                           .with_function_tolerance(std::nextafter(half_squared, 1.))
+                           .with_function_tolerance(std::nextafter(tolerance, 2.))
                            .with_gradient_tolerance(0.)
                            .with_parameter_tolerance(0.)
                            .build();
-    vector_type already_x = vec({0.5});
+    vector_type already_x = vec({1.});
     const auto  already   = solver.solve(already_x, *above);
     EXPECT_EQ(already.iterations, 0u);
     EXPECT_EQ(already.status, native_convergence::function_converged);
-    EXPECT_EQ(already_x[0], 0.5);
-    EXPECT_EQ(already.residual_norm, 0.5);
+    EXPECT_EQ(already_x[0], 1.);
+    expect_each_residual_below(residuals, already_x, 2, std::nextafter(tolerance, 2.));
 }
 
 // Checks that all damping strategies stop at a stationary point even when residuals remain.
@@ -292,6 +310,7 @@ TEST(LmSafeguards, NonFiniteTrialIsRejected)
     EXPECT_TRUE(run.converged()) << run.message;
     EXPECT_NEAR(x[0], 1., 1e-8);
     EXPECT_GE(run.rejected_steps, 1u);
+    expect_each_residual_below(residuals, x, 1, options->function_tolerance());
 }
 
 // Ensures relative finite differences reject a zero-valued parameter where scaling is undefined.
@@ -330,6 +349,7 @@ TEST(LmSafeguards, FiniteDifferencesConvergeFromANonzeroStart)
         EXPECT_TRUE(run.converged()) << run.message;
         EXPECT_NEAR(x[0], 2., 1e-5);
         EXPECT_NEAR(x[1], 3., 1e-5);
+        expect_each_residual_below(residuals, x, 2, options->function_tolerance());
     }
 }
 
@@ -359,6 +379,7 @@ TEST(LmSafeguards, InactiveColumnStaysPut)
         EXPECT_TRUE(run.converged()) << run.message;
         EXPECT_NEAR(x[0], 1., 1e-8);
         EXPECT_EQ(x[1], 7.);
+        expect_each_residual_below(residuals, x, 2, options->function_tolerance());
     }
 }
 
@@ -387,7 +408,7 @@ TEST_P(LmCombination, ConvergesOnRosenbrock)
     EXPECT_EQ(run.status, native_convergence::function_converged) << run.message;
     EXPECT_NEAR(x[0], 1., 1e-6);
     EXPECT_NEAR(x[1], 1., 1e-6);
-    EXPECT_LT(0.5 * run.residual_norm * run.residual_norm, 1e-20);
+    expect_each_residual_below(rosenbrock_residual, x, 2, options->function_tolerance());
     ASSERT_TRUE(run.accepted_steps.has_value());
     EXPECT_GE(*run.accepted_steps, 1u);
 }

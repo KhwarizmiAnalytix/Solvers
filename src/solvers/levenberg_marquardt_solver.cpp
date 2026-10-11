@@ -61,10 +61,7 @@ levenberg_marquardt_solver::levenberg_marquardt_solver(size_t num_parameters,
         for (size_t j = 0; j < num_parameters_; ++j)
         {
             const double h = finite_difference_increment(fd_scale_, fd_step_, x[j]);
-            if (h <= 0.0)
-            {
-                SOLVERS_THROW("finite-difference step is not positive");
-            }
+            SOLVERS_CHECK(h > 0.0, "finite-difference step is not positive");
             fd_parameters_[j] = x[j] + h;
             function_(fd_parameters_, fd_residual_);
             jacobian_matrix.col(static_cast<index_type>(j)) = (fd_residual_ - fd_base_) / h;
@@ -130,15 +127,12 @@ native_result levenberg_marquardt_solver::solve(
         JtWdy.noalias() = J.transpose() * y_p;
     };
     const double function_tolerance = options.function_tolerance();
-    // F = 0.5 * ||r||^2, the objective the API documents.
+    // Stop when ||r|| is strictly below the function tolerance.
     const auto function_converged = [function_tolerance](double residual_norm)
-    { return 0.5 * residual_norm * residual_norm < function_tolerance; };
+    { return residual_norm < function_tolerance; };
 
     function_(parameters, y_p);
-    if (!y_p.allFinite())
-    {
-        SOLVERS_THROW("non-finite residuals at the initial point");
-    }
+    SOLVERS_CHECK(y_p.allFinite(), "non-finite residuals at the initial point");
     auto x2_p = l2_norm(y_p);
     // Smallest cost yet found, C(θ) = Σ r_m(θ)^2.
     auto min_cost             = y_p.squaredNorm();
@@ -157,10 +151,7 @@ native_result levenberg_marquardt_solver::solve(
     if (!x2_converged)
     {
         jacobian_(parameters, J);
-        if (!J.allFinite())
-        {
-            SOLVERS_THROW("non-finite Jacobian at the initial point");
-        }
+        SOLVERS_CHECK(J.allFinite(), "non-finite Jacobian at the initial point");
 
         refresh_normal_terms();
 
