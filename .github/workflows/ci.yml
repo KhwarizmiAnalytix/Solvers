@@ -122,6 +122,14 @@ jobs:
           CXX: ${{ matrix.env_cxx || '' }}
         run: python3 setup.py ${{ matrix.args }}
 
+      - name: Upload coverage to Codecov
+        if: matrix.name == 'Coverage'
+        uses: codecov/codecov-action@v4
+        with:
+          files: build_ninja/coverage_report/coverage.lcov
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   # ===========================================================================
   # macOS TESTS
   # ===========================================================================
