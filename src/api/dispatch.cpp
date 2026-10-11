@@ -126,30 +126,6 @@ algorithm resolve_algorithm(const solver_options& options)
 }
 }  // namespace
 
-// Structural summary only. inspect does not call residuals or solve.
-problem_traits inspect(const least_squares_problem& problem)
-{
-    problem_traits traits;
-    traits.is_least_squares = true;
-    traits.has_jacobian     = problem.jacobian.has_value();
-    traits.has_bounds       = !problem.bounds.empty();
-    traits.num_parameters   = problem.num_parameters;
-    traits.num_residuals    = problem.num_residuals;
-    return traits;
-}
-
-problem_traits inspect(const optimization_problem& problem)
-{
-    problem_traits traits;
-    traits.is_least_squares          = false;
-    traits.has_gradient              = problem.gradient.has_value();
-    traits.has_hessian               = problem.hessian.has_value();
-    traits.has_bounds                = !problem.bounds.empty();
-    traits.has_nonlinear_constraints = !problem.constraints.empty();
-    traits.num_parameters            = problem.num_parameters;
-    return traits;
-}
-
 // Least squares. Native LM and Gauss-Newton store objective as ||r||^2 and
 // residual_norm as ||r||. Ceres, Ipopt, NLopt, and PETSc/TAO store the scalar
 // cost 0.5 * ||r||^2. RNC-LM builds its own solver_result, including the

@@ -99,27 +99,9 @@ struct optimization_problem
     solverslib::api::constraints constraints;
 };
 
-
-// Structural summary for backend selection
-struct problem_traits
-{
-    bool is_least_squares           = false;
-    bool has_jacobian               = false;
-    bool has_gradient               = false;
-    bool has_hessian                = false;
-    bool has_bounds                 = false;
-    bool has_nonlinear_constraints  = false;
-
-    std::size_t num_parameters = 0;
-    std::size_t num_residuals  = 0;
-};
-
 // ---------------------------------------------------------------------------
 // API entry points
 // ---------------------------------------------------------------------------
-
-problem_traits inspect(const least_squares_problem& problem);
-problem_traits inspect(const optimization_problem& problem);
 
 solver_result solve(const least_squares_problem& problem,
     const vector_type&                           initial_guess,
