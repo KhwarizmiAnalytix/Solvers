@@ -18,6 +18,11 @@ unusedFunction:src/api/roots.cpp
 unusedFunction:src/api/routing.cpp
 unusedFunction:src/api/evaluators.cpp
 
+// Root-finding algorithms declared in root_finding_algorithms.h are public API
+// exercised from Testing/, Testing/Benchmark/, and example/, none of which
+// cppcheck scans.
+unusedFunction:src/solvers/root_finding_algorithms.cpp
+
 // Plain loops in the polynomial/selection helpers read more clearly than
 // std::accumulate/any_of/copy_if with capturing lambdas.
 useStlAlgorithm:src/api/roots.cpp
