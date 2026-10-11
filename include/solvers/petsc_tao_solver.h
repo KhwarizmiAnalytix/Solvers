@@ -15,10 +15,10 @@ class solver_options_petsc;
 
 // Adapter around PETSc/TAO. TAO's algorithm family covers both general
 // objective minimization (nls/ntr/ntl/lmvm/bnls/bqnls) and derivative-free /
-// Gauss-Newton least squares (pounders/brgn), so this one adapter serves both
-// the backend::petsc_tao and backend::pounders routes. PETSc's C types (Tao,
-// Vec, Mat) never cross this header. Compiled against PETSc only when
-// SOLVERS_HAS_PETSC is set; otherwise is_supported() is false.
+// Gauss-Newton least squares (pounders/brgn). The caller selects the TAO
+// algorithm through solver_options_petsc; dispatch reports backend::petsc_tao.
+// PETSc's C types (Tao, Vec, Mat) never cross this header. Compiled against
+// PETSc only when SOLVERS_HAS_PETSC is set; otherwise is_supported() is false.
 class petsc_tao_solver
 {
     SOLVERS_FRIEND_API_SOLVE

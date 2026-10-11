@@ -64,14 +64,6 @@ struct solver_result
     std::string message;
 
     bool converged() const noexcept { return status == solver_status::converged; }
-
-    // A limit-hit or stalled run still returns a usable iterate (the last
-    // accepted point); hard failures do not.
-    bool has_usable_iterate() const noexcept
-    {
-        return status == solver_status::converged || status == solver_status::max_iterations ||
-               status == solver_status::stalled || status == solver_status::user_stopped;
-    }
 };
 }  // namespace solverslib::api
 

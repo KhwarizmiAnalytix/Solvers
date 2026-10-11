@@ -27,8 +27,6 @@ struct backend_solve_status
     int                        native_code = 0;
     std::optional<std::size_t> iterations;
     std::string                message;
-
-    bool converged() const noexcept { return outcome == backend_outcome::converged; }
 };
 }  // namespace solverslib
 

@@ -2,18 +2,6 @@
 
 namespace solverslib
 {
-solver_options::solver_options(solver_enum solver,
-    int                                    max_num_iterations,
-    double                                 function_tolerance,
-    double                                 gradient_tolerance,
-    double                                 parameter_tolerance,
-    bool                                   verbose)
-    : solver_(solver), max_num_iterations_(max_num_iterations),
-      function_tolerance_(function_tolerance), gradient_tolerance_(gradient_tolerance),
-      parameter_tolerance_(parameter_tolerance), verbose_(verbose)
-{
-}
-
 solver_options::solver_options(solver_enum solver) : solver_(solver) {}
 
 solver_enum        solver_options::solver() const { return solver_; }
