@@ -6,15 +6,40 @@
 #include "detail/support.h"
 #include "solver_options/solver_options_petsc.h"
 
-#if SOLVERS_HAS_PETSC
+namespace solverslib
+{
+petsc_tao_solver::petsc_tao_solver(size_t num_parameters,
+    objective_type                        objective,
+    gradient_type                         gradient,
+    hessian_type                          hessian,
+    std::vector<double>                   lower_bounds,
+    std::vector<double>                   upper_bounds)
+    : is_least_squares_(false), num_parameters_(num_parameters), num_residuals_(0),
+      objective_(std::move(objective)), gradient_(std::move(gradient)),
+      hessian_(std::move(hessian)), lower_bounds_(std::move(lower_bounds)),
+      upper_bounds_(std::move(upper_bounds))
+{
+}
+
+petsc_tao_solver::petsc_tao_solver(size_t num_parameters,
+    size_t                                num_residuals,
+    residual_type                         residuals,
+    jacobian_type                         jacobian,
+    std::vector<double>                   lower_bounds,
+    std::vector<double>                   upper_bounds)
+    : is_least_squares_(true), num_parameters_(num_parameters), num_residuals_(num_residuals),
+      residuals_(std::move(residuals)), jacobian_(std::move(jacobian)),
+      lower_bounds_(std::move(lower_bounds)), upper_bounds_(std::move(upper_bounds))
+{
+}
+}  // namespace solverslib
+
 #include <petsctao.h>
-#endif
 
 namespace solverslib
 {
 namespace
 {
-#if SOLVERS_HAS_PETSC
 const char* tao_type_string(tao_algorithm_enum type)
 {
     switch (type)
@@ -124,48 +149,16 @@ PetscErrorCode residual_jac_tramp(Tao /*tao*/, Vec x, Mat J, Mat /*Jpre*/, void*
     MatAssemblyEnd(J, MAT_FINAL_ASSEMBLY);
     return 0;
 }
-#endif  // SOLVERS_HAS_PETSC
 }  // namespace
-
-petsc_tao_solver::petsc_tao_solver(size_t num_parameters,
-    objective_type                        objective,
-    gradient_type                         gradient,
-    hessian_type                          hessian,
-    std::vector<double>                   lower_bounds,
-    std::vector<double>                   upper_bounds)
-    : is_least_squares_(false), num_parameters_(num_parameters), num_residuals_(0),
-      objective_(std::move(objective)), gradient_(std::move(gradient)),
-      hessian_(std::move(hessian)), lower_bounds_(std::move(lower_bounds)),
-      upper_bounds_(std::move(upper_bounds))
-{
-}
-
-petsc_tao_solver::petsc_tao_solver(size_t num_parameters,
-    size_t                                num_residuals,
-    residual_type                         residuals,
-    jacobian_type                         jacobian,
-    std::vector<double>                   lower_bounds,
-    std::vector<double>                   upper_bounds)
-    : is_least_squares_(true), num_parameters_(num_parameters), num_residuals_(num_residuals),
-      residuals_(std::move(residuals)), jacobian_(std::move(jacobian)),
-      lower_bounds_(std::move(lower_bounds)), upper_bounds_(std::move(upper_bounds))
-{
-}
 
 bool petsc_tao_solver::is_supported()
 {
-#if SOLVERS_HAS_PETSC
     return true;
-#else
-    return false;
-#endif
 }
 
 backend_solve_status petsc_tao_solver::solve(
-    SOLVERS_UNUSED std::vector<double>&        parameters,
-    SOLVERS_UNUSED const solver_options_petsc& options)
+    std::vector<double>& parameters, const solver_options_petsc& options)
 {
-#if SOLVERS_HAS_PETSC
     if (!PetscInitializeCalled)
     {
         PetscInitializeNoArguments();
@@ -313,10 +306,5 @@ backend_solve_status petsc_tao_solver::solve(
         }
     }
     return out;
-#else
-    backend_solve_status out;  // dispatcher gates on is_supported() before ever calling this
-    out.message = "PETSc/TAO backend was not compiled in";
-    return out;
-#endif
 }
 }  // namespace solverslib

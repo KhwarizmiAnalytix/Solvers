@@ -7,7 +7,20 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "Solvers",
-    srcs = glob(["src/**/*.cpp"]),
+    # The optional backends (Ceres, Ipopt, NLopt, PETSc/TAO) are not wired up as
+    # Bazel deps, so their adapters are excluded here; src/api/dispatch.cpp's own
+    # SOLVERS_HAS_<NAME> #if (all defined 0 below) reports backend_unavailable
+    # instead. See CMakeLists.txt for the CMake side, which compiles the adapter
+    # in once the matching SOLVERS_ENABLE_<NAME> option is ON.
+    srcs = glob(
+        ["src/**/*.cpp"],
+        exclude = [
+            "src/solvers/ceres_solver.cpp",
+            "src/solvers/ipopt_solver.cpp",
+            "src/solvers/nlopt_solver.cpp",
+            "src/solvers/petsc_tao_solver.cpp",
+        ],
+    ),
     hdrs = glob(
         [
             "include/**/*.h",

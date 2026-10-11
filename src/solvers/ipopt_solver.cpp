@@ -7,12 +7,6 @@
 #include "detail/support.h"
 #include "solver_options/solver_options_ipopt.h"
 
-#if SOLVERS_HAS_IPOPT
-#include <IpIpoptApplication.hpp>
-#include <IpSolveStatistics.hpp>
-#include <IpTNLP.hpp>
-#endif
-
 namespace solverslib
 {
 ipopt_solver::ipopt_solver(size_t num_parameters,
@@ -26,17 +20,14 @@ ipopt_solver::ipopt_solver(size_t num_parameters,
       lower_bounds_(std::move(lower_bounds)), upper_bounds_(std::move(upper_bounds))
 {
 }
+}  // namespace solverslib
 
-bool ipopt_solver::is_supported()
+#include <IpIpoptApplication.hpp>
+#include <IpSolveStatistics.hpp>
+#include <IpTNLP.hpp>
+
+namespace solverslib
 {
-#if SOLVERS_HAS_IPOPT
-    return true;
-#else
-    return false;
-#endif
-}
-
-#if SOLVERS_HAS_IPOPT
 namespace
 {
 // Minimal bound-constrained TNLP (no general nonlinear constraints: m = 0).
@@ -219,12 +210,7 @@ private:
     std::vector<double>&          x_;
     bool                          use_exact_hessian_;
 };
-}  // namespace
-#endif  // SOLVERS_HAS_IPOPT
 
-#if SOLVERS_HAS_IPOPT
-namespace
-{
 backend_solve_status classify(Ipopt::ApplicationReturnStatus status)
 {
     backend_solve_status out;
@@ -268,12 +254,15 @@ backend_solve_status classify(Ipopt::ApplicationReturnStatus status)
     return out;
 }
 }  // namespace
-#endif
 
-backend_solve_status ipopt_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
-    SOLVERS_UNUSED const solver_options_ipopt&                                           options)
+bool ipopt_solver::is_supported()
 {
-#if SOLVERS_HAS_IPOPT
+    return true;
+}
+
+backend_solve_status ipopt_solver::solve(
+    std::vector<double>& parameters, const solver_options_ipopt& options)
+{
     const bool use_exact_hessian =
         options.hessian_approximation() == ipopt_hessian_approximation_enum::EXACT &&
         static_cast<bool>(hessian_);
@@ -316,10 +305,5 @@ backend_solve_status ipopt_solver::solve(SOLVERS_UNUSED std::vector<double>& par
         out.iterations = static_cast<std::size_t>(statistics->IterationCount());
     }
     return out;
-#else
-    backend_solve_status out;  // dispatcher gates on is_supported() before ever calling this
-    out.message = "Ipopt backend was not compiled in";
-    return out;
-#endif
 }
 }  // namespace solverslib

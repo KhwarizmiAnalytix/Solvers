@@ -12,14 +12,37 @@
 #include "solver_options/solver_options_ceres.h"
 #include "solver_options/solver_options_ipopt.h"
 #include "solver_options/solver_options_petsc.h"
+
+#if SOLVERS_HAS_CERES
 #include "solvers/ceres_solver.h"
+#endif
+#if SOLVERS_HAS_IPOPT
 #include "solvers/ipopt_solver.h"
+#endif
+#if SOLVERS_HAS_PETSC
 #include "solvers/petsc_tao_solver.h"
+#endif
 
 using namespace solverslib;
 using namespace solverslib::api;
 using namespace solverslib::svi;
 using namespace solverslib::test;
+
+#if SOLVERS_HAS_CERES
+#define SOLVERS_BENCH_CERES_SUPPORTED() (ceres_solver::is_supported())
+#else
+#define SOLVERS_BENCH_CERES_SUPPORTED() (false)
+#endif
+#if SOLVERS_HAS_IPOPT
+#define SOLVERS_BENCH_IPOPT_SUPPORTED() (ipopt_solver::is_supported())
+#else
+#define SOLVERS_BENCH_IPOPT_SUPPORTED() (false)
+#endif
+#if SOLVERS_HAS_PETSC
+#define SOLVERS_BENCH_PETSC_SUPPORTED() (petsc_tao_solver::is_supported())
+#else
+#define SOLVERS_BENCH_PETSC_SUPPORTED() (false)
+#endif
 
 namespace
 {
@@ -68,7 +91,7 @@ const auto opt   = rosenbrock_optimization(true);
 
 static void BM_Ceres_LeastSquares(benchmark::State& state)
 {
-    if (!ceres_solver::is_supported())
+    if (!SOLVERS_BENCH_CERES_SUPPORTED())
     {
         state.SkipWithMessage("Ceres backend not compiled in");
         return;
@@ -84,7 +107,7 @@ BENCHMARK(BM_Ceres_LeastSquares);
 
 static void BM_Ipopt_LeastSquares(benchmark::State& state)
 {
-    if (!ipopt_solver::is_supported())
+    if (!SOLVERS_BENCH_IPOPT_SUPPORTED())
     {
         state.SkipWithMessage("Ipopt backend not compiled in");
         return;
@@ -100,7 +123,7 @@ BENCHMARK(BM_Ipopt_LeastSquares)->Unit(benchmark::kMillisecond);
 
 static void BM_PETSc_BRGN_LeastSquares(benchmark::State& state)
 {
-    if (!petsc_tao_solver::is_supported())
+    if (!SOLVERS_BENCH_PETSC_SUPPORTED())
     {
         state.SkipWithMessage("PETSc/TAO backend not compiled in");
         return;
@@ -116,7 +139,7 @@ BENCHMARK(BM_PETSc_BRGN_LeastSquares);
 
 static void BM_Ipopt_Optimization(benchmark::State& state)
 {
-    if (!ipopt_solver::is_supported())
+    if (!SOLVERS_BENCH_IPOPT_SUPPORTED())
     {
         state.SkipWithMessage("Ipopt backend not compiled in");
         return;
@@ -132,7 +155,7 @@ BENCHMARK(BM_Ipopt_Optimization)->Unit(benchmark::kMillisecond);
 
 static void BM_PETSc_LMVM_Optimization(benchmark::State& state)
 {
-    if (!petsc_tao_solver::is_supported())
+    if (!SOLVERS_BENCH_PETSC_SUPPORTED())
     {
         state.SkipWithMessage("PETSc/TAO backend not compiled in");
         return;
@@ -152,7 +175,7 @@ BENCHMARK(BM_PETSc_LMVM_Optimization);
 
 static void BM_SVI_Ceres_Analytic(benchmark::State& state)
 {
-    if (!ceres_solver::is_supported())
+    if (!SOLVERS_BENCH_CERES_SUPPORTED())
     {
         state.SkipWithMessage("Ceres backend not compiled in");
         return;
@@ -165,7 +188,7 @@ BENCHMARK(BM_SVI_Ceres_Analytic);
 
 static void BM_SVI_Ceres_FiniteDiff(benchmark::State& state)
 {
-    if (!ceres_solver::is_supported())
+    if (!SOLVERS_BENCH_CERES_SUPPORTED())
     {
         state.SkipWithMessage("Ceres backend not compiled in");
         return;
@@ -182,7 +205,7 @@ BENCHMARK(BM_SVI_Ceres_FiniteDiff);
 
 static void BM_SVI_Ipopt_Grad(benchmark::State& state)
 {
-    if (!ipopt_solver::is_supported())
+    if (!SOLVERS_BENCH_IPOPT_SUPPORTED())
     {
         state.SkipWithMessage("Ipopt backend not compiled in");
         return;
@@ -195,7 +218,7 @@ BENCHMARK(BM_SVI_Ipopt_Grad)->Unit(benchmark::kMillisecond);
 
 static void BM_SVI_Ipopt_FiniteDiff(benchmark::State& state)
 {
-    if (!ipopt_solver::is_supported())
+    if (!SOLVERS_BENCH_IPOPT_SUPPORTED())
     {
         state.SkipWithMessage("Ipopt backend not compiled in");
         return;
@@ -212,7 +235,7 @@ BENCHMARK(BM_SVI_Ipopt_FiniteDiff)->Unit(benchmark::kMillisecond);
 
 static void BM_SVI_PETSc_BRGN_Analytic(benchmark::State& state)
 {
-    if (!petsc_tao_solver::is_supported())
+    if (!SOLVERS_BENCH_PETSC_SUPPORTED())
     {
         state.SkipWithMessage("PETSc/TAO backend not compiled in");
         return;
@@ -225,7 +248,7 @@ BENCHMARK(BM_SVI_PETSc_BRGN_Analytic);
 
 static void BM_SVI_PETSc_LMVM_Grad(benchmark::State& state)
 {
-    if (!petsc_tao_solver::is_supported())
+    if (!SOLVERS_BENCH_PETSC_SUPPORTED())
     {
         state.SkipWithMessage("PETSc/TAO backend not compiled in");
         return;
@@ -238,7 +261,7 @@ BENCHMARK(BM_SVI_PETSc_LMVM_Grad);
 
 static void BM_SVI_PETSc_LMVM_FiniteDiff(benchmark::State& state)
 {
-    if (!petsc_tao_solver::is_supported())
+    if (!SOLVERS_BENCH_PETSC_SUPPORTED())
     {
         state.SkipWithMessage("PETSc/TAO backend not compiled in");
         return;

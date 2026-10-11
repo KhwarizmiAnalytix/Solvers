@@ -2,7 +2,20 @@
 
 #include "detail/support.h"
 
-#if SOLVERS_HAS_CERES
+namespace solverslib
+{
+ceres_solver::ceres_solver(size_t                         num_parameters,
+    size_t                                                num_residuals,
+    function_type                                         cost_function,
+    const jacobian_type&                                  jacobian_callback,
+    const std::vector<double>&                            lower_bounds,
+    const std::vector<double>&                            upper_bounds)
+    : cost_function_(std::move(cost_function)), jacobian_callback_(jacobian_callback),
+      lower_bounds_(lower_bounds), upper_bounds_(upper_bounds),
+      num_parameters_(num_parameters), num_residuals_(num_residuals)
+{
+}
+}  // namespace solverslib
 
 #include <ceres/ceres.h>
 
@@ -157,48 +170,24 @@ void update_options(
         static_cast<ceres::DumpFormatType>(input_options.trust_region_problem_dump_format_type());
 }
 }  // namespace solverslib
-#endif
 
 namespace solverslib
 {
-ceres_solver::ceres_solver(size_t                         num_parameters,
-    size_t                                                num_residuals,
-    function_type                                         cost_function,
-    const jacobian_type&                                  jacobian_callback,
-    const std::vector<double>&                            lower_bounds,
-    const std::vector<double>&                            upper_bounds)
-    : cost_function_(std::move(cost_function)), jacobian_callback_(jacobian_callback),
-      lower_bounds_(lower_bounds), upper_bounds_(upper_bounds),
-      num_parameters_(num_parameters), num_residuals_(num_residuals)
-{
-}
-
 bool ceres_solver::is_supported()
 {
-#if SOLVERS_HAS_CERES
     return true;
-#else
-    return false;
-#endif
-};
+}
 
-bool ceres_solver::solve(SOLVERS_UNUSED std::vector<double>& parameters,
-    SOLVERS_UNUSED const solver_options_ceres&               options)
+bool ceres_solver::solve(std::vector<double>& parameters, const solver_options_ceres& options)
 {
-#if SOLVERS_HAS_CERES
     ceres::Solver::Summary summary;
     solve_with_summary(parameters, options, &summary);
     return summary.IsSolutionUsable();
-#else
-    SOLVERS_NOT_IMPLEMENTED("ceres solver not supported");
-#endif
 }
 
-void ceres_solver::solve_with_summary(SOLVERS_UNUSED std::vector<double>& parameters,
-    SOLVERS_UNUSED const solver_options_ceres&                            options,
-    SOLVERS_UNUSED void*                                                  summary_ptr)
+void ceres_solver::solve_with_summary(
+    std::vector<double>& parameters, const solver_options_ceres& options, void* summary_ptr)
 {
-#if SOLVERS_HAS_CERES
     ceres::Solver::Summary& summary = *static_cast<ceres::Solver::Summary*>(summary_ptr);
     SOLVERS_CHECK(parameters.size() == num_parameters_);
 
@@ -354,8 +343,5 @@ void ceres_solver::solve_with_summary(SOLVERS_UNUSED std::vector<double>& parame
     {
         SOLVERS_LOG_INFO("ceres solver summary: {}", summary.BriefReport());
     }
-#else
-    SOLVERS_NOT_IMPLEMENTED("ceres solver not supported");
-#endif
 }
 }  // namespace solverslib

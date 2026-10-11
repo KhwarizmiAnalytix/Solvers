@@ -5,10 +5,6 @@
 #include "detail/support.h"
 #include "solver_options/solver_options_nlopt.h"
 
-#if SOLVERS_HAS_NLOPT
-#include <nlopt.h>
-#endif
-
 namespace solverslib
 {
 nlopt_solver::nlopt_solver(size_t num_parameters,
@@ -21,17 +17,12 @@ nlopt_solver::nlopt_solver(size_t num_parameters,
       upper_bounds_(std::move(upper_bounds))
 {
 }
+}  // namespace solverslib
 
-bool nlopt_solver::is_supported()
+#include <nlopt.h>
+
+namespace solverslib
 {
-#if SOLVERS_HAS_NLOPT
-    return true;
-#else
-    return false;
-#endif
-}
-
-#if SOLVERS_HAS_NLOPT
 namespace
 {
 struct nlopt_context
@@ -58,6 +49,11 @@ double nlopt_objective_wrapper(
     return f;
 }
 }  // namespace
+
+bool nlopt_solver::is_supported()
+{
+    return true;
+}
 
 backend_solve_status nlopt_solver::solve(std::vector<double>& parameters,
     const solver_options_nlopt&         options)
@@ -152,16 +148,4 @@ backend_solve_status nlopt_solver::solve(std::vector<double>& parameters,
 
     return status;
 }
-
-#else
-backend_solve_status nlopt_solver::solve(std::vector<double>& /* parameters */,
-    const solver_options_nlopt& /* options */)
-{
-    backend_solve_status status;
-    status.outcome     = backend_outcome::failed;
-    status.native_code = -1;
-    status.message     = "NLopt backend not compiled in";
-    return status;
-}
-#endif
 }  // namespace solverslib

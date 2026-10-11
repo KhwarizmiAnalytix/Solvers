@@ -14,14 +14,23 @@
 #include "solver_options/solver_options_nlopt.h"
 #include "solver_options/solver_options_petsc.h"
 #include "solver_options/solver_options_rnc_lm.h"
-#include "solvers/ceres_solver.h"
 #include "solvers/gauss_newton_solver.h"
-#include "solvers/ipopt_solver.h"
 #include "solvers/lbfgs_solver.h"
 #include "solvers/levenberg_marquardt_solver.h"
-#include "solvers/nlopt_solver.h"
-#include "solvers/petsc_tao_solver.h"
 #include "solvers/rnc_lm_solver.h"
+
+#if SOLVERS_HAS_CERES
+#include "solvers/ceres_solver.h"
+#endif
+#if SOLVERS_HAS_IPOPT
+#include "solvers/ipopt_solver.h"
+#endif
+#if SOLVERS_HAS_NLOPT
+#include "solvers/nlopt_solver.h"
+#endif
+#if SOLVERS_HAS_PETSC
+#include "solvers/petsc_tao_solver.h"
+#endif
 
 // api::solve is the only call into a solver. Each overload checks the problem,
 // selects a kernel from the concrete options type, and copies that kernel's
@@ -221,11 +230,7 @@ solver_result solve(const least_squares_problem& problem,
     }
     case solver_enum::CERES:
     {
-        if (!ceres_solver::is_supported())
-        {
-            return failed(
-                solver_status::backend_unavailable, "Ceres backend not compiled in", initial_guess);
-        }
+#if SOLVERS_HAS_CERES
         ceres_solver        solver(problem.num_parameters,
             problem.num_residuals,
             problem.residuals,
@@ -246,14 +251,14 @@ solver_result solve(const least_squares_problem& problem,
         problem.residuals(result.parameters, residual);
         result.objective = .5 * residual.squaredNorm();
         return result;
+#else
+        return failed(
+            solver_status::backend_unavailable, "Ceres backend not compiled in", initial_guess);
+#endif
     }
     case solver_enum::IPOPT:
     {
-        if (!ipopt_solver::is_supported())
-        {
-            return failed(
-                solver_status::backend_unavailable, "Ipopt backend not compiled in", initial_guess);
-        }
+#if SOLVERS_HAS_IPOPT
         if (!problem.jacobian)
         {
             return failed(solver_status::unsupported_capability,
@@ -289,14 +294,14 @@ solver_result solve(const least_squares_problem& problem,
             backend::ipopt);
         result.objective = objective(result.parameters);
         return result;
+#else
+        return failed(
+            solver_status::backend_unavailable, "Ipopt backend not compiled in", initial_guess);
+#endif
     }
     case solver_enum::NLOPT:
     {
-        if (!nlopt_solver::is_supported())
-        {
-            return failed(
-                solver_status::backend_unavailable, "NLopt backend not compiled in", initial_guess);
-        }
+#if SOLVERS_HAS_NLOPT
         // Same scalar cost as Ipopt. The gradient callback is present only when
         // the problem supplies a Jacobian; derivative-free NLopt algorithms run
         // with it empty.
@@ -326,15 +331,14 @@ solver_result solve(const least_squares_problem& problem,
             backend::nlopt);
         result.objective = objective(result.parameters);
         return result;
+#else
+        return failed(
+            solver_status::backend_unavailable, "NLopt backend not compiled in", initial_guess);
+#endif
     }
     case solver_enum::PETSC_TAO:
     {
-        if (!petsc_tao_solver::is_supported())
-        {
-            return failed(solver_status::backend_unavailable,
-                "PETSc/TAO backend not compiled in",
-                initial_guess);
-        }
+#if SOLVERS_HAS_PETSC
         // TAO receives the residual callback directly and chooses its algorithm
         // from solver_options_petsc (POUNDERS, BRGN, NLS, and the rest).
         petsc_tao_solver    solver(problem.num_parameters,
@@ -352,6 +356,11 @@ solver_result solve(const least_squares_problem& problem,
         problem.residuals(result.parameters, residual);
         result.objective = .5 * residual.squaredNorm();
         return result;
+#else
+        return failed(solver_status::backend_unavailable,
+            "PETSc/TAO backend not compiled in",
+            initial_guess);
+#endif
     }
     default:
         return failed(
@@ -424,11 +433,7 @@ solver_result solve(const optimization_problem& problem,
     }
     case solver_enum::IPOPT:
     {
-        if (!ipopt_solver::is_supported())
-        {
-            return failed(
-                solver_status::backend_unavailable, "Ipopt backend not compiled in", initial_guess);
-        }
+#if SOLVERS_HAS_IPOPT
         if (!problem.gradient)
         {
             return failed(solver_status::unsupported_capability,
@@ -448,14 +453,14 @@ solver_result solve(const optimization_problem& problem,
             backend::ipopt);
         result.objective = problem.objective(result.parameters);
         return result;
+#else
+        return failed(
+            solver_status::backend_unavailable, "Ipopt backend not compiled in", initial_guess);
+#endif
     }
     case solver_enum::NLOPT:
     {
-        if (!nlopt_solver::is_supported())
-        {
-            return failed(
-                solver_status::backend_unavailable, "NLopt backend not compiled in", initial_guess);
-        }
+#if SOLVERS_HAS_NLOPT
         if (!problem.gradient)
         {
             return failed(solver_status::unsupported_capability,
@@ -474,15 +479,14 @@ solver_result solve(const optimization_problem& problem,
             backend::nlopt);
         result.objective = problem.objective(result.parameters);
         return result;
+#else
+        return failed(
+            solver_status::backend_unavailable, "NLopt backend not compiled in", initial_guess);
+#endif
     }
     case solver_enum::PETSC_TAO:
     {
-        if (!petsc_tao_solver::is_supported())
-        {
-            return failed(solver_status::backend_unavailable,
-                "PETSc/TAO backend not compiled in",
-                initial_guess);
-        }
+#if SOLVERS_HAS_PETSC
         if (!problem.gradient)
         {
             return failed(solver_status::unsupported_capability,
@@ -502,6 +506,11 @@ solver_result solve(const optimization_problem& problem,
             backend::petsc_tao);
         result.objective = problem.objective(result.parameters);
         return result;
+#else
+        return failed(solver_status::backend_unavailable,
+            "PETSc/TAO backend not compiled in",
+            initial_guess);
+#endif
     }
     default:
         // Native LM, Gauss-Newton, and RNC-LM options have no scalar kernel.

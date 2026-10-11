@@ -10,10 +10,19 @@
 #include "solver_options/solver_options_nlopt.h"
 #include "solver_options/solver_options_petsc.h"
 #include "solver_options/solver_options_rnc_lm.h"
+
+#if SOLVERS_HAS_CERES
 #include "solvers/ceres_solver.h"
+#endif
+#if SOLVERS_HAS_IPOPT
 #include "solvers/ipopt_solver.h"
+#endif
+#if SOLVERS_HAS_NLOPT
 #include "solvers/nlopt_solver.h"
+#endif
+#if SOLVERS_HAS_PETSC
 #include "solvers/petsc_tao_solver.h"
+#endif
 
 using namespace solverslib;
 using namespace solverslib::api;
@@ -176,6 +185,150 @@ TEST(NativeBackend, Solve)
         expect_rosenbrock_minimum(result);
     }
     {
+        SCOPED_TRACE("LBFGSConvergesOnParameterStep");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(5000)
+                                 .with_function_tolerance(0.0)
+                                 .with_gradient_tolerance(0.0)
+                                 .with_parameter_tolerance(1e-10)
+                                 .build();
+        const auto result  = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        EXPECT_EQ(result.convergence, convergence_reason::parameter);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSConvergesOnGradientNorm");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(5000)
+                                 .with_function_tolerance(0.0)
+                                 .with_gradient_tolerance(1e-9)
+                                 .with_parameter_tolerance(0.0)
+                                 .build();
+        const auto result  = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        EXPECT_EQ(result.convergence, convergence_reason::gradient);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSStopsAtMaxIterations");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(1)
+                                 .with_function_tolerance(0.0)
+                                 .with_gradient_tolerance(0.0)
+                                 .with_parameter_tolerance(0.0)
+                                 .build();
+        const auto result  = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        EXPECT_EQ(result.status, solver_status::max_iterations);
+    }
+    {
+        SCOPED_TRACE("LBFGSFiniteDifferenceGradient");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(2000)
+                                 .with_function_tolerance(1e-13)
+                                 .with_gradient_tolerance(1e-10)
+                                 .with_bump(1e-6)
+                                 .build();
+        const auto result   = solve(rosenbrock_optimization(false), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSNocedalWrightTightBracket");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(2000)
+                                 .with_function_tolerance(1e-13)
+                                 .with_gradient_tolerance(1e-11)
+                                 .with_type(lbfgs_line_search_type::NOCEDAL_WRIGHT)
+                                 .with_initial_step(10.0)
+                                 .with_step_min(1e-3)
+                                 .with_step_max(20.0)
+                                 .with_line_search_expansion(1.05)
+                                 .with_linesearch_tolerance(1e-4)
+                                 .with_linesearch_wolfe(0.1)
+                                 .with_max_iteration_linesearch(200)
+                                 .build();
+        const auto result   = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSBacktrackingArmijo");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(2000)
+                                 .with_function_tolerance(1e-13)
+                                 .with_gradient_tolerance(1e-11)
+                                 .with_method_type(lbfgs_line_search_method_type::ARMIJO)
+                                 .with_type(lbfgs_line_search_type::BACKTRACKING)
+                                 .build();
+        const auto result   = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSBacktrackingStrongWolfe");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(2000)
+                                 .with_function_tolerance(1e-13)
+                                 .with_gradient_tolerance(1e-11)
+                                 .with_method_type(lbfgs_line_search_method_type::STRONG_WOLFE)
+                                 .with_type(lbfgs_line_search_type::BACKTRACKING)
+                                 .build();
+        const auto result   = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSBracketingArmijo");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(2000)
+                                 .with_function_tolerance(1e-13)
+                                 .with_gradient_tolerance(1e-11)
+                                 .with_method_type(lbfgs_line_search_method_type::ARMIJO)
+                                 .with_type(lbfgs_line_search_type::BRACKETING)
+                                 .build();
+        const auto result   = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSBracketingWolfe");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(2000)
+                                 .with_function_tolerance(1e-13)
+                                 .with_gradient_tolerance(1e-11)
+                                 .with_method_type(lbfgs_line_search_method_type::WOLFE)
+                                 .with_type(lbfgs_line_search_type::BRACKETING)
+                                 .build();
+        const auto result   = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("LBFGSBracketingStrongWolfe");
+        const auto options = solver_options_bfgs_builder()
+                                 .with_max_iterations(2000)
+                                 .with_function_tolerance(1e-13)
+                                 .with_gradient_tolerance(1e-11)
+                                 .with_method_type(lbfgs_line_search_method_type::STRONG_WOLFE)
+                                 .with_type(lbfgs_line_search_type::BRACKETING)
+                                 .build();
+        const auto result   = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::lbfgs);
+        expect_rosenbrock_minimum(result);
+    }
+    {
         SCOPED_TRACE("LBFGSLeastSquaresIsUnsupported");
         const auto options = solver_options_bfgs_builder().build();
         const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
@@ -209,7 +362,11 @@ TEST(NativeBackend, Solve)
 
 TEST(CeresBackend, Solve)
 {
+#if SOLVERS_HAS_CERES
     REQUIRE_BACKEND(ceres_solver::is_supported(), "Ceres");
+#else
+    GTEST_SKIP() << "Ceres backend not compiled in";
+#endif
     {
         SCOPED_TRACE("LeastSquares");
         const auto options = solver_options_ceres_builder().with_max_iterations(200).build();
@@ -293,7 +450,11 @@ TEST(CeresBackend, Solve)
 
 TEST(IpoptBackend, Solve)
 {
+#if SOLVERS_HAS_IPOPT
     REQUIRE_BACKEND(ipopt_solver::is_supported(), "Ipopt");
+#else
+    GTEST_SKIP() << "Ipopt backend not compiled in";
+#endif
     {
         SCOPED_TRACE("LeastSquaresWithJacobian");
         const auto options = solver_options_ipopt_builder().with_max_iterations(500).build();
@@ -349,7 +510,11 @@ TEST(IpoptBackend, Solve)
 
 TEST(NloptBackend, Solve)
 {
+#if SOLVERS_HAS_NLOPT
     REQUIRE_BACKEND(nlopt_solver::is_supported(), "NLopt");
+#else
+    GTEST_SKIP() << "NLopt backend not compiled in";
+#endif
     {
         SCOPED_TRACE("LeastSquaresWithJacobian");
         const auto options = solver_options_nlopt_builder().with_max_iterations(500).build();
@@ -408,7 +573,11 @@ TEST(NloptBackend, Solve)
 
 TEST(PetscBackend, Solve)
 {
+#if SOLVERS_HAS_PETSC
     REQUIRE_BACKEND(petsc_tao_solver::is_supported(), "PETSc/TAO");
+#else
+    GTEST_SKIP() << "PETSc/TAO backend not compiled in";
+#endif
     {
         SCOPED_TRACE("LeastSquaresBRGN");
         const auto options = solver_options_petsc_builder()

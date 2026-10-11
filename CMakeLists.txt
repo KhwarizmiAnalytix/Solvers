@@ -33,6 +33,28 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(SolversDependencies)
 
 file(GLOB_RECURSE solvers_sources CONFIGURE_DEPENDS "src/*.cpp")
+
+# Each optional backend's adapter (src/solvers/<name>_solver.cpp) is compiled
+# only against that library, so it is only ever part of the build when the
+# matching SOLVERS_ENABLE_<NAME> option is ON. When OFF, src/api/dispatch.cpp
+# falls back to its own SOLVERS_HAS_<NAME> #if and reports backend_unavailable
+# without referencing the adapter at all.
+set(_solvers_backend_names ceres ipopt nlopt petsc_tao)
+set(_solvers_backend_options
+    SOLVERS_ENABLE_CERES SOLVERS_ENABLE_IPOPT SOLVERS_ENABLE_NLOPT SOLVERS_ENABLE_PETSC
+)
+foreach(_backend_name _backend_option IN ZIP_LISTS _solvers_backend_names _solvers_backend_options)
+    set(_backend_source "${CMAKE_CURRENT_SOURCE_DIR}/src/solvers/${_backend_name}_solver.cpp")
+    if(NOT ${_backend_option})
+        list(REMOVE_ITEM solvers_sources "${_backend_source}")
+    endif()
+endforeach()
+unset(_solvers_backend_names)
+unset(_solvers_backend_options)
+unset(_backend_name)
+unset(_backend_option)
+unset(_backend_source)
+
 add_library(Solvers ${solvers_sources})
 add_library(Solvers::Solvers ALIAS Solvers)
 target_include_directories(
