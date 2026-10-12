@@ -39,25 +39,6 @@ inline matrix_type make_matrix(size_t rows, size_t cols)
     return matrix_type(static_cast<index_type>(rows), static_cast<index_type>(cols));
 }
 
-// -- sizing -------------------------------------------------------------------
-// Resize only when the shape differs, so repeated calls on a correctly sized
-// buffer never touch the allocator.
-inline void resize_if_needed(vector_type& v, size_t size)
-{
-    if (static_cast<size_t>(v.size()) != size)
-    {
-        v.resize(static_cast<index_type>(size));
-    }
-}
-
-inline void resize_if_needed(matrix_type& a, size_t rows, size_t cols)
-{
-    if (static_cast<size_t>(a.rows()) != rows || static_cast<size_t>(a.cols()) != cols)
-    {
-        a.resize(static_cast<index_type>(rows), static_cast<index_type>(cols));
-    }
-}
-
 // -- interop with raw buffers / std::vector<double> --------------------------
 // The only place this library touches a bare double* or std::vector<double>
 // boundary: Ceres' C-style API, and the solve() dispatcher's
@@ -80,17 +61,6 @@ inline void copy_into(double* destination, size_t size, const vector_type& sourc
 inline void copy_into(std::vector<double>& destination, const vector_type& source)
 {
     copy_into(destination.data(), destination.size(), source);
-}
-
-// Fill `destination` (resized to rows x cols) from a flat row-major buffer, the
-// layout Ceres writes Jacobians in.
-inline void copy_from_row_major(
-    matrix_type& destination, const double* source, size_t rows, size_t cols)
-{
-    resize_if_needed(destination, rows, cols);
-    destination =
-        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(
-            source, static_cast<index_type>(rows), static_cast<index_type>(cols));
 }
 
 // Ceres' CostFunction::Evaluate hands back jacobians as a flat row-major

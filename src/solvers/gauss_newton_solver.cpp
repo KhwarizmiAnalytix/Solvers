@@ -87,7 +87,7 @@ api::solver_result gauss_newton_solver::solve(
     SOLVERS_CHECK(y_p.allFinite(), "non-finite residuals at the initial point");
 
     auto x2_p                 = l2_norm(y_p);
-    auto x2_converged         = 0.5 * x2_p * x2_p < options.function_tolerance();
+    auto x2_converged         = x2_p < options.function_tolerance();
     bool gradient_converged   = false;
     bool parameters_converged = false;
 
@@ -182,7 +182,7 @@ api::solver_result gauss_newton_solver::solve(
 
         parameters_converged = step_norm < param_norm * options.parameter_tolerance();
         gradient_converged   = gradient_norm < options.gradient_tolerance();
-        x2_converged         = 0.5 * x2_p * x2_p < options.function_tolerance();
+        x2_converged         = x2_p < options.function_tolerance();
 
         if (parameters_converged || gradient_converged || x2_converged)
         {

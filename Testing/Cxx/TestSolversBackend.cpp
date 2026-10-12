@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
+
 #include "api/dispatch.h"
 #include "problems/rosenbrock.h"
 #include "solver_options/solver_options_bfgs.h"
@@ -44,6 +46,29 @@ void expect_rosenbrock_minimum(const solver_result& result)
     EXPECT_NEAR(result.parameters(0), 1.0, kMinimumTolerance);
     EXPECT_NEAR(result.parameters(1), 1.0, kMinimumTolerance);
     EXPECT_NEAR(result.objective, 0.0, kMinimumTolerance);
+}
+
+// Exact Hessian of f(x) = 0.5 * ||r(x)||^2 for the Rosenbrock residuals used
+// above (r1 = 10(x2 - x1^2), r2 = 1 - x1). Exercises the optimization-path
+// hessian callback that Ipopt/PETSc only call when an exact Hessian is
+// requested; rosenbrock_optimization() never sets one.
+void rosenbrock_hessian(const vector_type& x, matrix_type& h)
+{
+    h.resize(2, 2);
+    h(0, 0) = 600.0 * x(0) * x(0) - 200.0 * x(1) + 1.0;
+    h(0, 1) = -200.0 * x(0);
+    h(1, 0) = -200.0 * x(0);
+    h(1, 1) = 100.0;
+}
+
+optimization_problem rosenbrock_optimization_with_hessian()
+{
+    optimization_problem problem;
+    problem.num_parameters = 2;
+    problem.objective      = rosenbrock_objective;
+    problem.gradient       = rosenbrock_gradient;
+    problem.hessian        = rosenbrock_hessian;
+    return problem;
 }
 }  // namespace
 
@@ -119,6 +144,19 @@ TEST(NativeBackend, Solve)
                                  .with_parameter_tolerance(1e-14)
                                  .build();
         const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.algorithm, algorithm::gauss_newton);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        SCOPED_TRACE("GaussNewtonLeastSquaresFiniteDifferences");
+        const auto options = solver_options_gn_builder()
+                                 .with_max_iterations(400)
+                                 .with_function_tolerance(1e-14)
+                                 .with_gradient_tolerance(1e-12)
+                                 .with_parameter_tolerance(1e-14)
+                                 .build();
+        const auto result  = solve(rosenbrock_least_squares(false), rosenbrock_start(), *options);
 
         EXPECT_EQ(result.algorithm, algorithm::gauss_newton);
         expect_rosenbrock_minimum(result);
@@ -446,6 +484,70 @@ TEST(CeresBackend, Solve)
 
         EXPECT_EQ(result.status, solver_status::unsupported_capability);
     }
+    {
+        // No Jacobian callback and no bounds: exercises ceres_solver's
+        // auto-generated finite-difference Jacobian along its unconstrained,
+        // central-difference path (ceres_solver.cpp central-difference branch).
+        SCOPED_TRACE("LeastSquaresFiniteDifferenceNoBounds");
+        const auto options = solver_options_ceres_builder().with_max_iterations(300).build();
+        const auto result  = solve(rosenbrock_least_squares(false), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ceres);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // Bounds placed exactly on the starting point drive the auto-generated
+        // finite-difference Jacobian into its degenerate (step <= 0) branches
+        // on both the lower-bound and upper-bound sides. The zeroed Jacobian
+        // column pins that parameter at the boundary, so the true minimum is
+        // not reachable from here; this is a smoke test for the degenerate
+        // code paths themselves (ceres_solver.cpp), not for convergence.
+        SCOPED_TRACE("LeastSquaresBoundedFiniteDifferenceDegenerateSteps");
+        auto problem         = rosenbrock_least_squares(false);
+        problem.bounds.lower = {-1.2, -1e9};
+        problem.bounds.upper = {1e9, 1.0};
+        const auto options   = solver_options_ceres_builder().with_max_iterations(500).build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ceres);
+        EXPECT_GE(result.parameters(0), problem.bounds.lower[0]);
+        EXPECT_LE(result.parameters(1), problem.bounds.upper[1]);
+        EXPECT_TRUE(std::isfinite(result.objective));
+    }
+    {
+        // Bounds placed just inside the representable step from the starting
+        // point drive the finite-difference Jacobian into its non-degenerate
+        // one-sided (forward/backward) branches on both sides. The one-sided
+        // steps are extremely small, so the solver can declare premature
+        // (parameter-tolerance) convergence away from the true minimum; this
+        // exercises the near-boundary branches themselves rather than final
+        // accuracy.
+        SCOPED_TRACE("LeastSquaresBoundedFiniteDifferenceNearBoundarySteps");
+        auto problem         = rosenbrock_least_squares(false);
+        problem.bounds.lower = {-1.2 - 5e-9, -1e9};
+        problem.bounds.upper = {1e9, 1.0 + 5e-9};
+        const auto options   = solver_options_ceres_builder().with_max_iterations(500).build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ceres);
+        EXPECT_GE(result.parameters(0), problem.bounds.lower[0]);
+        EXPECT_LE(result.parameters(1), problem.bounds.upper[1]);
+        EXPECT_TRUE(std::isfinite(result.objective));
+    }
+    {
+        // Bounds combined with an analytic Jacobian: exercises
+        // SetParameterLowerBound/UpperBound independently of the
+        // finite-difference path.
+        SCOPED_TRACE("LeastSquaresBoundedWithJacobian");
+        auto problem         = rosenbrock_least_squares(true);
+        problem.bounds.lower = {-5.0, -5.0};
+        problem.bounds.upper = {5.0, 5.0};
+        const auto options   = solver_options_ceres_builder().with_max_iterations(300).build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ceres);
+        expect_rosenbrock_minimum(result);
+    }
 }
 
 TEST(IpoptBackend, Solve)
@@ -506,6 +608,64 @@ TEST(IpoptBackend, Solve)
 
         EXPECT_EQ(result.status, solver_status::unsupported_capability);
     }
+    {
+        // Bounds that do not exclude the true minimum: exercises
+        // solvers_tnlp::get_bounds_info's non-empty lower_/upper_ branches for
+        // a least-squares problem.
+        SCOPED_TRACE("LeastSquaresWithBounds");
+        auto problem         = rosenbrock_least_squares(true);
+        problem.bounds.lower = {-10.0, -10.0};
+        problem.bounds.upper = {10.0, 10.0};
+        const auto options   = solver_options_ipopt_builder().with_max_iterations(500).build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ipopt);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // Same bound coverage for the scalar optimization path.
+        SCOPED_TRACE("OptimizationWithBounds");
+        auto problem         = rosenbrock_optimization(true);
+        problem.bounds.lower = {-10.0, -10.0};
+        problem.bounds.upper = {10.0, 10.0};
+        const auto options   = solver_options_ipopt_builder().with_max_iterations(500).build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ipopt);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // use_exact_hessian() true with a real Hessian callback: exercises
+        // solvers_tnlp::eval_h's sparsity-query and value-fill branches, which
+        // the limited-memory default never reaches.
+        SCOPED_TRACE("OptimizationWithExactHessian");
+        const auto problem  = rosenbrock_optimization_with_hessian();
+        const auto options  = solver_options_ipopt_builder()
+                                 .with_max_iterations(200)
+                                 .with_hessian_approximation(ipopt_hessian_approximation_enum::EXACT)
+                                 .build();
+        const auto result   = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ipopt);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // A one-iteration budget forces Ipopt's Maximum_Iterations_Exceeded
+        // return status, exercising the budget_exhausted branch of classify().
+        SCOPED_TRACE("StopsAtMaxIterationsIsBudgetExhausted");
+        const auto options = solver_options_ipopt_builder().with_max_iterations(1).build();
+        const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::ipopt);
+        EXPECT_EQ(result.status, solver_status::max_iterations);
+    }
+    // Note: an unrecognized linear_solver name does not reach
+    // ipopt_solver::solve's app->Initialize()-failure branch: Ipopt's
+    // SetStringValue() rejects the bad value and leaves the default solver in
+    // place (its return value is not checked by the caller), so Initialize()
+    // still succeeds. That early-return branch (ipopt_solver.cpp, "Ipopt
+    // initialization failed") was not found to be reachable from the public
+    // API within this test file; see the final report for details.
 }
 
 TEST(NloptBackend, Solve)
@@ -569,6 +729,102 @@ TEST(NloptBackend, Solve)
 
         EXPECT_EQ(result.status, solver_status::unsupported_capability);
     }
+    {
+        // Exercises the LD_MMA branch of the algorithm switch. MMA is
+        // designed around (box-)constrained conservative convex
+        // approximations; on this unconstrained problem it is not expected to
+        // reach the tight tolerance expect_rosenbrock_minimum requires, so
+        // this only checks that the algorithm runs to a finite, usable
+        // result (i.e. the switch branch and solve path execute cleanly).
+        SCOPED_TRACE("LeastSquaresAlgorithmLD_MMA");
+        const auto options = solver_options_nlopt_builder()
+                                  .with_max_iterations(2000)
+                                  .with_algorithm(nlopt_algorithm_enum::LD_MMA)
+                                  .build();
+        const auto result = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::nlopt);
+        EXPECT_TRUE(std::isfinite(result.objective));
+    }
+    {
+        // Exercises the LD_CCSAQ branch of the algorithm switch. Same caveat
+        // as LD_MMA above: CCSAQ is a conservative convex approximation
+        // method, so only a clean run is asserted here.
+        SCOPED_TRACE("OptimizationAlgorithmLD_CCSAQ");
+        const auto options = solver_options_nlopt_builder()
+                                  .with_max_iterations(2000)
+                                  .with_algorithm(nlopt_algorithm_enum::LD_CCSAQ)
+                                  .build();
+        const auto result = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::nlopt);
+        EXPECT_TRUE(std::isfinite(result.objective));
+    }
+    {
+        // Exercises the LN_SBPLX branch of the algorithm switch on a
+        // derivative-free least-squares problem (NLopt optimization always
+        // requires a gradient callback per dispatch.cpp, so a gradient-free
+        // algorithm can only be exercised through the least-squares path).
+        SCOPED_TRACE("LeastSquaresAlgorithmLN_SBPLX");
+        const auto options = solver_options_nlopt_builder()
+                                  .with_max_iterations(20000)
+                                  .with_algorithm(nlopt_algorithm_enum::LN_SBPLX)
+                                  .with_xtol_rel(1e-12)
+                                  .with_ftol_rel(1e-12)
+                                  .build();
+        const auto result = solve(rosenbrock_least_squares(false), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::nlopt);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // Bounds that do not exclude the true minimum: exercises
+        // nlopt_set_lower_bounds/upper_bounds for a least-squares problem.
+        SCOPED_TRACE("LeastSquaresWithBounds");
+        auto problem         = rosenbrock_least_squares(true);
+        problem.bounds.lower = {-10.0, -10.0};
+        problem.bounds.upper = {10.0, 10.0};
+        const auto options   = solver_options_nlopt_builder().with_max_iterations(1000).build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::nlopt);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // Same bound coverage for the scalar optimization path.
+        SCOPED_TRACE("OptimizationWithBounds");
+        auto problem         = rosenbrock_optimization(true);
+        problem.bounds.lower = {-10.0, -10.0};
+        problem.bounds.upper = {10.0, 10.0};
+        const auto options   = solver_options_nlopt_builder().with_max_iterations(1000).build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::nlopt);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // A one-evaluation budget forces NLOPT_MAXEVAL_REACHED, exercising the
+        // budget_exhausted branch for exhausted evaluations.
+        SCOPED_TRACE("StopsAtMaxEvalIsBudgetExhausted");
+        const auto options = solver_options_nlopt_builder().with_max_iterations(1).build();
+        const auto result  = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::nlopt);
+        EXPECT_EQ(result.status, solver_status::max_iterations);
+    }
+    {
+        // An effectively zero time budget forces NLOPT_MAXTIME_REACHED,
+        // exercising the budget_exhausted branch for exhausted wall time.
+        SCOPED_TRACE("StopsAtMaxTimeIsBudgetExhausted");
+        const auto options = solver_options_nlopt_builder()
+                                  .with_max_iterations(100000)
+                                  .with_max_time(1e-12)
+                                  .build();
+        const auto result = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::nlopt);
+        EXPECT_EQ(result.status, solver_status::max_iterations);
+    }
 }
 
 TEST(PetscBackend, Solve)
@@ -625,5 +881,126 @@ TEST(PetscBackend, Solve)
         const auto result  = solve(rosenbrock_optimization(false), rosenbrock_start(), *options);
 
         EXPECT_EQ(result.status, solver_status::unsupported_capability);
+    }
+    {
+        // Exercises the POUNDERS branch of tao_type_string.
+        SCOPED_TRACE("LeastSquaresPOUNDERS");
+        const auto options = solver_options_petsc_builder()
+                                  .with_tao_type(tao_algorithm_enum::POUNDERS)
+                                  .with_max_iterations(400)
+                                  .build();
+        const auto result = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // NLS ("Newton's method with line search") is a general unconstrained
+        // minimizer, not a least-squares algorithm: it requires an explicit
+        // Hessian (TaoSetHessian) and errors out ("Must call TaoSetHessian()")
+        // if driven through the residual/Jacobian routines used for
+        // is_least_squares_. Exercise it through the optimization path with
+        // an exact Hessian instead, which also covers the NLS branch of
+        // tao_type_string.
+        SCOPED_TRACE("OptimizationNLSWithExactHessian");
+        const auto problem = rosenbrock_optimization_with_hessian();
+        const auto options = solver_options_petsc_builder()
+                                  .with_tao_type(tao_algorithm_enum::NLS)
+                                  .with_max_iterations(400)
+                                  .build();
+        const auto result = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // NTR with an exact Hessian and matrix_free() false: exercises
+        // hessian_tramp and the MatCreateSeqDense/TaoSetHessian branch, which
+        // the gradient-only optimization tests never reach.
+        SCOPED_TRACE("OptimizationNTRWithExactHessian");
+        const auto problem  = rosenbrock_optimization_with_hessian();
+        const auto options  = solver_options_petsc_builder()
+                                 .with_tao_type(tao_algorithm_enum::NTR)
+                                 .with_max_iterations(400)
+                                 .build();
+        const auto result   = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // Exercises the BQNLS branch of tao_type_string.
+        SCOPED_TRACE("OptimizationBQNLS");
+        const auto options = solver_options_petsc_builder()
+                                  .with_tao_type(tao_algorithm_enum::BQNLS)
+                                  .with_max_iterations(400)
+                                  .build();
+        const auto result = solve(rosenbrock_optimization(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // BNLS ("Bounded Newton Line Search") is a Newton-type bound
+        // constrained minimizer: like NLS it needs an explicit Hessian, and
+        // (being a bounded variant) is exercised together with explicit
+        // bounds that do not exclude the true minimum.
+        SCOPED_TRACE("OptimizationBNLSWithExactHessianAndBounds");
+        auto problem         = rosenbrock_optimization_with_hessian();
+        problem.bounds.lower = {-10.0, -10.0};
+        problem.bounds.upper = {10.0, 10.0};
+        const auto options   = solver_options_petsc_builder()
+                                 .with_tao_type(tao_algorithm_enum::BNLS)
+                                 .with_max_iterations(400)
+                                 .build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // Both lower and upper bounds set: exercises TaoSetVariableBounds and
+        // the non-empty branches of the lower_/upper_ fill loop.
+        SCOPED_TRACE("LeastSquaresWithBothBounds");
+        auto problem         = rosenbrock_least_squares(true);
+        problem.bounds.lower = {-10.0, -10.0};
+        problem.bounds.upper = {10.0, 10.0};
+        const auto options   = solver_options_petsc_builder()
+                                 .with_tao_type(tao_algorithm_enum::BRGN)
+                                 .with_max_iterations(400)
+                                 .build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // Only a lower bound set (upper empty): exercises the "upper_bounds_
+        // empty -> PETSC_INFINITY" ternary branch alongside the non-empty
+        // lower branch.
+        SCOPED_TRACE("OptimizationWithLowerBoundOnly");
+        auto problem         = rosenbrock_optimization(true);
+        problem.bounds.lower = {-10.0, -10.0};
+        const auto options   = solver_options_petsc_builder()
+                                 .with_tao_type(tao_algorithm_enum::LMVM)
+                                 .with_max_iterations(400)
+                                 .build();
+        const auto result    = solve(problem, rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        expect_rosenbrock_minimum(result);
+    }
+    {
+        // A one-iteration budget forces TAO_DIVERGED_MAXITS, exercising the
+        // budget_exhausted branch of the TaoConvergedReason classification.
+        SCOPED_TRACE("StopsAtMaxIterationsIsBudgetExhausted");
+        const auto options = solver_options_petsc_builder()
+                                  .with_tao_type(tao_algorithm_enum::BRGN)
+                                  .with_max_iterations(1)
+                                  .build();
+        const auto result = solve(rosenbrock_least_squares(true), rosenbrock_start(), *options);
+
+        EXPECT_EQ(result.backend, backend::petsc_tao);
+        EXPECT_EQ(result.status, solver_status::max_iterations);
     }
 }

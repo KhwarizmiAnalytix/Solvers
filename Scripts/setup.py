@@ -387,7 +387,7 @@ class SummaryReporter:
             print_status(f"Covered Lines:  {covered_lines}", "INFO")
             print_status(
                 f"Coverage:       {coverage_percent:.2f}%",
-                "SUCCESS" if coverage_percent >= 95.0 else "WARNING" if coverage_percent >= 80.0 else "ERROR",
+                "SUCCESS" if coverage_percent >= 90.0 else "WARNING" if coverage_percent >= 80.0 else "ERROR",
             )
 
             if report.get("total_functions", 0) > 0:

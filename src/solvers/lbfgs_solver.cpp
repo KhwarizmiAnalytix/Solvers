@@ -431,8 +431,9 @@ api::solver_result lbfgs_solver::solve(
     auto x2_p = fx;
     // A scalar objective may be shifted by an arbitrary constant.  Its
     // absolute value is therefore not a valid convergence test; use step and
-    // gradient criteria below.  Residual mode retains the historical norm test.
-    auto x2_converged         = !scalar_mode_ && 0.5 * x2_p < options.function_tolerance();
+    // gradient criteria below.  Residual mode compares ||r|| against the
+    // tolerance, matching gauss_newton_solver/levenberg_marquardt_solver.
+    auto x2_converged = !scalar_mode_ && std::sqrt(x2_p) < options.function_tolerance();
     bool gradient_converged   = false;
     bool parameters_converged = false;
 
@@ -476,7 +477,7 @@ api::solver_result lbfgs_solver::solve(
         ++accepted_steps;
         last_step_norm = l2_norm(p_new - parameters);
 
-        if (!scalar_mode_ && 0.5 * std::fabs(fx) < options.function_tolerance())
+        if (!scalar_mode_ && std::sqrt(std::fabs(fx)) < options.function_tolerance())
         {
             parameters   = p_new;
             x2_converged = true;

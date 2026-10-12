@@ -166,14 +166,14 @@ root_run run_ridders(
             return {root_outcome::converged, estimate, iter + 1};
         }
 
-        if (std::copysign(1.0, f_mid) != std::copysign(1.0, f_estimate))
+        if (std::signbit(f_mid) != std::signbit(f_estimate))
         {
             x1 = mid;
             f1 = f_mid;
             x2 = estimate;
             f2 = f_estimate;
         }
-        else if (std::copysign(1.0, f1) != std::copysign(1.0, f_estimate))
+        else if (std::signbit(f1) != std::signbit(f_estimate))
         {
             x2 = estimate;
             f2 = f_estimate;
