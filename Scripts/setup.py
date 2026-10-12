@@ -1202,7 +1202,9 @@ class SolversConfiguration:
         # the Solvers label, so that entry is whichever binary CTest lists first
         # and the rest of the suite never contributes profile data. A static
         # build also has no libSolvers shared library for find_library to open;
-        # each test executable carries the instrumented objects.
+        # each test executable carries the instrumented objects. A shared build
+        # does have one, and its instrumented src/*.cpp objects only show up in
+        # the report if that library is added to the binaries list too.
         _orig_find_library = _ct_common.find_library
         _orig_prepare = _ct_clang.prepare_llvm_coverage
 
@@ -1225,6 +1227,16 @@ class SolversConfiguration:
             coverage_dir = Path(build_dir) / _ct_common.get_config()["coverage_report_dir"]
             coverage_dir.mkdir(exist_ok=True)
             wrote = False
+
+            platform_cfg = _ct_common.get_platform_config()
+            dll_path = _orig_find_library(
+                build_dir, platform_cfg["lib_folder"], module_name, platform_cfg["dll_extension"]
+            )
+            if dll_path is not None:
+                with open(binaries_list, "a", encoding="utf-8") as binaries:
+                    print(f"Adding {dll_path} to binaries list")
+                    binaries.write(f"-object={dll_path}\n")
+
             for exe in executables:
                 profraw = coverage_dir / f"{exe.name}.profraw"
                 env = os.environ.copy()
