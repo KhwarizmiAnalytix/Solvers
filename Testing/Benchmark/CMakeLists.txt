@@ -31,3 +31,15 @@ endfunction()
 solvers_add_benchmark(BenchmarkNative)
 solvers_add_benchmark(BenchmarkExternal)
 solvers_add_benchmark(BenchmarkRootFinding)
+
+# Convergence diagnostics demo: prints iterations/residual/gradient norm per
+# backend instead of timing a steady-state loop, so it needs Solvers only.
+add_executable(ConvergenceDemo ConvergenceDemo.cpp)
+target_include_directories(ConvergenceDemo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(ConvergenceDemo PRIVATE Solvers)
+if(WIN32 AND BUILD_SHARED_LIBS)
+  add_custom_command(
+    TARGET ConvergenceDemo POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:Solvers>
+            $<TARGET_FILE_DIR:ConvergenceDemo>)
+endif()
