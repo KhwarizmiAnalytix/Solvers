@@ -13,7 +13,7 @@ and [rnc-lm.md](rnc-lm.md).
 ## Native vs. third-party: measured performance
 
 The README's captured run (macOS/arm64, Release, Clang; see
-[README "Example results"](../README.md#development)), `x0 = (-1.2, 1.0)`,
+[README "Example results"](../README.md#rosenbrock-convergence-comparison)), `x0 = (-1.2, 1.0)`,
 minimum at `(1, 1)`:
 
 | Backend | status | iterations | time |
@@ -195,62 +195,76 @@ only) and no acceleration-ratio rejection test — the curve-length search
 plays that role instead.
 
 **Why higher order helps**: moving-tangent terms (the `J_k` contributions)
-capture how the Jacobian itself changes along the curve, which a single
-second-order correction cannot. Measured on the library's stiff generalized
-Rosenbrock benchmark (`SolversBenchmark rnc-lm`, stiffness `A = 1e6`, two
-valley exponents, objective threshold `C < 1e-4`):
+account for changes of the Jacobian along the curve. Their benefit depends on
+both the expansion order and the allowed curve length.
 
-| Valley exponent | Order 1 | Order 2 | Order 3 | Order 4 |
-| --- | ---: | ---: | ---: | ---: |
-| 2 | 9689 | 456 | 33 | 23 |
-| 3 | 6985 | 441 | 31 | 27 |
+#### Reproduction of the literature: corrected comparison
 
-Each order increase is roughly an order-of-magnitude drop in outer
-iterations on this stiff valley, where plain LM (even with geodesic
-acceleration) needs thousands of steps because a single correction cannot
-track the curvature.
+The previous comparison used a removed executable (`SolversBenchmark rnc-lm`)
+and historical results with diagonal-scaled damping and four curve trials:
+`9689/456/33/23` for exponent 2 and `6985/441/31/27` for exponent 3.
+It compared those values with the full-step column of the paper's Table 1a.
+That mixed damping conventions, search depths, and iteration counts.
+Also, the paper's `n=2` and `n=3` are **valley exponents**, not parameter
+counts: both residual models have two parameters.
 
-#### Reproduction of the literature
+The objective in Eq. (6) is
+`C = 0.5 * [x² + A² * (y - x^n/n)²]`, with `A = 1e6`, initial point
+`(1, 1/n)`, and termination at `C < 1e-4`. Figure 1 shows RNC curves at
+`lambda = 1e-3`. Our previous `D = diag(JᵀJ)` scaling multiplies damping by
+approximately `1e12` at that starting point, suppressing the initial tangent.
+The corrected default uses `D = I` and `lambda_0 = 1e-3`; the previous
+scaling remains available through `with_damping_scaling(MARQUARDT)`.
+This reconstruction follows the figure and observed numerical agreement;
+the available main text does not supply an explicit numerical definition of `D`.
 
-Liu & Zhang's Table 1a (arXiv:2607.07623v2) benchmarks exactly this
-problem — generalized Rosenbrock, stiffness `A = 1e6`, read at curve
-parameter `t_min = 1` so `K = 1` reduces to plain LM — for dimensions
-`n = 2` and `n = 3`:
+With full steps (`with_max_curve_trials(1)`), the manual check on
+13 October 2026 reproduced all Table 1a accepted-update counts:
 
-| Method | n = 2 | n = 3 |
+| Order | Paper, exponent 2 / 3 | Accepted updates, exponent 2 / 3 | Attempted curves, exponent 2 / 3 |
+| --- | ---: | ---: | ---: |
+| 1 (LM) | 8622 / 8069 | 8622 / 8069 | 8679 / 8176 |
+| 2 | 152 / 183 | 152 / 183 | 218 / 273 |
+| 3 | 33 / 33 | 33 / 33 | 76 / 65 |
+| 4 | 2 / 21 | 2 / 21 | 2 / 51 |
+
+`solver_result::iterations` continues to count attempted curves, including
+rejected damping retries. `accepted_steps` counts actual parameter updates
+and reproduces the published counts. Reporting only attempted curves would
+misrepresent the remaining difference.
+
+The default four trials allow three reductions, corresponding to the paper's
+`t_min = 0.027` column:
+
+| Order | Paper, exponent 2 / 3 | Accepted updates, exponent 2 / 3 |
 | --- | ---: | ---: |
-| LM (K=1), paper | 8622 | 8069 |
-| LM-GA, paper | 152 | 183 |
-| RNC-LM K=2, paper | 152 | 183 |
-| RNC-LM K=3, paper | 33 | 33 |
-| RNC-LM K=4, paper | 2 | 21 |
+| 2 | 11 / 393 | 9 / 393 |
+| 3 | 4 / 7 | 5 / 6 |
+| 4 | 2 / 6 | 2 / 6 |
 
-Against this repository's own measured run of the same problem family
-(table above, `order 1..4`, `valley exponent 2` and `3`):
+Fourth order now reproduces both default-search results, replacing the previous
+`23 / 27` with `2 / 6`. Small differences remain for orders 2 and 3 with deeper
+searches. They are not evidence of numerical divergence: every reported run
+reached the same objective threshold. The exact optimizer source and referenced
+supplementary settings are unavailable, so exact reproduction across every
+search depth is not claimed. See [rnc-lm.md](rnc-lm.md#comparison-with-table-1a)
+for configuration, counting conventions, and the full comparison.
 
-| Order | Paper (n=2 / n=3) | This implementation (2 / 3) | Agreement |
-| --- | --- | --- | --- |
-| 1 (plain LM) | 8622 / 8069 | 9689 / 6985 | Close (same order of magnitude, ±13–15%) |
-| 2 | 152 / 183 | 456 / 441 | **Diverges**: this implementation takes ~2.4–3× more iterations at order 2 |
-| 3 | 33 / 33 | 33 / 31 | **Matches closely** at `n=2`; within 7% at `n=3` |
-| 4 | 2 / 21 | 23 / 27 | **Diverges**: this implementation takes substantially more iterations at order 4, especially at `n=2` (23 vs. 2) |
+The residual derivative convention matters independently of damping:
+`R_k` and `J_k` are ordinary derivatives along the entire truncated curve,
+not coefficients divided by `k!`. Quadratic residuals can have nonzero
+third and fourth derivatives along a curved parameter path. The restored
+Taylor adapter handles these terms consistently; the existing Rosenbrock and
+SVI callbacks now use it, including SVI's previously omitted fourth order.
 
-Order 3 is the strongest reproduction point; orders 2 and 4 are not a
-reproduction of the paper's numbers, consistent with what
-[rnc-lm.md](rnc-lm.md) already states — the implemented curve-length search,
-contraction bounds, and damping update are this repository's own choices
-(Eqs. 37–40 mapped, not copied), and "no claim is made about ... reproduction
-of the paper's Table 1: defaults and implementation details differ." The
-divergence at order 4 is the most consequential one to investigate further,
-since it is where the paper reports its largest advantage (`K=4` collapsing
-to 2 iterations at `n=2`) and this implementation does not reproduce that
-collapse.
+No tests or benchmark cases were added for this correction. The numerical
+comparison was performed outside the repository's test and benchmark suites.
 
 The paper's other two benchmarks — a reaction-diffusion PINN (Table 2: at
 `ν=5`, L-BFGS/LM/LM-GA all stay above 0.95 relative L² error while RNC-LM
 `K=3` reaches 6.56×10⁻³) and a 985,160-configuration machine-learning
 potential fit (`K=4` reaches a fixed training-RMSE target in 144 iterations
-/ 11.39 h vs. plain LM's 387.28 h unfinished run at the 5000-iteration
+/ 11.39 h vs. plain LM's 387.28 h run at the 5000-iteration
 budget — a 34× wall-clock speedup; `K=3` reaches the same target at 12.8×)
 — are both large, domain-specific workloads with no counterpart in this
 repository's test or benchmark suite. They are cited here as the literature's
@@ -259,7 +273,7 @@ implementation has attempted to reproduce.
 
 **Cost**: not per-problem-size but per-iteration — each curve point needs
 correspondingly higher directional derivatives of the residual (one model
-sweep per parameter per derivative order with the bundled Taylor-AD adapter,
+sweep per parameter per derivative order with the Taylor adapter,
 or a supplied analytic callback). Order 4 does strictly more work per
 iteration than order 1; the win in the table is in outer-iteration count, not
 automatically in wall-clock time for cheap residuals. RNC-LM is also a dense,
@@ -273,7 +287,7 @@ general objectives.
 | Fast baseline needed on a well-scaled least-squares problem | — | Native LM defaults (geodesic acceleration on, bold acceptance off) beat adapter overhead by orders of magnitude | n/a (architectural, not a literature claim) |
 | Many iterations through a curved valley | First-order velocity overshoots curved residual manifold | Geodesic acceleration (on by default) | Equations mapped and regression-tested; no local ablation yet measures this repo's speedup against the paper's reported 2–70× |
 | Repeated re-damping / `stalled` near a saddle or flat region | Ordinary acceptance rejects every uphill trial regardless of trajectory | Bold acceptance | Same gap as above, against the paper's reported ~30× with reduced success rate |
-| Still hundreds/thousands of iterations on a stiff, highly curved problem | Single second-order correction insufficient; Jacobian itself varies along the curve | RNC-LM, increasing `order` | Order 3 matches the paper's Table 1a closely; orders 2 and 4 diverge (see comparison table above) |
+| Still hundreds/thousands of iterations on a stiff, highly curved problem | Single second-order correction insufficient; Jacobian itself varies along the curve | RNC-LM, increasing `order` | Full-step accepted-update counts match Table 1a at all orders; default-search order 4 matches both valleys |
 | Bounds, general constraints, or very large sparse problems | Outside native LM's scope entirely | Ceres / Ipopt / PETSc-TAO, accepting the measured per-call overhead above | n/a |
 
 Reproduce any of these numbers locally before they drive a design decision —

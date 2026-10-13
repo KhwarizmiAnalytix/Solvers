@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/dispatch.h"
+#include "solvers/integrations/rnc_autodiff.h"
 
 #include <algorithm>
 #include <array>
@@ -189,147 +190,26 @@ inline api::optimization_problem make_svi_opt(bool with_gradient)
 }
 
 // ---------------------------------------------------------------------------
-// RNC-LM curve derivatives: Taylor-expands R(p(t)) and J(p(t)) along the
-// curve p(t) = base + c1*t + c2*t^2 + ... for orders 1–4.
+// Exact Taylor derivatives along base + sum(c_q*t^q/q!), including order 4.
+// The adapter converts normalized series coefficients to ordinary derivatives.
 // ---------------------------------------------------------------------------
+struct svi_rnc_model
+{
+    template <class T> void operator()(const T* p, T* r) const
+    {
+        using std::sqrt;
+        const auto& d = svi_problem_data();
+        for (std::size_t i = 0; i < kSviN; ++i)
+        {
+            const T c = T(d.log_moneyness[i]) - p[3];
+            r[i] = p[0] + p[1] * (p[2] * c + sqrt(c * c + p[4] * p[4])) - T(d.market_variance[i]);
+        }
+    }
+};
 
 inline api::rnc_derivative_function svi_curve_deriv()
 {
-    return [](const vector_type&               base,
-               const std::vector<vector_type>& coeffs,
-               int                             order,
-               api::rnc_curve_derivatives&     out)
-    {
-        const auto& d = svi_problem_data();
-        const int   m = static_cast<int>(kSviN);
-
-        const double a0   = base[0];
-        const double b0   = base[1];
-        const double rho0 = base[2];
-        const double m0   = base[3];
-        const double s0   = base[4];
-
-        const bool have1 = !coeffs.empty();
-        const bool have2 = coeffs.size() >= 2;
-
-        out.residual.resize(order + 1);
-        out.jacobian.resize(static_cast<std::size_t>(std::max(0, order - 2)) + 1u);
-
-        // Order 0: residual and Jacobian at base
-        out.residual[0].resize(m);
-        out.jacobian[0].resize(m, 5);
-        for (int i = 0; i < m; ++i)
-        {
-            const double c        = d.log_moneyness[i] - m0;
-            const double root     = std::sqrt(c * c + s0 * s0);
-            out.residual[0][i]    = a0 + b0 * (rho0 * c + root) - d.market_variance[i];
-            out.jacobian[0](i, 0) = 1.0;
-            out.jacobian[0](i, 1) = rho0 * c + root;
-            out.jacobian[0](i, 2) = b0 * c;
-            out.jacobian[0](i, 3) = b0 * (-rho0 - c / root);
-            out.jacobian[0](i, 4) = b0 * s0 / root;
-        }
-
-        // Order 1: residual[1] = J0 * c1
-        if (have1)
-            out.residual[1] = out.jacobian[0] * coeffs[0];
-        else
-            out.residual[1] = vector_type::Zero(m);
-
-        if (order >= 2)
-        {
-            // residual[2][i] = (1/2) * c1^T * H_i * c1
-            // Non-zero Hessian entries for r_i (at base):
-            //   H[1,2] = c,  H[1,3] = -rho-c/root,  H[1,4] = s/root,
-            //   H[2,3] = -b, H[3,3] = b*s^2/r3,    H[3,4] = b*c*s/r3,
-            //   H[4,4] = b*c^2/r3
-            out.residual[2] = vector_type::Zero(m);
-            if (have1)
-            {
-                const double v1 = coeffs[0][1];
-                const double v2 = coeffs[0][2];
-                const double v3 = coeffs[0][3];
-                const double v4 = coeffs[0][4];
-                for (int i = 0; i < m; ++i)
-                {
-                    const double c    = d.log_moneyness[i] - m0;
-                    const double root = std::sqrt(c * c + s0 * s0);
-                    const double r3   = root * root * root;
-                    out.residual[2][i] =
-                        c * v1 * v2 + (-rho0 - c / root) * v1 * v3 + (s0 / root) * v1 * v4 +
-                        (-b0) * v2 * v3 + 0.5 * (b0 * s0 * s0 / r3) * v3 * v3 +
-                        (b0 * c * s0 / r3) * v3 * v4 + 0.5 * (b0 * c * c / r3) * v4 * v4;
-                }
-            }
-        }
-
-        if (order >= 3)
-        {
-            // jacobian[1](i,j) = (d/dt J_i(p(t)))|t=0 = sum_k H_i[j,k]*c1[k]
-            out.jacobian[1] = matrix_type::Zero(m, 5);
-            // residual[3][i] = c1^T * H_i * c2  +  (1/6) * sum_jkl T_i[j,k,l]*c1_j*c1_k*c1_l
-            out.residual[3] = vector_type::Zero(m);
-            if (have1)
-            {
-                const double v1 = coeffs[0][1];
-                const double v2 = coeffs[0][2];
-                const double v3 = coeffs[0][3];
-                const double v4 = coeffs[0][4];
-                for (int i = 0; i < m; ++i)
-                {
-                    const double c    = d.log_moneyness[i] - m0;
-                    const double root = std::sqrt(c * c + s0 * s0);
-                    const double r3   = root * root * root;
-                    const double r5   = r3 * root * root;
-                    const double h13  = -rho0 - c / root;
-                    const double h14  = s0 / root;
-                    const double h33  = b0 * s0 * s0 / r3;
-                    const double h34  = b0 * c * s0 / r3;
-                    const double h44  = b0 * c * c / r3;
-
-                    // jacobian[1] columns (using symmetry H[j,k] = H[k,j])
-                    out.jacobian[1](i, 0) = 0.0;
-                    out.jacobian[1](i, 1) = c * v2 + h13 * v3 + h14 * v4;
-                    out.jacobian[1](i, 2) = c * v1 + (-b0) * v3;
-                    out.jacobian[1](i, 3) = h13 * v1 + (-b0) * v2 + h33 * v3 + h34 * v4;
-                    out.jacobian[1](i, 4) = h14 * v1 + h34 * v3 + h44 * v4;
-
-                    // c1^T * H_i * c2 cross term
-                    if (have2)
-                    {
-                        const double u1 = coeffs[1][1];
-                        const double u2 = coeffs[1][2];
-                        const double u3 = coeffs[1][3];
-                        const double u4 = coeffs[1][4];
-                        out.residual[3][i] += c * (v1 * u2 + v2 * u1) + h13 * (v1 * u3 + v3 * u1) +
-                                              h14 * (v1 * u4 + v4 * u1) +
-                                              (-b0) * (v2 * u3 + v3 * u2) + h33 * v3 * u3 +
-                                              h34 * (v3 * u4 + v4 * u3) + h44 * v4 * u4;
-                    }
-
-                    // (1/6) * sum T[j,k,l] c1_j c1_k c1_l — non-zero T values:
-                    //   T[1,2,3]=-1,  T[1,3,3]=s^2/r3,  T[1,3,4]=c*s/r3,  T[1,4,4]=c^2/r3
-                    //   T[3,3,3]=3b*c*s^2/r5, T[3,3,4]=b*s*(2c^2-s^2)/r5,
-                    //   T[3,4,4]=b*c*(c^2-2s^2)/r5, T[4,4,4]=-3b*c^2*s/r5
-                    out.residual[3][i] +=
-                        -v1 * v2 * v3 + 0.5 * (s0 * s0 / r3) * v1 * v3 * v3 +
-                        (c * s0 / r3) * v1 * v3 * v4 + 0.5 * (c * c / r3) * v1 * v4 * v4 +
-                        0.5 * (b0 * c * s0 * s0 / r5) * v3 * v3 * v3 +
-                        0.5 * (b0 * s0 * (2.0 * c * c - s0 * s0) / r5) * v3 * v3 * v4 +
-                        0.5 * (b0 * c * (c * c - 2.0 * s0 * s0) / r5) * v3 * v4 * v4 +
-                        (-0.5) * (b0 * c * c * s0 / r5) * v4 * v4 * v4;
-                }
-            }
-        }
-
-        if (order >= 4)
-        {
-            // Higher-order corrections are zero-approximated; the solver degrades
-            // gracefully to the order-3 curve when these are zero.
-            out.residual[4] = vector_type::Zero(m);
-            out.jacobian[2] = matrix_type::Zero(m, 5);
-        }
-    };
+    return make_rnc_derivatives(svi_rnc_model{}, 5, kSviN);
 }
 
 // RNC-LM problem: no bounds (RNC-LM does not support box constraints)

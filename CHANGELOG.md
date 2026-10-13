@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased: RNC-LM paper alignment
+
+- RNC-LM now defaults to absolute damping (`D = I`, `lambda_0 = 1e-3`).
+  Preserve the previous convention with
+  `with_damping_scaling(rnc_lm_damping_scaling_enum::MARQUARDT)` and
+  `with_initial_damping(1e-4)`. Lambda has different units in the two modes.
+- Restore the header-only `make_rnc_derivatives` and `rnc_least_squares`
+  factories using the current problem callbacks. They return ordinary curve
+  derivatives with the required factorial conversions and moving-tangent terms.
+- Correct existing Rosenbrock and SVI derivative callbacks through the Taylor
+  adapter; SVI now supplies its complete fourth-order derivatives.
+- Correct the comparison in `docs/demo.md` and `docs/rnc-lm.md`: match curve
+  search budgets and compare accepted updates with the paper's Table 1a.
+  All eight full-step accepted-update counts match; fourth-order results with
+  three reductions match at 2 and 6 accepted updates. No test or benchmark
+  cases were added. Attempted-curve iteration counting remains unchanged.
+
 ## Unreleased: design-review phases 0 to 6
 
 Implements `docs/reviews/design-review-phased-plan-2026-10-04.md`. Behavior

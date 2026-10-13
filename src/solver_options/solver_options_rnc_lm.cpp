@@ -2,10 +2,7 @@
 
 namespace solverslib
 {
-solver_options_rnc_lm::solver_options_rnc_lm()
-    : solver_options(solver_enum::LM)
-{
-}
+solver_options_rnc_lm::solver_options_rnc_lm() : solver_options(solver_enum::LM) {}
 
 int solver_options_rnc_lm::order() const
 {
@@ -52,6 +49,11 @@ double solver_options_rnc_lm::diagonal_scaling_floor() const
     return diagonal_scaling_floor_;
 }
 
+rnc_lm_damping_scaling_enum solver_options_rnc_lm::damping_scaling() const
+{
+    return damping_scaling_;
+}
+
 solver_options_rnc_lm_builder::solver_options_rnc_lm_builder()
     : options_(std::make_shared<solver_options_rnc_lm>())
 {
@@ -87,8 +89,7 @@ solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_verbose(bool 
     return *this;
 }
 
-solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_log_file(
-    const std::string& val)
+solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_log_file(const std::string& val)
 {
     options_->log_file_ = val;
     return *this;
@@ -106,8 +107,7 @@ solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_max_curve_tri
     return *this;
 }
 
-solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_acceptance_threshold(
-    double val)
+solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_acceptance_threshold(double val)
 {
     const_cast<solver_options_rnc_lm&>(*options_).acceptance_threshold_ = val;
     return *this;
@@ -147,6 +147,13 @@ solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_diagonal_scal
     double val)
 {
     const_cast<solver_options_rnc_lm&>(*options_).diagonal_scaling_floor_ = val;
+    return *this;
+}
+
+solver_options_rnc_lm_builder& solver_options_rnc_lm_builder::with_damping_scaling(
+    rnc_lm_damping_scaling_enum val)
+{
+    options_->damping_scaling_ = val;
     return *this;
 }
 

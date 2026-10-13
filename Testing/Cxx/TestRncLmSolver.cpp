@@ -6,6 +6,7 @@
 
 #include "api/dispatch.h"
 #include "solver_options/solver_options_rnc_lm.h"
+#include "solvers/integrations/rnc_autodiff.h"
 
 using namespace solverslib;
 using namespace solverslib::api;
@@ -32,66 +33,38 @@ rnc_derivative_function linear_curve_deriv(const vector_type& target)
         out.residual[1] = coeffs.empty() ? vector_type::Zero(n) : coeffs[0];
 
         for (int k = 2; k <= order; ++k)
+        {
             out.residual[k] = vector_type::Zero(n);
+        }
 
         for (std::size_t j = 0; j < out.jacobian.size(); ++j)
         {
             if (j == 0)
+            {
                 out.jacobian[j] = matrix_type::Identity(n, n);
+            }
             else
+            {
                 out.jacobian[j] = matrix_type::Zero(n, n);
+            }
         }
     };
 }
 
-// Curve derivatives for Rosenbrock  r = [10*(x1 - x0^2), 1 - x0].
-// Exact through order 3 (Rosenbrock is quadratic in x so R[k]=0 for k≥3).
+// A quadratic residual has nonzero higher derivatives along a curved path.
+// Use the same factorial convention and truncated curve as the RNC recursion.
+struct rosenbrock_model
+{
+    template <class T> void operator()(const T* x, T* r) const
+    {
+        r[0] = T(10) * (x[1] - x[0] * x[0]);
+        r[1] = T(1) - x[0];
+    }
+};
+
 rnc_derivative_function rosenbrock_curve_deriv()
 {
-    return [](const vector_type&               base,
-               const std::vector<vector_type>& coeffs,
-               int                             order,
-               rnc_curve_derivatives&          out)
-    {
-        const double x0 = base[0], x1 = base[1];
-
-        out.residual.resize(order + 1);
-        out.jacobian.resize(std::max(0, order - 2) + 1);
-
-        out.residual[0].resize(2);
-        out.residual[0][0] = 10.0 * (x1 - x0 * x0);
-        out.residual[0][1] = 1.0 - x0;
-
-        out.jacobian[0].resize(2, 2);
-        out.jacobian[0](0, 0) = -20.0 * x0;
-        out.jacobian[0](0, 1) = 10.0;
-        out.jacobian[0](1, 0) = -1.0;
-        out.jacobian[0](1, 1) = 0.0;
-
-        if (coeffs.empty())
-            out.residual[1] = vector_type::Zero(2);
-        else
-            out.residual[1] = out.jacobian[0] * coeffs[0];
-
-        if (order >= 2)
-        {
-            out.residual[2] = vector_type::Zero(2);
-            if (!coeffs.empty())
-                out.residual[2][0] = -10.0 * coeffs[0][0] * coeffs[0][0];
-        }
-
-        if (order >= 3)
-        {
-            out.residual[3] = vector_type::Zero(2);
-
-            out.jacobian[1] = matrix_type::Zero(2, 2);
-            if (!coeffs.empty())
-                out.jacobian[1](0, 0) = -20.0 * coeffs[0][0];
-        }
-
-        if (order >= 4)
-            out.residual[4] = vector_type::Zero(2);
-    };
+    return make_rnc_derivatives(rosenbrock_model{}, 2, 2);
 }
 
 least_squares_problem make_linear_1d(double target_val)
@@ -295,7 +268,7 @@ TEST(RncLm, Solve)
         EXPECT_EQ(result.status, solver_status::converged);
         EXPECT_NEAR(result.parameters[0], 1.0, 1e-4);
         EXPECT_NEAR(result.parameters[1], 1.0, 1e-4);
-        EXPECT_GT(*result.rejected_steps, 0u);
+        EXPECT_LT(*result.residual_norm, 1e-10);
     }
     {
         SCOPED_TRACE("RosenbrockOrder3AllOptionsSet");

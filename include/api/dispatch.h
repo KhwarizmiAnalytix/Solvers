@@ -21,7 +21,10 @@ namespace solverslib::api
 // Gradient: g(j) = ∂f / ∂x_j (n-dim vector)
 using gradient_function = std::function<void(const vector_type&, vector_type&)>;
 
-// RNC curve derivatives
+// RNC curve derivatives: ordinary d^k/dt^k values, NOT Taylor coefficients / k!.
+// Each request uses theta_<order(t) = base + sum(c_q * t^q/q!), holding the
+// supplied c_q fixed. Even a quadratic residual generally has nonzero R_3/R_4
+// along this curved path. The order-1 base request has no curve coefficients.
 struct rnc_curve_derivatives
 {
     std::vector<vector_type> residual;  // R[0..order]

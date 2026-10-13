@@ -257,7 +257,7 @@ void(const solverslib::vector_type& base,
 
 Fill `out.residual[0..order]` and `out.jacobian[0..max(0, order-2)]` with ordinary derivatives along the truncated curve. `coefficients[q-1]` is the unnormalized curve derivative `c_q`. An empty coefficient list at order 1 requests the residual and Jacobian at the base point.
 
-Select the method with `solver_options_rnc_lm_builder().with_order(3).build()`. Orders 1–4 are supported; the default is 3. See [analytic callback examples](Testing/Cxx/TestRncLmSolver.cpp) for the current interface and [RNC-LM notes](docs/rnc-lm.md) for the mathematics.
+Select the method with `solver_options_rnc_lm_builder().with_order(3).build()`. Orders 1–4 are supported; the default is 3. RNC-LM defaults to absolute damping `D = I` with `lambda_0 = 1e-3`; `with_damping_scaling(rnc_lm_damping_scaling_enum::MARQUARDT)` selects diagonal-scaled damping. The [Taylor adapter](include/solvers/integrations/rnc_autodiff.h) supplies these callbacks from a scalar-templated model through `rnc_least_squares(model, num_parameters, num_residuals)`. It includes factorial conversions and higher derivatives along the complete curve, without a Ceres dependency. See [RNC-LM usage and paper comparison](docs/rnc-lm.md) for a complete example.
 
 ## Results and production considerations
 
@@ -478,6 +478,7 @@ The CMake helper's benchmark phase runs the three Google Benchmark executables; 
 | [`Testing/Benchmark/`](Testing/Benchmark/) | Timing benchmarks, convergence demo, and SVI fixture |
 | [`docs/levenberg-marquardt.md`](docs/levenberg-marquardt.md) | Native LM mathematics and damping policies |
 | [`docs/rnc-lm.md`](docs/rnc-lm.md) | RNC-LM mathematics and implementation notes |
+| [`docs/lm-literature-problem-list.md`](docs/lm-literature-problem-list.md) | Literature problem inventory, current coverage gaps, and prioritized additions |
 | [`docs/svi_calib.md`](docs/svi_calib.md) | SVI calibration background |
 | [`CHANGELOG.md`](CHANGELOG.md) | Change history |
 

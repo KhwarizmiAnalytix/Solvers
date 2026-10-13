@@ -20,10 +20,11 @@ bool valid_options(const solver_options_rnc_lm& cfg)
            positive(cfg.damping_floor()) && positive(cfg.damping_ceiling()) &&
            cfg.damping_floor() <= cfg.initial_damping() &&
            cfg.initial_damping() <= cfg.damping_ceiling() &&
-           cfg.damping_floor() < cfg.damping_ceiling() &&
-           positive(cfg.diagonal_scaling_floor()) && cfg.max_num_iterations() > 0 &&
-           tolerance(cfg.function_tolerance()) && tolerance(cfg.gradient_tolerance()) &&
-           tolerance(cfg.parameter_tolerance());
+           cfg.damping_floor() < cfg.damping_ceiling() && positive(cfg.diagonal_scaling_floor()) &&
+           (cfg.damping_scaling() == rnc_lm_damping_scaling_enum::IDENTITY ||
+               cfg.damping_scaling() == rnc_lm_damping_scaling_enum::MARQUARDT) &&
+           cfg.max_num_iterations() > 0 && tolerance(cfg.function_tolerance()) &&
+           tolerance(cfg.gradient_tolerance()) && tolerance(cfg.parameter_tolerance());
 }
 
 bool valid_derivatives(const rnc_curve_derivatives& d, int order, index_type m, index_type n)
@@ -135,7 +136,12 @@ solver_result rnc_lm_solver::run(
         vector_type diagonal(n);
         for (index_type i = 0; i < n; ++i)
         {
-            diagonal[i] = std::max(metric(i, i), cfg.diagonal_scaling_floor());
+            // Absolute damping reproduces the stiff-valley trajectories in
+            // Liu & Zhang's Fig. 1. Multiplying lambda by diag(J^T J) changes
+            // its units and can suppress the tangent by many orders of magnitude.
+            diagonal[i] = cfg.damping_scaling() == rnc_lm_damping_scaling_enum::IDENTITY
+                              ? 1.
+                              : std::max(metric(i, i), cfg.diagonal_scaling_floor());
             metric(i, i) += lambda * diagonal[i];
         }
         bool                     accepted    = false;
