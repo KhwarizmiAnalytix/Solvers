@@ -25,7 +25,7 @@ public:
     solver_options_rnc_lm();
 
     int    order_                  = 3;
-    int    max_curve_trials_       = 4;
+    int    max_curve_trials_       = 12;
     double acceptance_threshold_   = 1e-4;
     double contraction_min_        = 0.3;
     double contraction_max_        = 0.5;
