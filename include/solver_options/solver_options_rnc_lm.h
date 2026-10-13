@@ -31,6 +31,7 @@ public:
 
     solver_options_rnc_lm();
 
+private:
     int                         order_                  = 3;
     int                         max_curve_trials_       = 4;
     double                      acceptance_threshold_   = 1e-4;
