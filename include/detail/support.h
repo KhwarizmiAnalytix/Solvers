@@ -22,11 +22,22 @@
 // pieces (setw/scientific/setprecision) into a plain string themselves
 // first, since logging::strings::format supports only "{}", not format
 // specifiers.
-#define SOLVERS_CHECK(...) LOGGING_CHECK(__VA_ARGS__)
-#define SOLVERS_CHECK_DEBUG(...) LOGGING_CHECK_DEBUG(__VA_ARGS__)
+// These take an explicit first parameter (cond/format_str) rather than a bare
+// "..." that is passed straight through as LOGGING_*(__VA_ARGS__): under
+// MSVC's traditional preprocessor (no /Zc:preprocessor), forwarding one
+// macro's whole __VA_ARGS__ as a single argument to another variadic macro
+// does not get re-split on commas, so e.g. SOLVERS_CHECK(f1 * f2 <= 0.,
+// "f1={} f2={}", f1, f2) collapsed via the C comma operator into a condition
+// equal to just the last argument (f2) instead of "f1 * f2 <= 0." -- the
+// check silently stopped firing as intended. Naming "cond"/"format_str"
+// explicitly forces the preprocessor to split the call site's own arguments
+// correctly, and ", ##__VA_ARGS__" re-glues them for LOGGING_*.
+#define SOLVERS_CHECK(cond, ...) LOGGING_CHECK(cond, ##__VA_ARGS__)
+#define SOLVERS_CHECK_DEBUG(cond, ...) LOGGING_CHECK_DEBUG(cond, ##__VA_ARGS__)
 #define SOLVERS_CHECK_FINITE_DEBUG(value) LOGGING_CHECK_DEBUG(std::isfinite(value))
-#define SOLVERS_THROW(...) LOGGING_THROW(__VA_ARGS__)
-#define SOLVERS_NOT_IMPLEMENTED(...) LOGGING_NOT_IMPLEMENTED(__VA_ARGS__)
+#define SOLVERS_THROW(format_str, ...) LOGGING_THROW(format_str, ##__VA_ARGS__)
+#define SOLVERS_NOT_IMPLEMENTED(format_str, ...) \
+    LOGGING_NOT_IMPLEMENTED(format_str, ##__VA_ARGS__)
 #define SOLVERS_FORCE_INLINE inline
 #define SOLVERS_UNUSED [[maybe_unused]]
 #define SOLVERS_DELETE_CLASS(T) T() = delete
