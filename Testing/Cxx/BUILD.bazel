@@ -46,3 +46,27 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "TestLmLiteratureP0",
+    size = "medium",
+    srcs = ["TestLmLiteratureP0.cpp"],
+    deps = [
+        "//:Solvers",
+        "//Testing:test_problems",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "TestNistDatasets",
+    size = "medium",
+    srcs = ["TestNistDatasets.cpp"],
+    deps = [
+        "//:Solvers",
+        "//Testing:test_problems",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+    ],
+)

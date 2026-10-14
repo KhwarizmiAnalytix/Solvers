@@ -2,12 +2,14 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 
 package(default_visibility = ["//Testing:__subpackages__"])
 
-# Header-only library for shared test problem definitions (Rosenbrock, etc.).
-# The `includes = ["."]` makes headers reachable as "problems/<name>.h",
-# mirroring the CMake `target_include_directories(... ${CMAKE_CURRENT_SOURCE_DIR}/..)` pattern.
+# Header-only library for shared test problem definitions (Rosenbrock, the
+# NIST StRD nonlinear-regression fixtures under problems/nist/, etc.).
+# The `includes = ["."]` makes headers reachable as "problems/<name>.h" or
+# "problems/nist/<name>.h", mirroring the CMake
+# `target_include_directories(... ${CMAKE_CURRENT_SOURCE_DIR}/..)` pattern.
 cc_library(
     name = "test_problems",
-    hdrs = glob(["problems/*.h"]),
+    hdrs = glob(["problems/*.h", "problems/**/*.h"]),
     includes = ["."],
     deps = ["//:Solvers"],
 )
