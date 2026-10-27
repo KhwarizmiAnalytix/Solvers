@@ -232,3 +232,93 @@ jobs:
         working-directory: Scripts
         shell: bash
         run: python3 setup.py ${{ matrix.args }}
+
+  # ===========================================================================
+  # COMPILER CACHE & ICECC
+  # ===========================================================================
+  cache-icecc:
+    name: Cache & Icecc - ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux ccache
+            os: ubuntu-24.04
+            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=ccache
+
+          - name: Linux sccache
+            os: ubuntu-24.04
+            backend: sccache
+            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=sccache
+
+          - name: Linux icecc
+            os: ubuntu-24.04
+            cmake_args: -DSOLVERS_ENABLE_ICECC=ON
+
+          - name: macOS ccache
+            os: macos-14
+            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=ccache
+
+          - name: macOS sccache
+            os: macos-14
+            backend: sccache
+            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=sccache
+
+          - name: macOS icecc
+            os: macos-14
+            cmake_args: -DSOLVERS_ENABLE_ICECC=ON
+
+          - name: Windows ccache
+            os: windows-2022
+            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=ccache
+
+          - name: Windows sccache
+            os: windows-2022
+            backend: sccache
+            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=sccache
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Install Ninja and ccache/icecc (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ninja-build pkg-config gfortran liblapack-dev libblas-dev ccache icecc
+
+      - name: Install Ninja and ccache/icecream (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja pkg-config openblas lapack ccache icecream
+
+      - name: Install Ninja and ccache (Windows)
+        if: runner.os == 'Windows'
+        run: choco install -y ninja ccache
+
+      - name: Set up sccache
+        if: matrix.backend == 'sccache'
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Configure
+        shell: bash
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DSOLVERS_ENABLE_TESTING=ON
+          ${{ matrix.cmake_args }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        shell: bash
+        run: ctest --test-dir build --output-on-failure

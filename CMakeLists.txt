@@ -33,10 +33,21 @@ option(SOLVERS_ENABLE_FIX "Enable clang-tidy fix-errors and fix options for Solv
 mark_as_advanced(SOLVERS_ENABLE_FIX)
 option(SOLVERS_ENABLE_IWYU "Enable include-what-you-use analysis for Solvers" OFF)
 option(SOLVERS_ENABLE_BENCHMARKS "Build the solver backend comparison benchmark" OFF)
+option(SOLVERS_ENABLE_ICECC "Use Icecream (icecc) distributed compiler for Solvers" OFF)
+mark_as_advanced(SOLVERS_ENABLE_ICECC)
+option(SOLVERS_ENABLE_CACHE "Enable compiler caching for the Solvers target" ON)
+mark_as_advanced(SOLVERS_ENABLE_CACHE)
+set(SOLVERS_CACHE_BACKEND "none"
+    CACHE STRING "Compiler cache backend: none, ccache, sccache, or buildcache"
+)
+set_property(CACHE SOLVERS_CACHE_BACKEND PROPERTY STRINGS none ccache sccache buildcache)
+mark_as_advanced(SOLVERS_CACHE_BACKEND)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+include(cache)
+include(helper_macros)
 include(SolversDependencies)
 
 file(GLOB_RECURSE solvers_sources CONFIGURE_DEPENDS "src/*.cpp")
@@ -64,6 +75,8 @@ unset(_backend_source)
 
 add_library(Solvers ${solvers_sources})
 add_library(Solvers::Solvers ALIAS Solvers)
+xsigma_target_apply_cache(Solvers SOLVERS_ENABLE_CACHE SOLVERS_CACHE_BACKEND)
+xsigma_target_optional_icecc(Solvers SOLVERS_ENABLE_ICECC)
 target_include_directories(
     Solvers PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
                    "$<INSTALL_INTERFACE:include>"
@@ -225,6 +238,9 @@ if(SOLVERS_STANDALONE)
   message("  Fix                  : ${SOLVERS_ENABLE_FIX}")
   message("  IWYU                 : ${SOLVERS_ENABLE_IWYU}")
   message("  Benchmarks           : ${SOLVERS_ENABLE_BENCHMARKS}")
+  message("  Cache                : ${SOLVERS_ENABLE_CACHE}")
+  message("  Cache backend        : ${SOLVERS_CACHE_BACKEND}")
+  message("  Icecc                : ${SOLVERS_ENABLE_ICECC}")
   message("  C++ standard         : ${CMAKE_CXX_STANDARD}")
   message("")
 endif()
