@@ -19,6 +19,7 @@ Usage:
 """
 
 import glob
+import importlib.util
 import os
 import platform
 import re
@@ -696,15 +697,15 @@ class SolversFlags:
             )
             self.__value["test"] = self.ON
 
-        if self.__value.get("coverage") == self.ON:
-            try:
-                import coverage_tool  # noqa: F401
-            except ImportError:
-                print_status(
-                    "coverage-tool is not installed. Install with: pip install coverage-tool",
-                    "ERROR",
-                )
-                sys.exit(1)
+        if (
+            self.__value.get("coverage") == self.ON
+            and importlib.util.find_spec("coverage_tool") is None
+        ):
+            print_status(
+                "coverage-tool is not installed. Install with: pip install coverage-tool",
+                "ERROR",
+            )
+            sys.exit(1)
 
     @staticmethod
     def find_case_insensitive(element, lst):
