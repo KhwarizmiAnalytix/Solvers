@@ -279,6 +279,21 @@ jobs:
             backend: sccache
             cmake_args: --cache=ON --cache-backend=sccache
 
+          - name: Linux buildcache
+            os: ubuntu-24.04
+            backend: buildcache
+            cmake_args: --cache=ON --cache-backend=buildcache
+
+          - name: macOS buildcache
+            os: macos-14
+            backend: buildcache
+            cmake_args: --cache=ON --cache-backend=buildcache
+
+          - name: Windows buildcache
+            os: windows-2022
+            backend: buildcache
+            cmake_args: --cache=ON --cache-backend=buildcache
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -309,6 +324,16 @@ jobs:
       - name: Set up sccache
         if: matrix.backend == 'sccache'
         uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Set BuildCache directory
+        if: matrix.backend == 'buildcache'
+        shell: bash
+        run: echo "BUILDCACHE_DIR=$RUNNER_TEMP/buildcache-data" >> "$GITHUB_ENV"
+
+      - name: Install BuildCache
+        if: matrix.backend == 'buildcache'
+        shell: bash
+        run: python3 .github/scripts/install_buildcache.py --install-prefix "$RUNNER_TEMP/buildcache-tool"
 
       - name: Configure
         shell: bash
