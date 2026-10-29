@@ -1428,8 +1428,10 @@ def main():
             cppcheck_end = time.perf_counter()
 
             test_start = time.perf_counter()
-            compilation_calc.test(source_path, build_path)
+            test_exit_code = compilation_calc.test(source_path, build_path)
             test_end = time.perf_counter()
+            if test_exit_code != 0:
+                sys.exit(test_exit_code)
 
             benchmark_start = time.perf_counter()
             compilation_calc.benchmark(build_path)

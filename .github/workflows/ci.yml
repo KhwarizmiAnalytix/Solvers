@@ -239,6 +239,7 @@ jobs:
   cache-icecc:
     name: Cache & Icecc - ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -296,9 +297,10 @@ jobs:
 
       - name: Install Ninja and ccache/icecream (macOS)
         if: runner.os == 'macOS'
-        run: |
-          brew update
-          brew install ninja pkg-config openblas lapack ccache icecream
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_UPGRADE: 1
+        run: brew install ninja pkg-config openblas lapack ccache icecream
 
       - name: Install Ninja and ccache (Windows)
         if: runner.os == 'Windows'
@@ -321,4 +323,4 @@ jobs:
 
       - name: Test
         shell: bash
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --timeout 300
