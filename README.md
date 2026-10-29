@@ -483,3 +483,29 @@ The CMake helper's benchmark phase runs the three Google Benchmark executables; 
 | [`CHANGELOG.md`](CHANGELOG.md) | Change history |
 
 Some examples in the design and mathematical notes predate the current callback/builder interface. Use the public headers, unit tests, and complete examples in this README for the current API.
+
+### Reproducing CI with the setup helper
+
+CI and local builds use the documented dotted actions and named options from
+`python Scripts/setup.py --help`:
+
+```sh
+python Scripts/setup.py config.build.test.release.ninja.clang --build-dir build
+python Scripts/setup.py install.release --build-dir build --install-prefix install
+python Scripts/setup.py config.build.test --build-dir build-debug --compiler clang-cl --build-type Debug --testing on --benchmark off
+```
+
+Only declared options are accepted. Tool commands, raw build-system arguments,
+and a `--` argument separator are rejected. Paths, backend selections, GPU
+architectures, test filters, and installation settings have named options in
+the usage text. `--source-dir` selects a dependency or installed-package consumer
+project. `verifycache --build-dir build --target TARGET` checks the launcher and
+clean-rebuild cache hits. `verifytoolchain` checks the compiler selected by Ninja.
+Run Windows Ninja builds in a Visual Studio developer environment.
+
+Bazel CI uses the same action style and the options listed by
+`python Scripts/setup_bazel.py --help`, for example:
+
+```sh
+python Scripts/setup_bazel.py build.test --target //Testing/... --compiler default --test-output errors
+```

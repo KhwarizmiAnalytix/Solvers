@@ -93,7 +93,7 @@ def build_project(builder: str, build_enum: str, system: str, shell_flag: bool) 
         attempts = 3 if is_ninja else 1
         last_rc = 1
         for attempt in range(1, attempts + 1):
-            rc = subprocess.call(cmake_cmd_build, stderr=subprocess.STDOUT, shell=shell_flag)
+            rc = subprocess.call(cmake_cmd_build, stderr=subprocess.STDOUT, shell=False)
             if rc == 0:
                 return 0
             last_rc = rc

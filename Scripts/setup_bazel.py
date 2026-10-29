@@ -69,9 +69,7 @@ def run(command: list[str]) -> None:
     print_status("$ " + " ".join(command))
     sys.stdout.flush()
     result = subprocess.run(command, cwd=ROOT)
-    # Bazel exit code 4: build OK but no tests found — treat as success.
-    if result.returncode not in (0, 4):
-        result.check_returncode()
+    result.check_returncode()
 
 
 def run_spell() -> None:
@@ -96,6 +94,12 @@ def _base_flags(tokens: set[str]) -> list[str]:
 
 
 def main(arguments: list[str]) -> int:
+    from helpers.cli import dispatch_bazel
+
+    forwarded = dispatch_bazel(arguments)
+    if forwarded is not None:
+        sys.exit(forwarded)
+
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

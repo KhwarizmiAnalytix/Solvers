@@ -21,25 +21,25 @@ jobs:
         include:
           # Core builds
           - name: default (Debug)
-            args: config.build.test
+            args: config.build.test.debug
 
           - name: static (Debug)
-            args: config.build.test.static
+            args: config.build.test.static.debug
 
           - name: default (Release)
             args: config.build.test.release
 
           - name: shared (Debug)
-            args: config.build.test.shared
+            args: config.build.test.shared.debug
 
           # Compiler variants
           - name: GCC (Debug)
-            args: config.build.test.gcc
+            args: config.build.test.gcc.debug
             env_cc: gcc
             env_cxx: g++
 
           - name: Clang (Debug)
-            args: config.build.test.clang
+            args: config.build.test.clang.debug
             env_cc: clang
             env_cxx: clang++
 
@@ -143,15 +143,15 @@ jobs:
           # macOS 14 (Apple Silicon / ARM64)
           - name: default (Debug)
             os: macos-14
-            args: config.build.test
+            args: config.build.test.debug
 
           - name: static (Debug)
             os: macos-14
-            args: config.build.test.static
+            args: config.build.test.static.debug
 
           - name: shared (Debug)
             os: macos-14
-            args: config.build.test.shared
+            args: config.build.test.shared.debug
 
           - name: Ceres backend
             os: macos-14
@@ -198,16 +198,16 @@ jobs:
         include:
           # Core builds
           - name: default (Debug)
-            args: config.build.test
+            args: config.build.test.debug
 
           - name: static (Debug)
-            args: config.build.test.static
+            args: config.build.test.static.debug
 
           - name: default (Release)
             args: config.build.test.release
 
           - name: shared (Debug)
-            args: config.build.test.shared
+            args: config.build.test.shared.debug
 
           # Backend variant
           - name: Ceres backend
@@ -246,38 +246,38 @@ jobs:
         include:
           - name: Linux ccache
             os: ubuntu-24.04
-            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=ccache
+            cmake_args: --cache=ON --cache-backend=ccache
 
           - name: Linux sccache
             os: ubuntu-24.04
             backend: sccache
-            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=sccache
+            cmake_args: --cache=ON --cache-backend=sccache
 
           - name: Linux icecc
             os: ubuntu-24.04
-            cmake_args: -DSOLVERS_ENABLE_ICECC=ON
+            cmake_args: --icecc=ON
 
           - name: macOS ccache
             os: macos-14
-            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=ccache
+            cmake_args: --cache=ON --cache-backend=ccache
 
           - name: macOS sccache
             os: macos-14
             backend: sccache
-            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=sccache
+            cmake_args: --cache=ON --cache-backend=sccache
 
           - name: macOS icecc
             os: macos-14
-            cmake_args: -DSOLVERS_ENABLE_ICECC=ON
+            cmake_args: --icecc=ON
 
           - name: Windows ccache
             os: windows-2022
-            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=ccache
+            cmake_args: --cache=ON --cache-backend=ccache
 
           - name: Windows sccache
             os: windows-2022
             backend: sccache
-            cmake_args: -DSOLVERS_ENABLE_CACHE=ON -DSOLVERS_CACHE_BACKEND=sccache
+            cmake_args: --cache=ON --cache-backend=sccache
 
     steps:
       - name: Check out repository
@@ -313,14 +313,14 @@ jobs:
       - name: Configure
         shell: bash
         run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DSOLVERS_ENABLE_TESTING=ON
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja
+          --build-type=Release
+          --testing=ON
           ${{ matrix.cmake_args }}
 
       - name: Build
-        run: cmake --build build
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build
 
       - name: Test
         shell: bash
-        run: ctest --test-dir build --output-on-failure --timeout 300
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build --test-timeout 300

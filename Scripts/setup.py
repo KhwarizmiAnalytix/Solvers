@@ -23,7 +23,6 @@ import importlib.util
 import os
 import platform
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -46,6 +45,7 @@ except ImportError:  # Windows CLI smoke and some CI jobs skip pip install
 
 
 # Import helper modules
+from helpers import cli as cli_helper
 from helpers import (
     build as build_helper,
     config as config_helper,
@@ -573,6 +573,14 @@ class SolversFlags:
     ON = "ON"
 
     def __init__(self, arg_list):
+        self.requested_build_type = next(
+            (
+                cli_helper.canonical_build_type(arg)
+                for arg in reversed(arg_list)
+                if arg in ("debug", "release", "relwithdebinfo", "minsizerel")
+            ),
+            None,
+        )
         self.__initialize_flags()
         if arg_list:
             self.__build_cmake_flag()
@@ -581,7 +589,6 @@ class SolversFlags:
 
     def __initialize_flags(self):
         self.__key = [
-            # CMake options declared in CMakeLists.txt
             "static",
             "test",
             "ceres",
@@ -594,10 +601,12 @@ class SolversFlags:
             "clangtidy",
             "benchmark",
             "iwyu",
-            # Helper-driven analysis tokens (no CMake option behind them)
             "spell",
             "valgrind",
             "cppcheck",
+            "cache",
+            "cache_type",
+            "icecc",
         ]
         self.__description = [
             "build shared (default) or static libraries",
@@ -615,6 +624,9 @@ class SolversFlags:
             "run repository-configured CODESPELL checks",
             "execute the test suite under Valgrind",
             "run cppcheck static analysis after the build",
+            "enable compiler cache (cache token disables the default)",
+            "compiler cache backend: none, ccache, sccache, buildcache",
+            "enable Icecream distributed compilation",
         ]
 
     def __build_cmake_flag(self):
@@ -636,6 +648,9 @@ class SolversFlags:
             "benchmark": "SOLVERS_ENABLE_BENCHMARKS",
             "iwyu": "SOLVERS_ENABLE_IWYU",
         }
+        self.__name.update(
+            {"cache": "SOLVERS_ENABLE_CACHE", "cache_type": "SOLVERS_CACHE_BACKEND", "icecc": "SOLVERS_ENABLE_ICECC"}
+        )
 
     def __fill_option_flags(self, arg_list):
         debug_print("Fill option flags")
@@ -656,12 +671,20 @@ class SolversFlags:
                 "sanitizer_enum": "address",
             }
         )
+        self.__value.update({"cache": "ON", "cache_type": "none", "icecc": "OFF"})
 
     def __process_arg_list(self, arg_list):
         sanitizer_list = ["address", "undefined", "thread", "memory", "leak"]
 
         self.builder_suffix = ""
         for arg in arg_list:
+            if arg in ("ccache", "sccache", "buildcache", "none"):
+                self.__value["cache_type"] = arg
+                self.builder_suffix += f"_{arg}"
+                continue
+            if arg == "cache":
+                self.__value["cache"] = self.OFF
+                continue
             if arg == "static":
                 self.__value["static"] = self.OFF
                 self.builder_suffix += "_static"
@@ -697,10 +720,7 @@ class SolversFlags:
             )
             self.__value["test"] = self.ON
 
-        if (
-            self.__value.get("coverage") == self.ON
-            and importlib.util.find_spec("coverage_tool") is None
-        ):
+        if self.__value.get("coverage") == self.ON and importlib.util.find_spec("coverage_tool") is None:
             print_status(
                 "coverage-tool is not installed. Install with: pip install coverage-tool",
                 "ERROR",
@@ -717,7 +737,7 @@ class SolversFlags:
         del system  # unused; kept for parity with XSigma's signature
 
         # Sanitizer, valgrind, and coverage all need a debug build to be useful.
-        if (
+        if not self.requested_build_type and (
             self.__value.get("valgrind") == self.ON
             or self.__value.get("sanitizer") == self.ON
             or self.__value.get("coverage") == self.ON
@@ -726,9 +746,9 @@ class SolversFlags:
                 "Enabling debug build for sanitizer, valgrind, or coverage analysis",
                 "INFO",
             )
-            build_type = "DEBUG"
+            build_type = "Debug"
         else:
-            build_type = str(build_enum).capitalize()
+            build_type = cli_helper.canonical_build_type(build_enum)
 
         # Single flat target: emit one -D per token that maps to a real option.
         for key, value in self.__value.items():
@@ -802,6 +822,7 @@ def _solvers_test_executables(build_dir, module_name, ctest_tests=None):
 
 class SolversConfiguration:
     def __init__(self, args_list):
+        self.source_path = Path(__file__).resolve().parents[1]
         # Check dependencies first
         missing_deps = check_dependencies()
         if missing_deps:
@@ -812,12 +833,21 @@ class SolversConfiguration:
             sys.exit(1)
 
         # Initialize utilities
-        self.error_logger = ErrorLogger()
+        self.error_logger = ErrorLogger(str(self.source_path / "logs"))
         self.summary_reporter = SummaryReporter()
 
         self.__initialize_values()
         self.__solvers_flags = SolversFlags(args_list)
+        self.__set_ninja_flags()
         self.__fill_compilation_flags(args_list)
+        self.__value["build_enum"] = self.__solvers_flags.create_cmake_flags(
+            [], self.__value["build_enum"], self.__value["system"]
+        )
+        if self.__compiler_user_specified:
+            compiler = self.__value["cmake_cxx_compiler"].split("=", 1)[-1]
+            self.__value["build_folder"] += "_" + re.sub(r"[^a-zA-Z0-9+-]", "_", Path(compiler).name)
+        if self.__value["build_enum"] != "Release":
+            self.__value["build_folder"] += "_" + self.__value["build_enum"].lower()
 
     def __initialize_values(self):
         # Set default compiler to Clang on all platforms
@@ -856,8 +886,8 @@ class SolversConfiguration:
         elif self.__is_clang_compiler(arg):
             self.__set_clang_compiler(arg)
         elif arg == "clang-cl":
-            self.__value["cmake_cxx_compiler"] = "-DCMAKE_GENERATOR_TOOLSET=ClangCL"
-            self.__value["cmake_c_compiler"] = ""
+            self.__value["cmake_cxx_compiler"] = "-DCMAKE_CXX_COMPILER=clang-cl"
+            self.__value["cmake_c_compiler"] = "-DCMAKE_C_COMPILER=clang-cl"
             self.__compiler_user_specified = True
         elif self.__is_gcc_compiler(arg):
             self.__set_gcc_compiler(arg)
@@ -865,8 +895,8 @@ class SolversConfiguration:
             self.__set_visual_studio(arg)
         elif arg in ["config", "build", "test", "benchmark"]:
             self.__value[arg] = arg
-        elif arg in ["release", "debug", "relwithdebinfo"]:
-            self.__value["build_enum"] = arg.capitalize()
+        elif arg in ["release", "debug", "relwithdebinfo", "minsizerel"]:
+            self.__value["build_enum"] = cli_helper.canonical_build_type(arg)
         elif arg in ["vv", "v"]:
             self.__set_verbose_flags()
 
@@ -1216,14 +1246,10 @@ class SolversConfiguration:
             executables = _solvers_test_executables(build_dir, module_name)
             return str(executables[0]) if executables else None
 
-        def _prepare_all_solvers_tests(
-            build_dir, module_name, binaries_list, profraw_list, ctest_tests=None
-        ):
+        def _prepare_all_solvers_tests(build_dir, module_name, binaries_list, profraw_list, ctest_tests=None):
             executables = _solvers_test_executables(build_dir, module_name, ctest_tests)
             if not executables:
-                return _orig_prepare(
-                    build_dir, module_name, binaries_list, profraw_list, ctest_tests
-                )
+                return _orig_prepare(build_dir, module_name, binaries_list, profraw_list, ctest_tests)
 
             coverage_dir = Path(build_dir) / _ct_common.get_config()["coverage_report_dir"]
             coverage_dir.mkdir(exist_ok=True)
@@ -1289,20 +1315,13 @@ class SolversConfiguration:
             return 1
 
     def __shell_flag(self):
-        return self.__value["system"] == "Windows"
+        return False
 
     def move_to_build_folder(self):
-        os.chdir("..")
-        build_folder = self.__value["build_folder"]
-
-        if os.path.isdir(build_folder) and self.__value.get("config") == "config":
-            shutil.rmtree(build_folder, ignore_errors=True)
-
-        if not os.path.isdir(build_folder):
-            os.mkdir(build_folder)
-
+        build_folder = self.source_path / self.__value["build_folder"]
+        build_folder.mkdir(parents=True, exist_ok=True)
         os.chdir(build_folder)
-        return os.getcwd()
+        return str(build_folder)
 
     def find_build_directory_for_analysis(self, source_path: str) -> Optional[str]:
         """Find the most appropriate build directory for analysis tools."""
@@ -1348,7 +1367,14 @@ def parse_args(args):
 
 
 def main():
+    forwarded = cli_helper.dispatch(
+        sys.argv[1:], Path(__file__).resolve().parents[1], SolversFlags, SolversConfiguration, parse_args
+    )
+    if forwarded is not None:
+        sys.exit(forwarded)
+
     if len(sys.argv) == 2 and sys.argv[1] == "--help":
+        cli_helper.print_help()
         print_status("Solvers Build Configuration Helper", "INFO")
         print("\n" + "=" * 80)
         print("DEFAULT CONFIGURATION:")
@@ -1408,7 +1434,7 @@ def main():
         print_status(f"Starting build configuration for {platform.system()}", "INFO")
         compilation_calc = SolversConfiguration(arg_list)
 
-        source_path = os.path.dirname(os.getcwd())
+        source_path = str(compilation_calc.source_path)
         build_path = compilation_calc.move_to_build_folder()
 
         print_status(f"Build directory: {build_path}", "INFO")
@@ -1424,7 +1450,9 @@ def main():
             build_end = time.perf_counter()
 
             cppcheck_start = time.perf_counter()
-            compilation_calc.cppcheck(source_path, build_path)
+            phase_result = compilation_calc.cppcheck(source_path, build_path)
+            if phase_result:
+                sys.exit(phase_result)
             cppcheck_end = time.perf_counter()
 
             test_start = time.perf_counter()
@@ -1434,11 +1462,15 @@ def main():
                 sys.exit(test_exit_code)
 
             benchmark_start = time.perf_counter()
-            compilation_calc.benchmark(build_path)
+            phase_result = compilation_calc.benchmark(build_path)
+            if phase_result:
+                sys.exit(phase_result)
             benchmark_end = time.perf_counter()
 
             coverage_start = time.perf_counter()
-            compilation_calc.coverage(source_path, build_path)
+            phase_result = compilation_calc.coverage(source_path, build_path)
+            if phase_result:
+                sys.exit(phase_result)
             coverage_end = time.perf_counter()
 
             spell_start = time.perf_counter()
