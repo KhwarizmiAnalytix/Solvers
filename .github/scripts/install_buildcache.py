@@ -37,6 +37,10 @@ def main():
             "-G",
             "Ninja",
             "-DCMAKE_BUILD_TYPE=Release",
+            # CMake 4 rejects cmake_minimum_required() below 3.5, and warns
+            # that below 3.10 is next. The pinned buildcache still vendors
+            # mingw-std-threads at 3.0; this raises only that older floor.
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.10",
             # CI uses local storage; avoid runner-specific OpenSSL DLLs.
             "-DDISABLE_SSL=ON",
             f"-DCMAKE_INSTALL_PREFIX={prefix}",
