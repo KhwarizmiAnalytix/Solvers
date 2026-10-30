@@ -27,6 +27,18 @@ def main():
         ],
         check=True,
     )
+    # BuildCache v0.33.1 relies on <string> to declare int64_t, which no
+    # longer works with GCC 14 on the Windows runner. Patch only this
+    # temporary checkout and explicitly include the type's own header.
+    header = source / "src" / "base" / "env_utils.hpp"
+    header.write_text(
+        header.read_text(encoding="utf-8").replace(
+            "#include <string>",
+            "// Solvers CI compatibility fix for GCC 14.\n#include <stdint.h>\n#include <string>",
+            1,
+        ),
+        encoding="utf-8",
+    )
     subprocess.run(
         [
             "cmake",

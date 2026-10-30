@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -140,21 +141,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS 14 (Apple Silicon / ARM64)
+          # macOS 15 (Apple Silicon / ARM64)
           - name: default (Debug)
-            os: macos-14
+            os: macos-15
             args: config.build.test.debug
 
           - name: static (Debug)
-            os: macos-14
+            os: macos-15
             args: config.build.test.static.debug
 
           - name: shared (Debug)
-            os: macos-14
+            os: macos-15
             args: config.build.test.shared.debug
 
           - name: Ceres backend
-            os: macos-14
+            os: macos-15
             args: config.build.test.ceres
 
     steps:
@@ -258,16 +259,16 @@ jobs:
             cmake_args: --icecc=ON
 
           - name: macOS ccache
-            os: macos-14
+            os: macos-15
             cmake_args: --cache=ON --cache-backend=ccache
 
           - name: macOS sccache
-            os: macos-14
+            os: macos-15
             backend: sccache
             cmake_args: --cache=ON --cache-backend=sccache
 
           - name: macOS icecc
-            os: macos-14
+            os: macos-15
             cmake_args: --icecc=ON
 
           - name: Windows ccache
@@ -285,7 +286,7 @@ jobs:
             cmake_args: --cache=ON --cache-backend=buildcache
 
           - name: macOS buildcache
-            os: macos-14
+            os: macos-15
             backend: buildcache
             cmake_args: --cache=ON --cache-backend=buildcache
 
