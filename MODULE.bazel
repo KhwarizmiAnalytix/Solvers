@@ -38,5 +38,5 @@ new_local_repository = use_repo_rule(
 new_local_repository(
     name = "eigen",
     path = "ThirdParty/eigen",
-    build_file = "//:eigen.BUILD",
+    build_file = "//bazel:eigen.BUILD",
 )

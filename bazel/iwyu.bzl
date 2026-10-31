@@ -73,7 +73,7 @@ iwyu_aspect = aspect(
     attr_aspects = ["deps"],
     attrs = {
         "_iwyu_binary": attr.label(
-            default = Label("//tools/iwyu:iwyu_binary"),
+            default = Label("//bazel:iwyu_binary"),
             providers = [BuildSettingInfo],
         ),
     },
