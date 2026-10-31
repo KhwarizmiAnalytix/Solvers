@@ -10,11 +10,14 @@ bazel_dep(name = "rules_pkg", version = "1.0.1")
 bazel_dep(name = "googletest", version = "1.16.0")
 bazel_dep(name = "google_benchmark", version = "1.9.1")
 
-# Logging library (vendored git submodule).
+# Logging library (vendored git submodule), wired as its own Bazel module.
+# magic_enum is overridden here so it comes from the vendored copy instead of
+# Bazel Central Registry (matches LinearAlgebra). glog/gflags are Logging's
+# own optional GLOG-backend deps: Solvers' own code never references them,
+# nothing here selects the glog backend, and the sibling LinearAlgebra
+# module omits them entirely, so they don't belong in this MODULE.bazel.
 bazel_dep(name = "xsigma_logging", version = "1.0.0")
 bazel_dep(name = "magic_enum", version = "0.9.8")
-bazel_dep(name = "glog", version = "0.7.1")
-bazel_dep(name = "gflags", version = "2.2.2")
 
 local_path_override(
     module_name = "xsigma_logging",
@@ -24,11 +27,6 @@ local_path_override(
 local_path_override(
     module_name = "magic_enum",
     path = "ThirdParty/Logging/ThirdParty/magic_enum",
-)
-
-local_path_override(
-    module_name = "glog",
-    path = "ThirdParty/Logging/ThirdParty/glog",
 )
 
 # Eigen is vendored as a git submodule with no MODULE.bazel.
